@@ -8,7 +8,7 @@ from torch.autograd import Variable
 def OrientationLoss(orient_batch, orientGT_batch, confGT_batch):
 
     batch_size = orient_batch.size()[0]
-    indexes = torch.max(confGT_batch, dim=1)[1]
+    indexes = torch.max(confGT_batch, dim=1)[1]#conf 是在那一個bin上取大
 
     # extract just the important bin
     orientGT_batch = orientGT_batch[torch.arange(batch_size), indexes]
@@ -22,8 +22,8 @@ def OrientationLoss(orient_batch, orientGT_batch, confGT_batch):
 class Model(nn.Module):
     def __init__(self, features=None, bins=2, w = 0.4):
         super(Model, self).__init__()
-        self.bins = bins
-        self.w = w
+        self.bins = bins #2
+        self.w = w #0.4
         self.features = features
         self.orientation = nn.Sequential(
                     nn.Linear(512 * 7 * 7, 256),

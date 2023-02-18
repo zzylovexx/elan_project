@@ -37,7 +37,7 @@ def str2bool(v):
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--image-dir", default="eval/image_2/",
+parser.add_argument("--image-dir", default="eval/IVAforNCTU_kitti/img/", #elan_dataset:img, kitti:image_2
                     help="Relative path to the directory containing images to detect. Default \
                     is eval/image_2/")
 
@@ -60,10 +60,10 @@ parser.add_argument("--hide-debug", action="store_true",
 def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray, img_2d=None):
 
     # the math! returns X, the corners used for constraint
-    location, X = calc_location(dimensions, cam_to_img, box_2d, alpha, theta_ray)
+    location, X = calc_location(dimensions, cam_to_img, box_2d, alpha, theta_ray)#透過數學找到xyz（location)
 
     orient = alpha + theta_ray
-
+    print('orient:',orient)
     if img_2d is not None:
         plot_2d_box(img_2d, box_2d)
 
@@ -77,7 +77,9 @@ def main():
 
     # load torch
     weights_path = os.path.abspath(os.path.dirname(__file__)) + '/weights'
+    
     model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
+    weight_abs_path='/home/chang0731/Desktop/elan_project/3D-BoundingBox/weights/epoch_20.pkl'
     if len(model_lst) == 0:
         print('No previous model found, please train first!')
         exit()
@@ -86,7 +88,8 @@ def main():
         my_vgg = vgg.vgg19_bn(pretrained=True)
         # TODO: load bins from file or something
         model = Model.Model(features=my_vgg.features, bins=2).cuda()
-        checkpoint = torch.load(weights_path + '/%s'%model_lst[-1])
+        #checkpoint = torch.load(weights_path + '/%s'%model_lst[-1])
+        checkpoint=torch.load(weight_abs_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
 
@@ -125,17 +128,21 @@ def main():
 
         start_time = time.time()
 
-        img_file = img_path + img_id + ".png"
+        img_file = img_path + img_id + ".png"#elan:jpg,kitti:png
+       
 
         # P for each frame
         # calib_file = calib_path + id + ".txt"
 
         truth_img = cv2.imread(img_file)
+        
         img = np.copy(truth_img)
         yolo_img = np.copy(truth_img)
 
         detections = yolo.detect(yolo_img)
-
+       
+        print(detections)
+        
         for detection in detections:
 
             if not averages.recognized_class(detection.detected_class):
@@ -155,7 +162,7 @@ def main():
             detected_class = detection.detected_class
 
             input_tensor = torch.zeros([1,3,224,224]).cuda()
-            input_tensor[0,:,:,:] = input_img
+            input_tensor[0,:,:,:] = input_img #除了batch其他dim都配原圖資訊進去
 
             [orient, conf, dim] = model(input_tensor)
             orient = orient.cpu().data.numpy()[0, :, :]
@@ -166,6 +173,7 @@ def main():
 
             argmax = np.argmax(conf)
             orient = orient[argmax, :]
+            
             cos = orient[0]
             sin = orient[1]
             alpha = np.arctan2(sin, cos)
