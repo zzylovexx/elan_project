@@ -37,7 +37,7 @@ def str2bool(v):
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--image-dir", default="eval/IVAforNCTU_kitti/img/", #elan_dataset:img, kitti:image_2
+parser.add_argument("--image-dir", default="Kitti/training/image_2/", #elan_dataset:img, kitti:image_2
                     help="Relative path to the directory containing images to detect. Default \
                     is eval/image_2/")
 
@@ -63,13 +63,13 @@ def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray
     location, X = calc_location(dimensions, cam_to_img, box_2d, alpha, theta_ray)#透過數學找到xyz（location)
 
     orient = alpha + theta_ray
-    print('orient:',orient)
+    # print('orient:',orient)
     if img_2d is not None:
         plot_2d_box(img_2d, box_2d)
 
     plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
 
-    return location
+    return location,orient
 
 def main():
 
@@ -79,17 +79,18 @@ def main():
     weights_path = os.path.abspath(os.path.dirname(__file__)) + '/weights'
     
     model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
-    weight_abs_path='/home/chang0731/Desktop/elan_project/3D-BoundingBox/weights/epoch_20.pkl'
+    weight_abs_path='/home/chang0731/Desktop/elan_project/3D-BoundingBox/weights_orien/epoch_20.pkl'
     if len(model_lst) == 0:
         print('No previous model found, please train first!')
         exit()
     else:
-        print('Using previous model %s'%model_lst[-1])
+        #print('Using previous model %s'%model_lst[-1])
         my_vgg = vgg.vgg19_bn(pretrained=True)
         # TODO: load bins from file or something
         model = Model.Model(features=my_vgg.features, bins=2).cuda()
         #checkpoint = torch.load(weights_path + '/%s'%model_lst[-1])
         checkpoint=torch.load(weight_abs_path)
+        print('use previous weight:',weight_abs_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
 
@@ -109,12 +110,12 @@ def main():
             image_dir = "eval/video/2011_09_26/image_2/"
             cal_dir = "eval/video/2011_09_26/"
 
-
+    
     img_path = os.path.abspath(os.path.dirname(__file__)) + "/" + image_dir
     # using P_rect from global calibration file
     calib_path = os.path.abspath(os.path.dirname(__file__)) + "/" + cal_dir
     calib_file = calib_path + "calib_cam_to_cam.txt"
-
+    
     # using P from each frame
     # calib_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/testing/calib/'
 
@@ -128,7 +129,7 @@ def main():
 
         start_time = time.time()
 
-        img_file = img_path + img_id + ".png"#elan:jpg,kitti:png
+        img_file = img_path + img_id + ".png" #elan:jpg,kitti:png
        
 
         # P for each frame
@@ -139,11 +140,11 @@ def main():
         img = np.copy(truth_img)
         yolo_img = np.copy(truth_img)
 
-        detections = yolo.detect(yolo_img)
+        detections,confidences = yolo.detect(yolo_img)
        
-        print(detections)
-        
-        for detection in detections:
+        #print('value',confidences)
+        lines=[]
+        for detectionid,detection in enumerate(detections):
 
             if not averages.recognized_class(detection.detected_class):
                 continue
@@ -159,8 +160,9 @@ def main():
             input_img = detectedObject.img
             proj_matrix = detectedObject.proj_matrix
             box_2d = detection.box_2d
+           
             detected_class = detection.detected_class
-
+            #print('detectionclass:', detection.detected_class)
             input_tensor = torch.zeros([1,3,224,224]).cuda()
             input_tensor[0,:,:,:] = input_img #除了batch其他dim都配原圖資訊進去
 
@@ -168,9 +170,8 @@ def main():
             orient = orient.cpu().data.numpy()[0, :, :]
             conf = conf.cpu().data.numpy()[0, :]
             dim = dim.cpu().data.numpy()[0, :]
-
             dim += averages.get_item(detected_class)
-
+            #print('dim:',dim)
             argmax = np.argmax(conf)
             orient = orient[argmax, :]
             
@@ -179,14 +180,20 @@ def main():
             alpha = np.arctan2(sin, cos)
             alpha += angle_bins[argmax]
             alpha -= np.pi
-
+            #print('alpha:',alpha)
             if FLAGS.show_yolo:
-                location = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray, truth_img)
+                location,_ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray, truth_img)
+                #this location means object center ,but in kitti lable it label th buttom center of objet ,so the y location need add 1/2 height
             else:
-                location = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray)
-
+                location,rotation_y = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray)
+            location_kitti=location
+            location_kitti[1]=location_kitti[1]+dim[0]*0.5
+            
+            lines+=f"{detection.detected_class} 0.0 0 {alpha:.2f} {box_2d[0][0]} {box_2d[0][1]} {box_2d[1][0]} {box_2d[1][1]} {dim[0]:.2f} {dim[1]:.2f} {dim[2]:.2f} {location_kitti[0]:.2f} {location_kitti[1]:.2f} {location_kitti[2]:.2f} {rotation_y:.2f} {confidences[detectionid]:.2f} \n"
+            
             if not FLAGS.hide_debug:
-                print('Estimated pose: %s'%location)
+                #print('Estimated pose : %s'%location)
+                print('Estimated pose kitti: %s'%location_kitti)
 
         if FLAGS.show_yolo:
             numpy_vertical = np.concatenate((truth_img, img), axis=0)
@@ -198,7 +205,15 @@ def main():
             print("\n")
             print('Got %s poses in %.3f seconds'%(len(detections), time.time() - start_time))
             print('-------------')
-
+            print(img_id)
+        result_path='./20epoch_orient_inverse/'
+        os.makedirs(result_path,exist_ok=True)
+       
+        #write to txt
+        with open(f'{result_path}{img_id}.txt','w') as f:
+            f.writelines(lines)
+            
+        
         if FLAGS.video:
             cv2.waitKey(1)
         else:
