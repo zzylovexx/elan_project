@@ -38,7 +38,7 @@ def main():
     orient_loss_func = OrientationLoss
 
     # load any previous weights
-    model_path = os.path.abspath(os.path.dirname(__file__)) + '/weights/'
+    model_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_orient/'
     latest_model = None
     first_epoch = 0
     if not os.path.isdir(model_path):
@@ -48,21 +48,21 @@ def main():
             latest_model = [x for x in sorted(os.listdir(model_path)) if x.endswith('.pkl')][-1]
         except:
             pass
+    use_latest=False
+    if use_latest==True:
+        if latest_model is not None:
+            checkpoint = torch.load(model_path + latest_model)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            opt_SGD.load_state_dict(checkpoint['optimizer_state_dict'])
+            first_epoch = checkpoint['epoch']
+            loss = checkpoint['loss']
+
+            print('Found previous checkpoint: %s at epoch %s'%(latest_model, first_epoch))
+            print('Resuming training....')
 
 
-    if latest_model is not None:
-        checkpoint = torch.load(model_path + latest_model)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        opt_SGD.load_state_dict(checkpoint['optimizer_state_dict'])
-        first_epoch = checkpoint['epoch']
-        loss = checkpoint['loss']
 
-        print('Found previous checkpoint: %s at epoch %s'%(latest_model, first_epoch))
-        print('Resuming training....')
-
-
-
-    total_num_batches = int(len(dataset) / batch_size)
+    total_num_batches = int(len(dataset) / batch_size)#len(dataset)=40570
 
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0
@@ -70,6 +70,7 @@ def main():
         for local_batch, local_labels in generator:
 
             truth_orient = local_labels['Orientation'].float().cuda()
+    
             truth_conf = local_labels['Confidence'].long().cuda()
             truth_dim = local_labels['Dimensions'].float().cuda()
 
@@ -82,8 +83,8 @@ def main():
             truth_conf = torch.max(truth_conf, dim=1)[1]
             conf_loss = conf_loss_func(conf, truth_conf)
 
-            loss_theta = conf_loss + w * orient_loss
-            loss = alpha * dim_loss + loss_theta
+            loss_theta = conf_loss + w * orient_loss #w=0.4
+            loss = alpha * dim_loss + loss_theta#alpha=0.6
 
             opt_SGD.zero_grad()
             loss.backward()
@@ -91,14 +92,13 @@ def main():
 
 
             if passes % 10 == 0:
-                print("--- epoch %s | batch %s/%s --- [loss: %s]" %(epoch, curr_batch, total_num_batches, loss.item()))
+                print("--- epoch %s | batch %s/%s --- [loss: %s],[orient_loss:%5s],[dim_loss:%5s],[conf_loss:%5s]" %(epoch, curr_batch, total_num_batches, loss.item(),orient_loss.item(),dim_loss.item(),conf_loss.item()))
                 passes = 0
 
             passes += 1
             curr_batch += 1
-
         # save after every 10 epochs
-        if epoch % 10 == 0:
+        if epoch % 20 == 0:
             name = model_path + 'epoch_%s.pkl' % epoch
             print("====================")
             print ("Done with epoch %s!" % epoch)

@@ -12,7 +12,7 @@ from library.File import *
 from .ClassAverages import ClassAverages
 
 # TODO: clean up where this is
-def generate_bins(bins):
+def generate_bins(bins): #this case is 2
     angle_bins = np.zeros(bins)
     interval = 2 * np.pi / bins
     for i in range(1,bins):
@@ -263,7 +263,7 @@ class DetectedObject:
         self.label = label
         self.detection_class = detection_class
 
-    def calc_theta_ray(self, img, box_2d, proj_matrix):
+    def calc_theta_ray(self, img, box_2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
         width = img.shape[1]
         fovx = 2 * np.arctan(width / (2 * proj_matrix[0][0]))
         center = (box_2d[1][0] + box_2d[0][0]) / 2
@@ -285,12 +285,13 @@ class DetectedObject:
 
         # torch transforms
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                                std=[0.229, 0.224, 0.225])
+                                                 std=[0.229, 0.224, 0.225])
         process = transforms.Compose ([
             transforms.ToTensor(),
+            #transforms.Grayscale(num_output_channels=3), #make it to gray scale
             normalize
         ])
-
+        
         # crop image
         pt1 = box_2d[0]
         pt2 = box_2d[1]

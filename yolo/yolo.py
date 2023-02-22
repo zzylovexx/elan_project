@@ -55,6 +55,7 @@ class cv_Yolo:
 
                     box = detection[0:4] * np.array([W, H, W, H])
                     (centerX, centerY, width, height) = box.astype("int")
+                    
 
                     # use the center (x, y)-coordinates to derive the top and
                     # and left corner of the bounding box
@@ -65,27 +66,30 @@ class cv_Yolo:
                     # and class IDs
 
                     boxes.append([x, y, int(width), int(height)])
+                    
                     confidences.append(float(confidence))
                     class_ids.append(class_id)
 
 
 
         idxs = cv2.dnn.NMSBoxes(boxes, confidences, self.confidence, self.threshold)
+        confidences_array=[]
 
         if len(idxs) > 0:
             for i in idxs.flatten():
 
                 top_left = (boxes[i][0], boxes[i][1])
                 bottom_right = (top_left[0] + boxes[i][2], top_left[1] + boxes[i][3])
-
+                #print("tep_left:(%d,%d)"%(boxes[i][0],boxes[i][1]),"buttom_right:(%d,%d)"%((top_left[0] + boxes[i][2]),(top_left[1] + boxes[i][3])))
                 box_2d = [top_left, bottom_right]
                 class_ = self.get_class(class_ids[i])
                 if class_ == "person":
                     class_ = "pedestrian"
+                confidences_array.append(confidences[i])
 
                 detections.append(Detection(box_2d, class_))
 
-        return detections
+        return detections,confidences_array
 
     def get_class(self, class_id):
         return self.labels[class_id]
