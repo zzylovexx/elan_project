@@ -11,7 +11,10 @@ conda install -c numba cudatoolkit=x.x  (8.0, 9.0, 10.0, depend on your environm
 ## Usage
 * commandline interface:
 ```
-python evaluate.py evaluate --label_path=/path/to/your_gt_label_folder --result_path=/path/to/your_result_folder --label_split_file=/path/to/val.txt --current_class=0 --coco=False
+python evaluate.py evaluate --label_path=/path/to/your_gt_label_folder --result_path=/path/to/your_result_folder --label_split_file=/path/to/val.txt --current_class=0 
+
+python ./kitti-object-eval-python/evaluate.py evaluate --label_path=Kitti/training/label_2 --result_path=20epoch_orient_inverse
+--coco=False
 ```
 * python interface:
 ```Python

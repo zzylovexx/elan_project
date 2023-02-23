@@ -214,12 +214,12 @@ def main():
         with open(f'{result_path}{img_id}.txt','w') as f:
             f.writelines(lines)
             
-        
+        '''
         if FLAGS.video:
             cv2.waitKey(1)
         else:
             if cv2.waitKey(0) != 32: # space bar
-                exit()
+                exit()'''
 
 if __name__ == '__main__':
     main()
