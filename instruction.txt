@@ -1,0 +1,6 @@
+
+## Run Group_labeling.py to generate group labels
+python Group_labeling.py --group-label-dir='label_2_group'
+
+## Run Train_group.py to train with group labels
+python Train_group.py --label-dir="/label_2_group/" --group

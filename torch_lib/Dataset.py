@@ -22,9 +22,9 @@ def generate_bins(bins): #this case is 2
     return angle_bins
 
 class Dataset(data.Dataset):
-    def __init__(self, path, bins=2, overlap=0.1):
+    def __init__(self, path, label_path="/label_2/", bins=2, overlap=0.1):
 
-        self.top_label_path = path + "/label_2/"
+        self.top_label_path = path + label_path
         self.top_img_path = path + "/image_2/"
         self.top_calib_path = path + "/calib/"
         # use a relative path instead?
@@ -135,7 +135,7 @@ class Dataset(data.Dataset):
         return bin_idxs
 
     def format_label(self, line):
-        line = line[:-1].split(' ')
+        line = line.split(' ')
 
         Class = line[0]
 
@@ -169,15 +169,26 @@ class Dataset(data.Dataset):
             Orientation[bin_idx,:] = np.array([np.cos(angle_diff), np.sin(angle_diff)])
             Confidence[bin_idx] = 1
 
-        label = {
-                'Class': Class,
-                'Box_2D': Box_2D,
-                'Dimensions': Dimension,
-                'Alpha': Alpha,
-                'Orientation': Orientation,
-                'Confidence': Confidence
-                }
-
+        if len(line) == 16:
+            Group = line[15] #line[-1]
+            label = {
+                    'Class': Class,
+                    'Box_2D': Box_2D,
+                    'Dimensions': Dimension,
+                    'Alpha': Alpha,
+                    'Orientation': Orientation,
+                    'Confidence': Confidence,
+                    'Group': Group
+                    }
+        else:
+            label = {
+                    'Class': Class,
+                    'Box_2D': Box_2D,
+                    'Dimensions': Dimension,
+                    'Alpha': Alpha,
+                    'Orientation': Orientation,
+                    'Confidence': Confidence
+                    }
         return label
 
     # will be deprc soon

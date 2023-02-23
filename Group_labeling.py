@@ -9,25 +9,23 @@ from library.File import *
 from jenkspy import jenks_breaks
 
 parser = argparse.ArgumentParser()
-
-parser.add_argument("--dataset-dir", default="Kitti/training/", help="path to Kitti/training")
 parser.add_argument("--group-label-dir", default="label_2_group/", help="group label folder name")
-parser.add_argument("--calib-dir", default="camera_cal/", help="path to the camera_cal")
 parser.add_argument("--calib-file", default="calib_cam_to_cam.txt", help="file name of the camera_cal.txt")
 
+#python .\Group_labeling.py --group-label-dir='label_2_group'
 def main():
 
     FLAGS = parser.parse_args()
     # Kitti image_2 dir / label_2 dir
-    img_root = os.path.join(FLAGS.dataset_dir, 'image_2')
+    img_root = "Kitti/training/image_2"
+    label_root = "Kitti/training/label_2"
     imgs = glob.glob(os.path.join(img_root, '*.png'), recursive=True)
-    label_root = os.path.join(FLAGS.dataset_dir, 'label_2')
     files = glob.glob(os.path.join(label_root, '*.txt'), recursive=True)
     # Kitti camera cal dir
-    calib_file = os.path.join(FLAGS.calib_dir, FLAGS.calib_file)
+    calib_file = os.path.join("camera_cal", FLAGS.calib_file)
     proj_matrix = get_P(calib_file)
     dir_name = FLAGS.group_label_dir
-    os.makedirs(os.path.join(FLAGS.dataset_dir, dir_name), exist_ok=True)
+    os.makedirs(os.path.join("Kitti/training", dir_name), exist_ok=True)
 
     obj_count = 0
     for i in range(len(files)):
@@ -45,16 +43,15 @@ def main():
                     for j in range(1, len(elements)):
                         elements[j] = float(elements[j])
 
-                    
-                    top_left = (int(round(elements[4])), int(round(elements[5])))
-                    btm_right = (int(round(elements[6])), int(round(elements[7])))
-                    theta_ray = calc_theta_ray(width, (top_left, btm_right), proj_matrix)
+                    #top_left = (int(round(elements[4])), int(round(elements[5])))
+                    #btm_right = (int(round(elements[6])), int(round(elements[7])))
+                    #theta_ray = calc_theta_ray(width, (top_left, btm_right), proj_matrix)
+                    #alpha = elements[3]
+                    #ty = alpha + theta_ray 
+                    #orients.append(math.cos(ty))
 
-                    alpha = elements[3]
-                    ty = alpha + theta_ray 
-                    orients.append(math.cos(ty))
-                    #rotation_y = elements[14]
-                    #orients.append(rotation_y)
+                    rotation_y = elements[14]
+                    orients.append(rotation_y)
             
             if len(orients) > 1:
                 clustered = clustering(orients, 0.7)
@@ -79,7 +76,7 @@ def main():
                 for data in new_data:
                     new_f.writelines(data+'\n')
     
-    print('Group labels.txt are saved in %s'%(os.path.join(FLAGS.dataset_dir, dir_name)))
+    print('Group labels.txt are saved in %s'%(os.path.join("Kitti/training", dir_name)))
 
 def clustering(orient, threshold=0.7):
     array = np.array(orient)
