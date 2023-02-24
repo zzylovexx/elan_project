@@ -1,6 +1,12 @@
 
-## Run Group_labeling.py to generate group labels
-python Group_labeling.py --group-label-dir='label_2_group'
+## Group_labeling.py to generate Kitti-format labels with "group" label
+python ./Group_labeling.py --group-label-dir="label_2_group"
 
-## Run Train_group.py to train with group labels
-python Train_group.py --label-dir="/label_2_group/" --group
+## Train_group.py to train on Kitti-format labels with "group" label
+python ./Train_group.py --label-dir="/label_2_group/" --group
+
+## Run_Kitti_no_yolo.py to generate Kiiti-format labels which are based on GT labels (result-path is suggested to name after date i.e. GT_orient_0228)
+python ./Run_Kitti_no_yolo.py --result-path=GT_orient_0228
+
+## kitti-object-eval-python/evaluate.py to evluate 3D AP on Kiiti-format generated labels (result-path should be the same as above)
+python ./kitti-object-eval-python/evaluate.py evaluate --label_path=Kitti/training/label_2 --result_path=GT_orient_0228
