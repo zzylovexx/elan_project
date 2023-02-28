@@ -46,15 +46,14 @@ parser.add_argument("--cal-dir", default="camera_cal/",
                     help="Relative path to the directory containing camera calibration form KITTI. \
                     Default is camera_cal/")
 
-parser.add_argument("--video", action="store_true",
-                    help="Weather or not to advance frame-by-frame as fast as possible. \
-                    By default, this will pull images from ./eval/video")
-
 parser.add_argument("--show-yolo", action="store_true",
                     help="Show the 2D BoundingBox detecions on a separate image")
-
 parser.add_argument("--hide-debug", action="store_true",
                     help="Supress the printing of each 3d location")
+
+parser.add_argument('--weights', default='epoch_20.pkl', help='weights name, XXX.pkl')
+parser.add_argument('--result-path', default='GT_orient', help='path to put in the generated txt (suggest name after date i.e. GT_orient_0228)')
+parser.add_argument('--show-img', default=False, help='Show image by image or not')
 
 
 def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray, img_2d=None):
@@ -69,18 +68,18 @@ def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray
 
     plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
 
-    return location,orient
+    return location, orient
 
 def main():
 
     FLAGS = parser.parse_args()
-
+    # 
+    os.makedirs(FLAGS.result_path,exist_ok=True)
     # load torch
     weights_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_orient'
     
     model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
-    #weight_abs_path='/home/chang0731/Desktop/elan_project/3D-BoundingBox/weights_orient/epoch_20.pkl'
-    weight_abs_path='./weights_orient/epoch_20.pkl'
+    weight_abs_path= os.path.join(weights_path, FLAGS.weights)
     if len(model_lst) == 0:
         print('No previous model found, please train first!')
         exit()
@@ -91,7 +90,7 @@ def main():
         model = Model.Model(features=my_vgg.features, bins=2).cuda()
         #checkpoint = torch.load(weights_path + '/%s'%model_lst[-1])
         checkpoint=torch.load(weight_abs_path)
-        print('use previous weight:',weight_abs_path)
+        print('use previous weight:', weight_abs_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
 
@@ -106,11 +105,6 @@ def main():
 
     image_dir = FLAGS.image_dir
     cal_dir = FLAGS.cal_dir
-    if FLAGS.video:
-        if FLAGS.image_dir == "eval/image_2/" and FLAGS.cal_dir == "camera_cal/":
-            image_dir = "eval/video/2011_09_26/image_2/"
-            cal_dir = "eval/video/2011_09_26/"
-
     
     img_path = os.path.abspath(os.path.dirname(__file__)) + "/" + image_dir
     # using P_rect from global calibration file
@@ -127,7 +121,8 @@ def main():
         exit()
 
     for img_id in ids:
-
+        
+        print(img_id)
         start_time = time.time()
 
         img_file = img_path + img_id + ".png" #elan:jpg,kitti:png
@@ -183,10 +178,10 @@ def main():
             alpha -= np.pi
             #print('alpha:',alpha)
             if FLAGS.show_yolo:
-                location,_ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray, truth_img)
+                location, _ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray, truth_img)
                 #this location means object center ,but in kitti lable it label th buttom center of objet ,so the y location need add 1/2 height
             else:
-                location,rotation_y = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray)
+                location, rotation_y = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray)
             location_kitti=location
             location_kitti[1]=location_kitti[1]+dim[0]*0.5
             
@@ -196,30 +191,27 @@ def main():
                 #print('Estimated pose : %s'%location)
                 print('Estimated pose kitti: %s'%location_kitti)
 
-        if FLAGS.show_yolo:
-            numpy_vertical = np.concatenate((truth_img, img), axis=0)
-            cv2.imshow('SPACE for next image, any other key to exit', numpy_vertical)
-        else:
-            cv2.imshow('3D detections', img)
-
         if not FLAGS.hide_debug:
-            print("\n")
             print('Got %s poses in %.3f seconds'%(len(detections), time.time() - start_time))
             print('-------------')
-            print(img_id)
-        result_path='./20epoch_orient_inverse/'
-        os.makedirs(result_path,exist_ok=True)
-       
-        #write to txt
-        with open(f'{result_path}{img_id}.txt','w') as f:
-            f.writelines(lines)
-            
-        '''
-        if FLAGS.video:
-            cv2.waitKey(1)
-        else:
-            if cv2.waitKey(0) != 32: # space bar
-                exit()'''
 
+        if not FLAGS.show_img:
+            #write to txt
+            with open(f'{FLAGS.result_path}/{img_id}.txt','w') as f:
+                f.writelines(lines)
+
+        else:
+            if FLAGS.show_yolo:
+                numpy_vertical = np.concatenate((truth_img, img), axis=0)
+                cv2.imshow('SPACE for next image, any other key to exit', numpy_vertical)
+                if cv2.waitKey(0) != 32: # space bar
+                    exit()
+            elif FLAGS:
+                cv2.imshow('3D detections', img)
+                if cv2.waitKey(0) != 32: # space bar
+                    exit()
+        
+            
+        
 if __name__ == '__main__':
     main()

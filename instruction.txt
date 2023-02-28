@@ -1,12 +1,15 @@
 
-## Group_labeling.py to generate Kitti-format labels with "group" label
+## Step1 Group_labeling.py to generate Kitti-format labels with "group" label
 python ./Group_labeling.py --group-label-dir="label_2_group"
 
-## Train_group.py to train on Kitti-format labels with "group" label
-python ./Train_group.py --label-dir="/label_2_group/" --group
+## Step2 Train_group.py to train on Kitti-format labels with "group" label
+python ./Train_group.py --label-dir="/label_2_group/"
 
-## Run_Kitti_no_yolo.py to generate Kiiti-format labels which are based on GT labels (result-path is suggested to name after date i.e. GT_orient_0228)
+## Step3 Run_Group.py to generate Kiiti-format labels which are based on GT labels (result-path is suggested to name after date i.e. GT_orient_0228)
+python ./Run_group.py --weights=epoch_20.pkl --result-path=Reverse_orient_0228 --hide-debug
+
+## (Step3 Optional) Run_Kitti_no_yolo.py to generate Kiiti-format labels which are based on GT labels (result-path is suggested to name after date i.e. GT_orient_0228)
 python ./Run_Kitti_no_yolo.py --result-path=GT_orient_0228
 
 ## kitti-object-eval-python/evaluate.py to evluate 3D AP on Kiiti-format generated labels (result-path should be the same as above)
-python ./kitti-object-eval-python/evaluate.py evaluate --label_path=Kitti/training/label_2 --result_path=GT_orient_0228
+python ./kitti-object-eval-python/evaluate.py evaluate --label_path=Kitti/training/label_2 --result_path={should be the same as result-path at Step3}

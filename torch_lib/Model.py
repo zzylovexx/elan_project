@@ -34,7 +34,9 @@ def GroupLoss(orient_batch, orientGT_batch, confGT_batch, group_batch):
     group_idxs = get_group_idxs(group_batch)
     weighted_loss = 0
     for idxs in group_idxs:
-        loss = eachGroupLoss(idxs, theta_diff, estimated_theta_diff) 
+        loss = eachGroupLoss(idxs, theta_diff, estimated_theta_diff)
+        #loss = eachGroupLoss_cos(idxs, theta_diff, estimated_theta_diff)
+        #loss = eachGroupLoss_std(idxs, theta_diff, estimated_theta_diff)
         weighted_loss += loss*len(idxs)/batch_size
 
     #return torch.tensor(weighted_loss)
@@ -52,6 +54,31 @@ def eachGroupLoss(idxs, theta_diff, estimated_theta_diff):
     group_theta_diff = estimated_theta_diff - estimated_theta_diff[closest_idx]
     # sin0 = 0  
     return torch.sin(group_theta_diff).sum()
+
+def eachGroupLoss_cos(idxs, theta_diff, estimated_theta_diff):
+    if len(idxs) == 1:
+        return torch.zeros(1)[0].cuda()
+    
+    theta_diff = theta_diff[idxs]
+    estimated_theta_diff = estimated_theta_diff[idxs]
+    theta_loss = torch.cos(theta_diff - estimated_theta_diff)
+    closest_idx = torch.argmax(theta_loss)
+    group_theta_diff = estimated_theta_diff - estimated_theta_diff[closest_idx]
+    # sin0 = 0  
+    return -1 * torch.cos(group_theta_diff).sum()
+
+def eachGroupLoss_std(idxs, theta_diff, estimated_theta_diff):
+    if len(idxs) == 1:
+        return torch.zeros(1)[0].cuda()
+    
+    theta_diff = theta_diff[idxs]
+    estimated_theta_diff = estimated_theta_diff[idxs]
+    theta_loss = torch.cos(theta_diff - estimated_theta_diff)
+    closest_idx = torch.argmax(theta_loss)
+    group_theta_diff = estimated_theta_diff - estimated_theta_diff[closest_idx]
+    std = group_theta_diff.std()
+    # sin(t) = t, when t is small
+    return torch.sin(std)
 
 def get_group_idxs(group):
     # remove duplicate values
