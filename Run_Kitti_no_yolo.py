@@ -20,8 +20,8 @@ import numpy as np
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument('--weight-dir', default='weights_orient', help='path to the Kiiti weights folder')
-parser.add_argument('--result-path', default='GT_orient', help='path to put in the generated txt (suggest name after date i.e. GT_orient_0228)')
+parser.add_argument('--weight-dir', default='weights_group', help='path to the Kiiti weights folder')
+parser.add_argument('--result-path', default='GT_group', help='path to put in the generated txt (suggest name after date i.e. GT_orient_0228)')
 
 def plot_regressed_3d_bbox(img, truth_img, cam_to_img, box_2d, dimensions, alpha, theta_ray):
 
@@ -47,7 +47,7 @@ def main():
         print('No previous model found, please train first!')
         exit()
     else:
-        print ('Using previous model %s'%model_lst[-1])
+        print ('Using previous model %s'%(weights_path+model_lst[-1]))
         my_vgg = vgg.vgg19_bn(pretrained=True)
         model = Model.Model(features=my_vgg.features, bins=2).cuda()
         checkpoint = torch.load(weights_path + '/%s'%model_lst[-1])

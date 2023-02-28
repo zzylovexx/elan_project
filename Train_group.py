@@ -23,7 +23,7 @@ def main():
     FLAGS = parser.parse_args()
     # hyper parameters
     epochs = 100
-    batch_size = 8
+    batch_size = 16
     alpha = 0.6
     w = 0.4
 
@@ -50,7 +50,7 @@ def main():
         group_loss_func = GroupLoss
 
     # load any previous weights
-    model_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_orient/'
+    model_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_group/'
     latest_model = None
     first_epoch = 0
     if not os.path.isdir(model_path):
