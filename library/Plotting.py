@@ -93,7 +93,14 @@ def plot_3d_box(img, cam_to_img, ry, dimension, center):
     for corner in corners:
         point = project_3d_pt(corner, cam_to_img)
         box_3d.append(point)
-
+   
+    # buttomcenter=np.zeros(3)
+    # buttomcenter[0]=center[0]
+    # buttomcenter[1]=center[1]+0.5*dimension[0]
+    # buttomcenter[2]=center[2]
+    # print('center3d:',buttomcenter)
+    # center_3d=project_3d_pt(buttomcenter,cam_to_img)
+    # cv2.circle(img,center_3d,1,(0,0,255),4)
     #TODO put into loop
     cv2.line(img, (box_3d[0][0], box_3d[0][1]), (box_3d[2][0],box_3d[2][1]), cv_colors.GREEN.value, 1)
     cv2.line(img, (box_3d[4][0], box_3d[4][1]), (box_3d[6][0],box_3d[6][1]), cv_colors.GREEN.value, 1)
