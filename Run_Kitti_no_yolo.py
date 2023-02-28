@@ -38,7 +38,7 @@ def plot_regressed_3d_bbox(img, truth_img, cam_to_img, box_2d, dimensions, alpha
 def main():
     FLAGS = parser.parse_args()
     
-    weights_path = os.path.abspath(os.path.dirname(__file__)) + '/' + FLAGS.weight_dir # '/weights_orient'
+    weights_path = os.path.abspath(os.path.dirname(__file__)) + '/' + FLAGS.weight_dir
     model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
     result_path= FLAGS.result_path
     os.makedirs(result_path,exist_ok=True)
@@ -55,8 +55,8 @@ def main():
         model.eval()
 
     # defaults to /eval
-    dataset = Dataset(os.path.abspath(os.path.dirname(__file__)) + '/eval')
-    #dataset = Dataset(os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training')
+    #dataset = Dataset(os.path.abspath(os.path.dirname(__file__)) + '/eval')
+    dataset = Dataset(os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training')
     averages = ClassAverages.ClassAverages()
 
     all_images = dataset.all_objects()

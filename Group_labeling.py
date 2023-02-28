@@ -43,15 +43,15 @@ def main():
                     for j in range(1, len(elements)):
                         elements[j] = float(elements[j])
 
-                    #top_left = (int(round(elements[4])), int(round(elements[5])))
-                    #btm_right = (int(round(elements[6])), int(round(elements[7])))
-                    #theta_ray = calc_theta_ray(width, (top_left, btm_right), proj_matrix)
-                    #alpha = elements[3]
-                    #ty = alpha + theta_ray 
-                    #orients.append(math.cos(ty))
+                    top_left = (int(round(elements[4])), int(round(elements[5])))
+                    btm_right = (int(round(elements[6])), int(round(elements[7])))
+                    theta_ray = calc_theta_ray(width, (top_left, btm_right), proj_matrix)
+                    alpha = elements[3]
+                    ty = alpha + theta_ray 
+                    orients.append(math.cos(ty))
 
-                    rotation_y = elements[14]
-                    orients.append(rotation_y)
+                    #rotation_y = elements[14]
+                    #orients.append(rotation_y)
             
             if len(orients) > 1:
                 clustered = clustering(orients, 0.7)
