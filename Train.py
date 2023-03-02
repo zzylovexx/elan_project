@@ -15,7 +15,7 @@ def main():
 
     # hyper parameters
     epochs = 100
-    batch_size = 8
+    batch_size = 64
     alpha = 0.6
     w = 0.4
 
@@ -25,7 +25,7 @@ def main():
     dataset = Dataset(train_path)
 
     params = {'batch_size': batch_size,
-              'shuffle': True,
+              'shuffle': False,
               'num_workers': 6}
 
     generator = data.DataLoader(dataset, **params)
@@ -38,7 +38,7 @@ def main():
     orient_loss_func = OrientationLoss
 
     # load any previous weights
-    model_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_orient/'
+    model_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_64/'
     latest_model = None
     first_epoch = 0
     if not os.path.isdir(model_path):
