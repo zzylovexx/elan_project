@@ -38,7 +38,9 @@ def main():
     orient_loss_func = OrientationLoss
 
     # load any previous weights
+
     model_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_64/'
+
     latest_model = None
     first_epoch = 0
     if not os.path.isdir(model_path):

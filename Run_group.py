@@ -76,7 +76,7 @@ def main():
     # 
     os.makedirs(FLAGS.result_path,exist_ok=True)
     # load torch
-    weights_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_orient'
+    weights_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_group'
     
     model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
     weight_abs_path= os.path.join(weights_path, FLAGS.weights)
