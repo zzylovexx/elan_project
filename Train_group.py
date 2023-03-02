@@ -16,7 +16,6 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--label-dir", default="/label_2_group/", help='dir name of the labels')
 parser.add_argument("--group", default="True", help='with group label or not')
-#python Train_group.py --label-dir="/label_2_group/" --group
 
 def main():
 
@@ -104,9 +103,10 @@ def main():
 
             if FLAGS.group:
                 #loss += 0.2 * group_loss # cal_orient, rotation_y (sin_loss before 228)
-                loss += 0.5 * group_loss # cal_orient sin_loss in 228
+                #loss += 0.5 * group_loss # cal_orient sin_loss in 228
                 #loss += group_loss # std_loss
                 #loss += 0.5*group_loss # cos_loss
+                loss += 0.2 * group_loss # cal_orient ABS(sin_loss) IN 301
 
             opt_SGD.zero_grad()
             loss.backward()

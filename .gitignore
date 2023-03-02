@@ -16,3 +16,4 @@ PyTorch_YOLOv3_kitti/data/
 PyTorch_YOLOv3_kitti/label_transform/
 PyTorch_YOLOv3_kitti/checkpoints/darknet53.conv.74
 PyTorch_YOLOv3_kitti/detect_test.ipynb
+*/*.txt

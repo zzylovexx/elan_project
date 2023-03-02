@@ -49,11 +49,12 @@ def eachGroupLoss(idxs, theta_diff, estimated_theta_diff):
     
     theta_diff = theta_diff[idxs]
     estimated_theta_diff = estimated_theta_diff[idxs]
-    theta_loss = torch.cos(theta_diff - estimated_theta_diff)
-    closest_idx = torch.argmax(theta_loss)
+    delta = torch.cos(theta_diff - estimated_theta_diff)
+    closest_idx = torch.argmax(delta)
     group_theta_diff = estimated_theta_diff - estimated_theta_diff[closest_idx]
-    # sin0 = 0  
-    return torch.sin(group_theta_diff).sum()
+    group_theta_diff = torch.abs(group_theta_diff)
+    group_theta_loss = torch.sin(group_theta_diff).sum()
+    return group_theta_loss
 
 def eachGroupLoss_cos(idxs, theta_diff, estimated_theta_diff):
     if len(idxs) == 1:
