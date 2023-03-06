@@ -80,12 +80,12 @@ def main():
     FLAGS = parser.parse_args()
 
     # load torch
-    weights_path = os.path.abspath(os.path.dirname(__file__)) + '/weights'
+    weights_path = os.path.abspath(os.path.dirname(__file__)) + '/weights' #/weights_group
     
     model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
 
     weight_abs_path='./weights_group/epoch_20.pkl' #my weigh_path
-    
+    #weight_abs_path = 'weights_group/epoch_20_b16_cos_1.pkl'
     if len(model_lst) == 0:
         print('No previous model found, please train first!')
         exit()
@@ -218,6 +218,7 @@ def main():
         os.makedirs(result_path,exist_ok=True)
        
         #write to txt
+        #print(img_id)
         with open(f'{result_path}{img_id}.txt','w') as f:
             f.writelines(lines)
             
