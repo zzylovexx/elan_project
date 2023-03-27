@@ -33,3 +33,7 @@ demo/
         ├── 00001.txt
         ├── 00002.txt
         └── ...
+
+
+## 0327 added Alpha_Ry_labeling.py (Get Alpha group line[15] and Ry group line[16])
+python Alpha_Ry_labeling.py
