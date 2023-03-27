@@ -9,23 +9,21 @@ from library.File import *
 from jenkspy import jenks_breaks
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--group-label-dir", default="label_2_group/", help="group label folder name")
+parser.add_argument("--label-root", default="Kitti/training/label_2", help="group label folder name")
 parser.add_argument("--calib-file", default="calib_cam_to_cam.txt", help="file name of the camera_cal.txt")
 
-#python .\Group_labeling.py --group-label-dir='label_2_group'
+#python .\Group_labeling.py --label-root=Baseline_no_group
 def main():
 
     FLAGS = parser.parse_args()
     # Kitti image_2 dir / label_2 dir
     img_root = "Kitti/training/image_2"
-    label_root = "Kitti/training/label_2"
+    label_root = FLAGS.label_root #"Kitti/training/label_2"
     imgs = glob.glob(os.path.join(img_root, '*.png'), recursive=True)
     files = glob.glob(os.path.join(label_root, '*.txt'), recursive=True)
     # Kitti camera cal dir
     calib_file = os.path.join("camera_cal", FLAGS.calib_file)
     proj_matrix = get_P(calib_file)
-    dir_name = FLAGS.group_label_dir
-    os.makedirs(os.path.join("Kitti/training", dir_name), exist_ok=True)
 
     obj_count = 0
     for i in range(len(files)):
@@ -72,11 +70,11 @@ def main():
                 new_data.append(line[:-1] + ' ' + str(c))
         
             # write new .txt
-            with open(files[i].replace('label_2', dir_name), 'w') as new_f:
+            with open(files[i], 'w') as new_f:
                 for data in new_data:
                     new_f.writelines(data+'\n')
     
-    print('Group labels.txt are saved in %s'%(os.path.join("Kitti/training", dir_name)))
+    print('Group labels.txt are saved.')
 
 def clustering(orient, threshold=0.7):
     array = np.array(orient)

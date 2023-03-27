@@ -20,9 +20,9 @@ import numpy as np
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument('--weight-dir', default='weights_group', help='path to the Kiiti weights folder')
-parser.add_argument('--weights', default='epoch_20.pkl', help='weights name')
-parser.add_argument('--result-path', default='GT_group', help='path to put in the generated txt (suggest name after date i.e. GT_orient_0228)')
+parser.add_argument('--weight-dir', default='weights', help='path to the Kiiti weights folder')
+parser.add_argument('--weights', required=True, help='The name of weights.pkl')
+parser.add_argument('--data-dir', default='Kitti/demo', help='path to data folder')
 
 def plot_regressed_3d_bbox(img, truth_img, cam_to_img, box_2d, dimensions, alpha, theta_ray):
 
@@ -40,25 +40,21 @@ def main():
     FLAGS = parser.parse_args()
     
     weights_path = os.path.abspath(os.path.dirname(__file__)) + '/' + FLAGS.weight_dir
-    model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
-    result_path= FLAGS.result_path
-    os.makedirs(result_path, exist_ok=True)
+    my_vgg = vgg.vgg19_bn(pretrained=True)
+    model = Model.Model(features=my_vgg.features, bins=2).cuda()
+    checkpoint = torch.load(weights_path + '/' + FLAGS.weights)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.eval()
 
-    if len(model_lst) == 0:
-        print('No previous model found, please train first!')
-        exit()
-    else:
-        print ('Using model %s'%(FLAGS.weight_dir + '/' + FLAGS.weights))
-        my_vgg = vgg.vgg19_bn(pretrained=True)
-        model = Model.Model(features=my_vgg.features, bins=2).cuda()
-        checkpoint = torch.load(os.path.join(weights_path, FLAGS.weights))
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.eval()
-
-    dataset = Dataset(os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training')
+    # defaults to /eval
+    #dataset = Dataset(os.path.abspath(os.path.dirname(__file__)) + '/eval')
+    dataset = Dataset(os.path.abspath(os.path.dirname(__file__)) + '/' + FLAGS.data_dir)
     averages = ClassAverages.ClassAverages()
+
     all_images = dataset.all_objects()
     for key in sorted(all_images.keys()):
+
+        start_time = time.time()
 
         data = all_images[key]
 
@@ -69,6 +65,7 @@ def main():
         
         #added
         lines = list()
+        rys = list()
         for detectedObject in objects:
             label = detectedObject.label
 
@@ -98,26 +95,16 @@ def main():
             alpha -= np.pi
 
             location, rotation_y = plot_regressed_3d_bbox(img, truth_img, cam_to_img, label['Box_2D'], dim, alpha, theta_ray)
+            rys.append(f'{rotation_y:.2f}')
 
-            #print('Estimated pose: %s'%location)
-            #print('Truth pose: %s'%label['Location'])
-            #print('-------------')
-            lines+=f"{label['Class']} 0.0 0 {alpha:.2f} {label['Box_2D'][0][0]} {label['Box_2D'][0][1]} {label['Box_2D'][1][0]} {label['Box_2D'][1][1]} {dim[0]:.2f} {dim[1]:.2f} {dim[2]:.2f} {location[0]:.2f} {location[1]:.2f} {location[2]:.2f} {rotation_y:.2f}\n"
-
-
-        #print('Got %s poses in %.3f seconds\n'%(len(objects), time.time() - start_time))
-
-        print(key)
-        '''
-        numpy_vertical = np.concatenate((truth_img, img), axis=0)
         
-        cv2.imshow('2D detection on top, 3D prediction on bottom', numpy_vertical)
+        numpy_vertical = np.concatenate((truth_img, img), axis=0)
+        print(key)
+        print(rys)
+        print('-'*20)
+        cv2.imshow(FLAGS.weights, numpy_vertical)
         if cv2.waitKey(0) == 27:
             return
-        '''
-        #write to txt
-        with open(f'{result_path}/{key}.txt','w') as f:
-            f.writelines(lines)
-
+        
 if __name__ == '__main__':
     main()

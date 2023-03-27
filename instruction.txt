@@ -1,15 +1,34 @@
 
 ## Step1 Group_labeling.py to generate Kitti-format labels with "group" label
-python ./Group_labeling.py --group-label-dir="label_2_group"
+python ./Group_labeling.py
 
 ## Step2 Train_group.py to train on Kitti-format labels with "group" label
 python ./Train_group.py --label-dir="/label_2_group/"
 
-## Step3 Run_Group.py to generate Kiiti-format labels which are based on GT labels (result-path is suggested to name after date i.e. GT_orient_0228)
-python ./Run_group.py --weights=epoch_20.pkl --result-path=Reverse_orient_0228 --hide-debug
+## (Step3) yolo.weights | Generate Kiiti-format label (result-path is suggested to name after date i.e. GT_orient_0228)
+python ./Run_group.py --weights=epoch_20.pkl --result-path=Predict_orient_0228 --hide-debug
 
-## (Step3 Optional) Run_Kitti_no_yolo.py to generate Kiiti-format labels which are based on GT labels (result-path is suggested to name after date i.e. GT_orient_0228)
-python ./Run_Kitti_no_yolo.py --result-path=GT_orient_0228
+## (Step3) yolo-kitti.weights | Generate Kiiti-format labels (result-path is suggested to name after date i.e. GT_orient_0228)
+python ./Run_kitti_yolo.py --weights=epoch_20.pkl --result-path=Predict_orient_0228 --hide-debug
 
-## kitti-object-eval-python/evaluate.py to evluate 3D AP on Kiiti-format generated labels (result-path should be the same as above)
+## (Step4 Optional) Run_Kitti_no_yolo.py to generate Kiiti-format labels which are based on GT labels (result-path is suggested to name after date i.e. GT_orient_0228)
+python ./Run_Kitti_no_yolo.py --weight-dir={} --weights={weightName.pkl} --result-path=GT_orient_0228
+
+## (Step 5 Optional) Group_labeling.py again to generate Kitti-format labels with "group" label (ORG labels with group-label in the same folder) 
+#python ./Group_labeling.py --label-root={the same as Step4 result-path}
+
+## Evaluation Part
 python ./kitti-object-eval-python/evaluate.py evaluate --label_path=Kitti/training/label_2 --result_path={should be the same as result-path at Step3}
+
+## Visualize 2d box and 3d box in dataset (choose some images and create a demo folder, or whole dataset takes long time to load!)
+python ./Show_Kitti_no_yolo.py --weight-dir=weights_group --weights=epoch_20_b16_cos.pkl --data-dir=Kitti/demo
+## The structure of demo folder
+demo/
+    ├── image_2
+    │   ├── 000001.png
+    │   ├── 000002.png
+    │   └── ...
+    └── label_2
+        ├── 00001.txt
+        ├── 00002.txt
+        └── ...

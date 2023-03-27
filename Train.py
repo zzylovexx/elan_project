@@ -14,8 +14,10 @@ import os
 def main():
 
     # hyper parameters
-    epochs = 100
-    batch_size = 64
+
+    epochs = 20       #100
+    batch_size = 16   #b8 is better than b64
+
     alpha = 0.6
     w = 0.4
 
@@ -39,7 +41,9 @@ def main():
 
     # load any previous weights
 
+
     model_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_64/'
+
 
     latest_model = None
     first_epoch = 0
