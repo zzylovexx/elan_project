@@ -10,12 +10,15 @@ from jenkspy import jenks_breaks
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--label-root", default="Kitti/training/label_2", help="group label folder name")
+parser.add_argument("--new-label-dir", default="label_2_group", help="new label folder name")
 parser.add_argument("--calib-file", default="calib_cam_to_cam.txt", help="file name of the camera_cal.txt")
 
 #python .\Group_labeling.py --label-root=Baseline_no_group
 def main():
 
     FLAGS = parser.parse_args()
+
+    dir_name = FLAGS.new_label_dir
     # Kitti image_2 dir / label_2 dir
     img_root = "Kitti/training/image_2"
     label_root = FLAGS.label_root #"Kitti/training/label_2"
@@ -69,10 +72,10 @@ def main():
             for c, line in zip(clustered, lines):
                 new_data.append(line[:-1] + ' ' + str(c))
         
-            # write new .txt
-            with open(files[i], 'w') as new_f:
-                for data in new_data:
-                    new_f.writelines(data+'\n')
+        # write new .txt
+        with open(files[i].replace('label_2', dir_name), 'w') as new_f:
+            for data in new_data:
+                new_f.writelines(data+'\n')
     
     print('Group labels.txt are saved.')
 

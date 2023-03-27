@@ -2,6 +2,7 @@
 *.pkl
 *.pyc
 *.swp
+Kitti/demo
 Kitti/testing
 Kitti/training
 legacy

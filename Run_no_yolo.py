@@ -45,6 +45,7 @@ def main():
         my_vgg = vgg.vgg19_bn(pretrained=True)
         model = Model.Model(features=my_vgg.features, bins=2).cuda()
         checkpoint = torch.load(weights_path + '/%s'%model_lst[-1])
+        print(f'Using {model_lst[-1]}')
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
 
