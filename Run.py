@@ -37,7 +37,7 @@ def str2bool(v):
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--image-dir", default="Kitti/training/image_2/", #elan_dataset:img, kitti:image_2
+parser.add_argument("--image-dir", default="eval/training/image_2/", #elan_dataset:img, kitti:image_2
                     help="Relative path to the directory containing images to detect. Default \
                     is eval/image_2/")
 
@@ -57,7 +57,7 @@ parser.add_argument("--hide-debug", action="store_true",
                     help="Supress the printing of each 3d location")
 
 
-def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray, img_2d=None):
+def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray,detectionid=None, img_2d=None):
 
     # the math! returns X, the corners used for constraint
     location, X = calc_location(dimensions, cam_to_img, box_2d, alpha, theta_ray)#透過數學找到xyz（location)
@@ -65,7 +65,7 @@ def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray
     orient = alpha + theta_ray
     # print('orient:',orient)
     if img_2d is not None:
-        plot_2d_box(img_2d, box_2d)
+        plot_2d_box(img_2d, box_2d,detectionid)
 
     plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
 
@@ -79,7 +79,9 @@ def main():
     weights_path = os.path.abspath(os.path.dirname(__file__)) + '/weights'
     
     model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
-    weight_abs_path='/home/chang0731/Desktop/elan_project/3D-BoundingBox/weights_orien/epoch_20.pkl'
+
+    weight_abs_path='/home/chang0731/Desktop/elan_project/3D-BoundingBox/weights/epoch_100.pkl'
+    
     if len(model_lst) == 0:
         print('No previous model found, please train first!')
         exit()
@@ -108,7 +110,7 @@ def main():
     if FLAGS.video:
         if FLAGS.image_dir == "eval/image_2/" and FLAGS.cal_dir == "camera_cal/":
             image_dir = "eval/video/2011_09_26/image_2/"
-            cal_dir = "eval/video/2011_09_26/"
+            cal_dir = "camera_cal/"
 
     
     img_path = os.path.abspath(os.path.dirname(__file__)) + "/" + image_dir
@@ -139,9 +141,7 @@ def main():
         
         img = np.copy(truth_img)
         yolo_img = np.copy(truth_img)
-
         detections,confidences = yolo.detect(yolo_img)
-       
         #print('value',confidences)
         lines=[]
         for detectionid,detection in enumerate(detections):
@@ -165,12 +165,17 @@ def main():
             #print('detectionclass:', detection.detected_class)
             input_tensor = torch.zeros([1,3,224,224]).cuda()
             input_tensor[0,:,:,:] = input_img #除了batch其他dim都配原圖資訊進去
-
+           
             [orient, conf, dim] = model(input_tensor)
+            
+            
             orient = orient.cpu().data.numpy()[0, :, :]
             conf = conf.cpu().data.numpy()[0, :]
             dim = dim.cpu().data.numpy()[0, :]
             dim += averages.get_item(detected_class)
+            #dim = averages.get_item(detected_class)
+
+            
             #print('dim:',dim)
             argmax = np.argmax(conf)
             orient = orient[argmax, :]
@@ -182,36 +187,45 @@ def main():
             alpha -= np.pi
             #print('alpha:',alpha)
             if FLAGS.show_yolo:
-                location,_ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray, truth_img)
+                location,_ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray,detectionid, truth_img)
                 #this location means object center ,but in kitti lable it label th buttom center of objet ,so the y location need add 1/2 height
             else:
-                location,rotation_y = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray)
+                location,rotation_y = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray,detectionid)
             location_kitti=location
             location_kitti[1]=location_kitti[1]+dim[0]*0.5
             
-            lines+=f"{detection.detected_class} 0.0 0 {alpha:.2f} {box_2d[0][0]} {box_2d[0][1]} {box_2d[1][0]} {box_2d[1][1]} {dim[0]:.2f} {dim[1]:.2f} {dim[2]:.2f} {location_kitti[0]:.2f} {location_kitti[1]:.2f} {location_kitti[2]:.2f} {rotation_y:.2f} {confidences[detectionid]:.2f} \n"
-            
+            lines+=f"{detection.detected_class} 0.0 0 {alpha:.2f} {box_2d[0][0]} {box_2d[0][1]} {box_2d[1][0]} {box_2d[1][1]} {dim[0]:.2f} {dim[1]:.2f} {dim[2]:.2f} {location_kitti[0]:.2f} {location_kitti[1]:.2f} {location_kitti[2]:.2f} {rotation_y:.2f} {confidences[detectionid]:.2f}\n"
+             
             if not FLAGS.hide_debug:
-                #print('Estimated pose : %s'%location)
-                print('Estimated pose kitti: %s'%location_kitti)
+                print('Estimated pose : %s'%location)
+                #print('Estimated pose kitti: %s'%location_kitti)
+        pic_dir='look/'
+        os.makedirs(pic_dir,exist_ok=True)
+        
+        if (img_id == '0000000100'):
+            break
 
         if FLAGS.show_yolo:
             numpy_vertical = np.concatenate((truth_img, img), axis=0)
-            cv2.imshow('SPACE for next image, any other key to exit', numpy_vertical)
+            #cv2.imshow('SPACE for next image, any other key to exit', numpy_vertical)
+            #print(pic_dir+img_file)
+            cv2.imwrite(pic_dir+img_id +".png",numpy_vertical)
         else:
+            #pass
             cv2.imshow('3D detections', img)
-
+        
+        
         if not FLAGS.hide_debug:
             print("\n")
             print('Got %s poses in %.3f seconds'%(len(detections), time.time() - start_time))
             print('-------------')
             print(img_id)
-        result_path='./20epoch_orient_inverse/'
+        result_path='./temp/'
         os.makedirs(result_path,exist_ok=True)
        
-        #write to txt
-        with open(f'{result_path}{img_id}.txt','w') as f:
-            f.writelines(lines)
+       # write to txt
+        # with open(f'{result_path}{img_id}.txt','w') as f:
+        #     f.writelines(lines)
             
         
         if FLAGS.video:

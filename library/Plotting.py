@@ -120,12 +120,13 @@ def plot_3d_box(img, cam_to_img, ry, dimension, center):
     cv2.line(img, front_mark[0], front_mark[3], cv_colors.BLUE.value, 1)
     cv2.line(img, front_mark[1], front_mark[2], cv_colors.BLUE.value, 1)
 
-def plot_2d_box(img, box_2d):
+def plot_2d_box(img, box_2d,detectionid):
     # create a square from the corners
     pt1, pt2, pt3, pt4 = create_2d_box(box_2d)
-
+    text=str(detectionid)
     # plot the 2d box
     cv2.line(img, pt1, pt2, cv_colors.BLUE.value, 2)
     cv2.line(img, pt2, pt3, cv_colors.BLUE.value, 2)
     cv2.line(img, pt3, pt4, cv_colors.BLUE.value, 2)
     cv2.line(img, pt4, pt1, cv_colors.BLUE.value, 2)
+    cv2.putText(img,text,(pt1),cv2.FONT_HERSHEY_SIMPLEX,0.5,(55,125,255),1,cv2.LINE_AA)

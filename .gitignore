@@ -13,8 +13,17 @@ eval/IVAforNCTU_kitti
 100epoch_results
 train_results
 20epoch_kitti_yolo_group/
+20epoch_kitti_yolo/
+20epoch__cal_orient_sin/
+20epoch__cal_orient_std/
+20epoch__cal_orient_cos/
+20epoch_sin_abs
+20epoch_rotation_sin/
+20epoch64/
 PyTorch_YOLOv3_kitti/data/
 PyTorch_YOLOv3_kitti/label_transform/
 PyTorch_YOLOv3_kitti/checkpoints/darknet53.conv.74
 PyTorch_YOLOv3_kitti/detect_test.ipynb
+
 */*.txt
+

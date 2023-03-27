@@ -41,7 +41,7 @@ def str2bool(v):
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--image-dir", default="Kitti/training/image_2/", #elan_dataset:img, kitti:image_2
+parser.add_argument("--image-dir", default="Kitti/data2/data/", #elan_dataset:img, kitti:image_2
                     help="Relative path to the directory containing images to detect. Default \
                     is eval/image_2/")
 
@@ -61,7 +61,7 @@ parser.add_argument("--hide-debug", action="store_true",
                     help="Supress the printing of each 3d location")
 
 
-def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray, img_2d=None):
+def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray,detectionid, img_2d=None):
 
     # the math! returns X, the corners used for constraint
     location, X = calc_location(dimensions, cam_to_img, box_2d, alpha, theta_ray)#透過數學找到xyz（location)
@@ -69,7 +69,7 @@ def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray
     orient = alpha + theta_ray
     # print('orient:',orient)
     if img_2d is not None:
-        plot_2d_box(img_2d, box_2d)
+        plot_2d_box(img_2d, box_2d,detectionid)
 
     plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
 
@@ -84,8 +84,9 @@ def main():
     
     model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
 
-    weight_abs_path='./weights_group/epoch_20_b16_sin.pkl' #my weigh_path
+    weight_abs_path='weights/epoch_20.pkl' #my weigh_path
     #weight_abs_path = 'weights_group/epoch_20_b16_cos_1.pkl'
+
     if len(model_lst) == 0:
         print('No previous model found, please train first!')
         exit()
@@ -190,14 +191,14 @@ def main():
             alpha -= np.pi
             #print('alpha:',alpha)
             if FLAGS.show_yolo:
-                location,_ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray, truth_img)
+                location,_ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray,detectionid, truth_img)
                 #this location means object center ,but in kitti lable it label th buttom center of objet ,so the y location need add 1/2 height
             else:
                 location,rotation_y = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray)
             location_kitti=location
             location_kitti[1]=location_kitti[1]+dim[0]*0.5
             
-            lines+=f"{detection.detected_class} 0.0 0 {alpha:.2f} {box_2d[0][0]} {box_2d[0][1]} {box_2d[1][0]} {box_2d[1][1]} {dim[0]:.2f} {dim[1]:.2f} {dim[2]:.2f} {location_kitti[0]:.2f} {location_kitti[1]:.2f} {location_kitti[2]:.2f} {rotation_y:.2f} {confidences[detectionid]:.2f} \n"
+            # lines+=f"{detection.detected_class} 0.0 0 {alpha:.2f} {box_2d[0][0]} {box_2d[0][1]} {box_2d[1][0]} {box_2d[1][1]} {dim[0]:.2f} {dim[1]:.2f} {dim[2]:.2f} {location_kitti[0]:.2f} {location_kitti[1]:.2f} {location_kitti[2]:.2f} {rotation_y:.2f} {confidences[detectionid]:.2f} \n"
             
             if not FLAGS.hide_debug:
                 #print('Estimated pose : %s'%location)
@@ -206,28 +207,27 @@ def main():
         if FLAGS.show_yolo:
             numpy_vertical = np.concatenate((truth_img, img), axis=0)
             cv2.imshow('SPACE for next image, any other key to exit', numpy_vertical)
-        # else:
-        #     cv2.imshow('3D detections', img)
+        else:
+            cv2.imshow('3D detections', img)
 
         if not FLAGS.hide_debug:
             print("\n")
             print('Got %s poses in %.3f seconds'%(len(detections), time.time() - start_time))
             print('-------------')
             print(img_id)
-        result_path='./20epoch_kitti_yolo/'
+        result_path='./20epoch_sin_abs/'
         os.makedirs(result_path,exist_ok=True)
        
         #write to txt
-        #print(img_id)
         with open(f'{result_path}{img_id}.txt','w') as f:
             f.writelines(lines)
-            
+
         
         if FLAGS.video:
             cv2.waitKey(1)
-        # else:
-        #     if cv2.waitKey(0) != 32: # space bar
-        #         exit()
+        else:
+            if cv2.waitKey(0) != 32: # space bar
+                exit()
 
 if __name__ == '__main__':
     main()
