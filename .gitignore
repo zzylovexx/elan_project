@@ -4,12 +4,13 @@
 *.swp
 Kitti/testing
 Kitti/training
+Kitti/
 legacy
 eval/video/2011_09_26
 .idea/
 .vscode/
 eval/IVAforNCTU_kitti
-100epoch_results
+100epoch_results/
 train_results
 20epoch_kitti_yolo_group/
 20epoch_kitti_yolo/
@@ -18,11 +19,15 @@ train_results
 20epoch__cal_orient_cos/
 20epoch_sin_abs
 20epoch_rotation_sin/
-20epoch64/
+20epoch_continue/
+20epoch_continue_cos/
+20epoch_continue_std/
+20_epoch_orient_inverse/
+
 PyTorch_YOLOv3_kitti/data/
 PyTorch_YOLOv3_kitti/label_transform/
 PyTorch_YOLOv3_kitti/checkpoints/darknet53.conv.74
 PyTorch_YOLOv3_kitti/detect_test.ipynb
-
+*.png
 */*.txt
 
