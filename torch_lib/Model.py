@@ -34,15 +34,28 @@ def GroupLoss(orient_batch, orientGT_batch, confGT_batch, group_batch):
     group_idxs = get_group_idxs(group_batch)
     weighted_loss = 0
     for idxs in group_idxs:
+        loss = eachGroupLoss_sin(idxs, theta_diff, estimated_theta_diff)
         #loss = eachGroupLoss_abssin(idxs, theta_diff, estimated_theta_diff)
         #loss = eachGroupLoss_cos(idxs, theta_diff, estimated_theta_diff)
-        loss = eachGroupLoss_cos_1(idxs, theta_diff, estimated_theta_diff) # try on 0303
+        #loss = eachGroupLoss_cos_1(idxs, theta_diff, estimated_theta_diff) # try on 0303
         weighted_loss += loss*len(idxs)/batch_size
 
     #return torch.tensor(weighted_loss)
     return weighted_loss.clone().detach().requires_grad_(True)
 
 #theta_loss = torch.cos(theta_diff - estimated_theta_diff)
+def eachGroupLoss_sin(idxs, theta_diff, estimated_theta_diff):
+    if len(idxs) == 1:
+        return torch.zeros(1)[0].cuda()
+    
+    theta_diff = theta_diff[idxs]
+    estimated_theta_diff = estimated_theta_diff[idxs]
+    delta = torch.cos(theta_diff - estimated_theta_diff)
+    closest_idx = torch.argmax(delta)
+    group_theta_diff = estimated_theta_diff - estimated_theta_diff[closest_idx]
+    group_theta_loss = torch.sin(group_theta_diff).sum()
+    return group_theta_loss
+
 def eachGroupLoss_abssin(idxs, theta_diff, estimated_theta_diff):
     if len(idxs) == 1:
         return torch.zeros(1)[0].cuda()
