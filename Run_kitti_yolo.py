@@ -41,7 +41,7 @@ def str2bool(v):
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--image-dir", default="Kitti/data2/data/", #elan_dataset:img, kitti:image_2
+parser.add_argument("--image-dir", default="Kitti/training/image_2/", #elan_dataset:img, kitti:image_2
                     help="Relative path to the directory containing images to detect. Default \
                     is eval/image_2/")
 
@@ -84,7 +84,7 @@ def main():
     
     model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
 
-    weight_abs_path='weights/epoch_20.pkl' #my weigh_path
+    weight_abs_path='weights/epoch_20_b16_no_group.pkl' #my weigh_path
     #weight_abs_path = 'weights_group/epoch_20_b16_cos_1.pkl'
 
     if len(model_lst) == 0:
@@ -93,6 +93,8 @@ def main():
     else:
         #print('Using previous model %s'%model_lst[-1])
         my_vgg = vgg.vgg19_bn(pretrained=True)
+        #0407
+        #my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
         # TODO: load bins from file or something
         model = Model.Model(features=my_vgg.features, bins=2).cuda()
         #checkpoint = torch.load(weights_path + '/%s'%model_lst[-1])
@@ -120,11 +122,11 @@ def main():
     
     img_path = os.path.abspath(os.path.dirname(__file__)) + "/" + image_dir
     # using P_rect from global calibration file
-    calib_path = os.path.abspath(os.path.dirname(__file__)) + "/" + cal_dir
-    calib_file = calib_path + "calib_cam_to_cam.txt"
+    #calib_path = os.path.abspath(os.path.dirname(__file__)) + "/" + cal_dir
+    #calib_file = calib_path + "calib_cam_to_cam.txt"
     
     # using P from each frame
-    # calib_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/testing/calib/'
+    calib_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training/calib/'
 
     try:
         ids = [x.split('.')[0] for x in sorted(os.listdir(img_path))]
@@ -140,30 +142,29 @@ def main():
        
 
         # P for each frame
-        # calib_file = calib_path + id + ".txt"
-
+        calib_file = get_calibration_cam_to_image(calib_path + img_id + ".txt")
+    
         truth_img = cv2.imread(img_file)
         
         img = np.copy(truth_img)
         
         
         detections,confidences = kitti_yolo_model.detect(img_file)#input is file path not cv2.imread
-       
-       
         
         lines=[]
-        for detectionid,detection in enumerate(detections):
-            # print(detection.detected_class)
-            # print(detection.box_2d)
+        for detectionid, detection in enumerate(detections):
+            #print(detection.detected_class)
+            #print(detection.box_2d)
             if not averages.recognized_class(detection.detected_class):
                 continue
 
             # this is throwing when the 2d bbox is invalid
             # TODO: better check
             try:
-                detectedObject = DetectedObject(img, detection.detected_class, detection.box_2d, calib_file)
+                detectedObject = DetectedObject(img, detection.detected_class, detection.box_2d, calib_file)    
             except:
                 continue
+            
 
             theta_ray = detectedObject.theta_ray
             input_img = detectedObject.img
@@ -173,7 +174,9 @@ def main():
             detected_class = detection.detected_class
             #print('detectionclass:', detection.detected_class)
             input_tensor = torch.zeros([1,3,224,224]).cuda()
-            input_tensor[0,:,:,:] = input_img #除了batch其他dim都配原圖資訊進去
+
+            input_tensor[0,0:3,:,:] = input_img #除了batch其他dim都配原圖資訊進去
+            #input_tensor[0,3,:,:] = torch.tensor(theta_ray).expand(1,224,224) #embed
 
             [orient, conf, dim] = model(input_tensor)
             orient = orient.cpu().data.numpy()[0, :, :]
@@ -191,43 +194,46 @@ def main():
             alpha -= np.pi
             #print('alpha:',alpha)
             if FLAGS.show_yolo:
-                location,_ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray,detectionid, truth_img)
+                location,_ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray, detectionid, truth_img)
                 #this location means object center ,but in kitti lable it label th buttom center of objet ,so the y location need add 1/2 height
             else:
-                location,rotation_y = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray)
+                location,rotation_y = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray, detectionid)
             location_kitti=location
             location_kitti[1]=location_kitti[1]+dim[0]*0.5
             
-            # lines+=f"{detection.detected_class} 0.0 0 {alpha:.2f} {box_2d[0][0]} {box_2d[0][1]} {box_2d[1][0]} {box_2d[1][1]} {dim[0]:.2f} {dim[1]:.2f} {dim[2]:.2f} {location_kitti[0]:.2f} {location_kitti[1]:.2f} {location_kitti[2]:.2f} {rotation_y:.2f} {confidences[detectionid]:.2f} \n"
-            
+            lines+=f"{detection.detected_class} 0.0 0 {alpha:.2f} {box_2d[0][0]} {box_2d[0][1]} {box_2d[1][0]} {box_2d[1][1]} {dim[0]:.2f} {dim[1]:.2f} {dim[2]:.2f} {location_kitti[0]:.2f} {location_kitti[1]:.2f} {location_kitti[2]:.2f} {rotation_y:.2f} {confidences[detectionid]:.2f} \n"
+
             if not FLAGS.hide_debug:
                 #print('Estimated pose : %s'%location)
                 print('Estimated pose kitti: %s'%location_kitti)
-
+        '''
         if FLAGS.show_yolo:
             numpy_vertical = np.concatenate((truth_img, img), axis=0)
             cv2.imshow('SPACE for next image, any other key to exit', numpy_vertical)
         else:
             cv2.imshow('3D detections', img)
-
+        '''
         if not FLAGS.hide_debug:
             print("\n")
             print('Got %s poses in %.3f seconds'%(len(detections), time.time() - start_time))
             print('-------------')
             print(img_id)
-        result_path='./20epoch_sin_abs/'
+        result_path='./20epoch_0408/'
         os.makedirs(result_path,exist_ok=True)
        
         #write to txt
+        print(img_id)
+        #print(lines)
         with open(f'{result_path}{img_id}.txt','w') as f:
             f.writelines(lines)
 
-        
+        '''
         if FLAGS.video:
             cv2.waitKey(1)
         else:
             if cv2.waitKey(0) != 32: # space bar
                 exit()
+        '''
 
 if __name__ == '__main__':
     main()

@@ -5,7 +5,7 @@ python ./Group_labeling.py
 ## Step2 Train_group.py to train on Kitti-format labels with "group" label
 python ./Train_group.py --label-dir="/label_2_group/"
 
-## (Step3) yolo.weights | Generate Kiiti-format label (result-path is suggested to name after date i.e. GT_orient_0228)
+## (Step3) yolov3.weights | Generate Kiiti-format label (result-path is suggested to name after date i.e. GT_orient_0228)
 python ./Run_group.py --weights=epoch_20.pkl --result-path=Predict_orient_0228 --hide-debug
 
 ## (Step3) yolo-kitti.weights | Generate Kiiti-format labels (result-path is suggested to name after date i.e. GT_orient_0228)
