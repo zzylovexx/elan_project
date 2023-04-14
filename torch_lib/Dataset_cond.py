@@ -10,7 +10,7 @@ from torch.utils import data
 
 from library.File import *
 from library.Plotting import *
-from library.ron_utils import *
+from library import ron_utils
 
 from .ClassAverages import ClassAverages
 
@@ -86,12 +86,10 @@ class Dataset(data.Dataset):
             self.curr_img = cv2.imread(self.top_img_path + '%s.png'%id)
 
         label = self.labels[id][str(line_num)]
-        # P doesn't matter here
         obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label)
-        
         #theta_ray_condition
         cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
-        img_cond = torch.concat((obj.img, cond), dim=0) # 3+1, 224, 224 + grouploss看看
+        img_cond = torch.concat((obj.img, cond), dim=0)
         return img_cond, label
 
     def __len__(self):
@@ -175,7 +173,7 @@ class Dataset(data.Dataset):
         
         calib_path = self.top_calib_path + '%s.txt'%id
         cam_to_img = get_calibration_cam_to_image(calib_path)
-        Offset = np.array(calc_center_offset_ratio(Box_2D, Location, cam_to_img))
+        Offset = np.array(ron_utils.calc_center_offset_ratio(Box_2D, Location, cam_to_img))
         
         if len(line) == 16:
             Group = line[15] #line[-1]
@@ -285,8 +283,6 @@ class DetectedObject:
         self.img = self.format_img(img, box_2d)
         self.label = label
         self.detection_class = detection_class
-        #self.center_offset = self.calc_center_offset(label['Box_2D'], label['Location'], proj_matrix)
-        #self.center_offset_ratio = self.calc_center_offset_ratio(label['Box_2D'], label['Location'], proj_matrix)
 
     def calc_theta_ray(self, img, box_2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
         width = img.shape[1]
@@ -327,35 +323,12 @@ class DetectedObject:
         batch = process(crop)
 
         return batch
-    
+        
     #offset pixels
     def calc_center_offset(self, d2_box, d3_location, cam_to_img, resize=224):
-        d2_center = get_2d_center(d2_box)
-        proj_center = project_3d_pt(d3_location, cam_to_img)
-        d2_box_size = get_box_size(d2_box)
-        #resize factor
-        factor_x = resize / d2_box_size[0] # transform.resize to 224
-        factor_y = resize / d2_box_size[1] 
-        
-        offset_x = (proj_center[0] - d2_center[0]) * factor_x
-        offset_y = (proj_center[1] - d2_center[1]) * factor_y
-        
-        # delta out of range
-        if abs(offset_x) > resize//2: 
-            offset_x = sign(offset_x)*resize//2
-        if abs(offset_y) > resize//2:
-            offset_y = sign(offset_y)*resize//2
-            
-        return [math.floor(offset_x), math.floor(offset_y)]
+        return ron_utils.calc_center_offset(d2_box, d3_location, cam_to_img, resize)
     
     #offset ratio -1~1
     def calc_center_offset_ratio(self, d2_box, d3_location, cam_to_img):
-        d2_center = get_2d_center(d2_box)
-        proj_center = project_3d_pt(d3_location, cam_to_img)
-        d2_box_size = get_box_size(d2_box)
-        
-        offset_x = (proj_center[0] - d2_center[0]) / float(d2_box_size[0])
-        offset_y = (proj_center[1] - d2_center[1]) / float(d2_box_size[1])
-            
-        return [offset_x, offset_y]
+        return ron_utils.calc_center_offset_ratio(d2_box, d3_location, cam_to_img)
         

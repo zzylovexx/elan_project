@@ -12,36 +12,42 @@ def get_box_size(d2_box):
     y_size = max(d2_box[1][1]-d2_box[0][1], 1)
     return (x_size, y_size)
 
-# return pixels
+#offset pixels
 def calc_center_offset(d2_box, d3_location, cam_to_img, resize=224):
     d2_center = get_2d_center(d2_box)
     proj_center = project_3d_pt(d3_location, cam_to_img)
     d2_box_size = get_box_size(d2_box)
     #resize factor
-    factor_x = resize / d2_box_size[0] # transform.resize to 224
-    factor_y = resize / d2_box_size[1] 
+    factor_x = 2*resize / d2_box_size[0] # transform.resize to 224
+    factor_y = 2*resize / d2_box_size[1] 
     
-    offset_x = (proj_center[0] - d2_center[0]) * factor_x
-    offset_y = (proj_center[1] - d2_center[1]) * factor_y
+    offset_pixel_x = (proj_center[0] - d2_center[0]) * factor_x
+    offset_pixel_y = (proj_center[1] - d2_center[1]) * factor_y
     
-    # offset out of range
-    if abs(offset_x) > resize//2: 
-        offset_x = sign(offset_x)*resize//2
-    if abs(offset_y) > resize//2:
-        offset_y = sign(offset_y)*resize//2
+    # delta out of range
+    if abs(offset_pixel_x) > resize//2: 
+        offset_pixel_x = sign(offset_pixel_x)*resize//2
+    if abs(offset_pixel_y) > resize//2:
+        offset_pixel_y = sign(offset_pixel_y)*resize//2
         
-    return [math.floor(offset_x), math.floor(offset_y)]
-
-# return ratio between (-1,1)
+    return [math.floor(offset_pixel_x), math.floor(offset_pixel_y)]
+    
+#offset ratio -1~1
 def calc_center_offset_ratio(d2_box, d3_location, cam_to_img):
     d2_center = get_2d_center(d2_box)
     proj_center = project_3d_pt(d3_location, cam_to_img)
     d2_box_size = get_box_size(d2_box)
     
-    offset_x = (proj_center[0] - d2_center[0]) / float(d2_box_size[0])
-    offset_y = (proj_center[1] - d2_center[1]) / float(d2_box_size[1])
-        
+    offset_x = 2*(proj_center[0] - d2_center[0]) / float(d2_box_size[0])
+    offset_y = 2*(proj_center[1] - d2_center[1]) / float(d2_box_size[1])
+    
+    if abs(offset_x) > 1: 
+        offset_x = sign(offset_x)*1.0
+    if abs(offset_y) > 1:
+        offset_y = sign(offset_y)*1.0
+
     return [offset_x, offset_y]
+
 
 def calc_theta_ray(img, box_2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
     width = img.shape[1]
