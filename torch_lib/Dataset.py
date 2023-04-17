@@ -116,7 +116,6 @@ class Dataset(data.Dataset):
     def get_label(self, id, line_num):
         lines = open(self.top_label_path + '%s.txt'%id).read().splitlines()
         label = self.format_label(lines[line_num])
-
         return label
 
     def get_bin(self, angle):
@@ -169,8 +168,9 @@ class Dataset(data.Dataset):
             Orientation[bin_idx,:] = np.array([np.cos(angle_diff), np.sin(angle_diff)])
             Confidence[bin_idx] = 1
 
-        if len(line) == 16:
-            Group = line[15] #line[-1]
+        if len(line) == 17: # idx:15 alpha group, idx:16 ry group
+            Ry = line[14]
+            Group = line[16] #line[-1]
             label = {
                     'Class': Class,
                     'Box_2D': Box_2D,
@@ -178,6 +178,7 @@ class Dataset(data.Dataset):
                     'Alpha': Alpha,
                     'Orientation': Orientation,
                     'Confidence': Confidence,
+                    'Ry' : Ry,
                     'Group': Group
                     }
         else:

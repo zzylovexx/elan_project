@@ -19,6 +19,27 @@ def OrientationLoss(orient_batch, orientGT_batch, confGT_batch):
 
     return -1 * torch.cos(theta_diff - estimated_theta_diff).mean()
 
+#added 0417 RyGT_batch unused now
+def stdGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_batch): #
+
+    batch_size = orient_batch.size()[0]
+    indexes = torch.max(confGT_batch, dim=1)[1]#conf 是在那一個bin上取大
+    # extract just the important bin
+    orient_batch = orient_batch[torch.arange(batch_size), indexes]
+    estimated_alpha = torch.atan2(orient_batch[:,1], orient_batch[:,0])
+    estimated_Ry = estimated_alpha + ThetaGT_batch  
+
+    group_idxs = get_group_idxs(group_batch)
+    loss = torch.zeros(1)[0].cuda()
+    for idxs in group_idxs:
+        if len(idxs) == 1:
+            continue
+            
+        value_tensor_list = estimated_Ry[idxs]
+        stddev = torch.std(value_tensor_list)
+        loss += stddev*len(idxs)/batch_size
+
+    return loss.requires_grad_(True)
 
 def GroupLoss(orient_batch, orientGT_batch, confGT_batch, group_batch):
 
@@ -41,7 +62,7 @@ def GroupLoss(orient_batch, orientGT_batch, confGT_batch, group_batch):
         weighted_loss += loss*len(idxs)/batch_size
 
     #return torch.tensor(weighted_loss)
-    return weighted_loss.clone().detach().requires_grad_(True)
+    return weighted_loss.requires_grad_(True)
 
 #theta_loss = torch.cos(theta_diff - estimated_theta_diff)
 def eachGroupLoss_sin(idxs, theta_diff, estimated_theta_diff):

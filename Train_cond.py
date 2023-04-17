@@ -8,13 +8,15 @@ from torch.autograd import Variable
 from torchvision.models import vgg
 from torch.utils import data
 
+from torch.utils.tensorboard import SummaryWriter
+
 
 import os
 
 def main():
 
+    writer = SummaryWriter('./cond_log')
     # hyper parameters
-
     epochs = 20       #100
     batch_size = 16   #b8 is better than b64
 
@@ -34,7 +36,7 @@ def main():
 
     my_vgg = vgg.vgg19_bn(pretrained=True)
     # reset the first layer 0407
-    my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
+    #my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
     model = Model(features=my_vgg.features).cuda()
     opt_SGD = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
     conf_loss_func = nn.CrossEntropyLoss().cuda()
@@ -71,10 +73,9 @@ def main():
 
 
     total_num_batches = int(len(dataset) / batch_size)#len(dataset)=40570
-
+    passes = 0
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0
-        passes = 0
         for local_batch, local_labels in generator:
 
             truth_orient = local_labels['Orientation'].float().cuda()
@@ -99,14 +100,22 @@ def main():
             opt_SGD.step()
 
 
-            if passes % 10 == 0:
-                print("--- epoch %s | batch %s/%s --- [loss: %s],[orient_loss:%5s],[dim_loss:%5s],[conf_loss:%5s]" %(epoch, curr_batch, total_num_batches, loss.item(),orient_loss.item(),dim_loss.item(),conf_loss.item()))
-                passes = 0
+            if passes % 200 == 0:
+                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[orient_loss:%.4f],[dim_loss:%.4f],[conf_loss:%.4f]" \
+                    %(epoch, curr_batch, total_num_batches, loss.item(),orient_loss.item(),dim_loss.item(),conf_loss.item()))
+
+                writer.add_scalar('loss/orient_loss', orient_loss, passes//200)
+                writer.add_scalar('loss/dim_loss', dim_loss, passes//200)
+                writer.add_scalar('loss/conf_loss', conf_loss, passes//200)
+                #writer.add_scalar('loss/loss_theta', loss_theta, passes//200) #conf_loss + w*orient_loss
+                writer.add_scalar('loss/total_loss', loss, passes//200) #conf_loss + 0.4*orient_loss + 0.6*dim_loss + 0.6*offset_loss
+                # visiualize https://zhuanlan.zhihu.com/p/103630393
+                #tensorboard --logdir=./offset_log --port 8123
 
             passes += 1
             curr_batch += 1
         # save after every 10 epochs
-        if epoch % 20 == 0:
+        if epoch % 5 == 0:
             name = model_path + 'epoch_%s.pkl' % epoch
             print("====================")
             print ("Done with epoch %s!" % epoch)

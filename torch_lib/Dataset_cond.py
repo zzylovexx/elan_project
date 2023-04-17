@@ -30,6 +30,7 @@ class Dataset(data.Dataset):
         self.top_label_path = path + label_path
         self.top_img_path = path + "/image_2/"
         self.top_calib_path = path + "/calib/"
+        self.top_width_path = path + '/width/' #0417
         # use a relative path instead?
 
         # TODO: which camera cal to use, per frame or global one?
@@ -86,10 +87,14 @@ class Dataset(data.Dataset):
             self.curr_img = cv2.imread(self.top_img_path + '%s.png'%id)
 
         label = self.labels[id][str(line_num)]
-        obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label)
-        #theta_ray_condition
+        obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label) #TOBEFIXED using frame calib will be better?
+        #theta_ray_condition 0407
         cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
-        img_cond = torch.concat((obj.img, cond), dim=0)
+        #img_cond = torch.concat((obj.img, cond), dim=0)
+        img_cond = obj.img
+        img_cond[0,:,:] = img_cond[0,:,:] + cond
+        img_cond[1,:,:] = img_cond[1,:,:] + cond
+        img_cond[2,:,:] = img_cond[2,:,:] + cond
         return img_cond, label
 
     def __len__(self):
@@ -118,6 +123,14 @@ class Dataset(data.Dataset):
     def get_label(self, id, line_num):
         lines = open(self.top_label_path + '%s.txt'%id).read().splitlines()
         label = self.format_label(lines[line_num], id)
+
+        
+        width = int(open(self.top_width_path + '%s.txt'%id).read())
+        calib_path = self.top_calib_path + '%s.txt'%id
+        proj_matrix = get_calibration_cam_to_image(calib_path)
+        # img = cv2.imread(self.top_img_path + '%s.png'%id) take too much time to read img
+        # calc_theta_ray (use width, not img.width)
+        label['Theta'] = ron_utils.calc_theta_ray(width, label['Box_2D'], proj_matrix) #0417 added theta_ray
 
         return label
 
@@ -175,8 +188,9 @@ class Dataset(data.Dataset):
         cam_to_img = get_calibration_cam_to_image(calib_path)
         Offset = np.array(ron_utils.calc_center_offset_ratio(Box_2D, Location, cam_to_img))
         
-        if len(line) == 16:
-            Group = line[15] #line[-1]
+        if len(line) == 17: # idx:15 alpha group, idx:16 ry group
+            Ry = line[14]
+            Group = line[16] #line[-1]
             label = {
                     'Class': Class,
                     'Box_2D': Box_2D,
@@ -186,6 +200,7 @@ class Dataset(data.Dataset):
                     'Confidence': Confidence,
                     'Location': Location,
                     'Center_Offset': Offset,
+                    'Ry': Ry,
                     'Group': Group
                     }
         else:
@@ -197,7 +212,6 @@ class Dataset(data.Dataset):
                     'Orientation': Orientation,
                     'Confidence': Confidence,
                     'Location': Location,
-                    'Center_Offset': Offset,
                     }
         return label
 
