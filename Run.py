@@ -37,7 +37,7 @@ def str2bool(v):
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--image-dir", default="eval/training/image_2/", #elan_dataset:img, kitti:image_2
+parser.add_argument("--image-dir", default="Kitti/training/image_2/", #elan_dataset:img, kitti:image_2
                     help="Relative path to the directory containing images to detect. Default \
                     is eval/image_2/")
 
@@ -70,6 +70,13 @@ def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray
     plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
 
     return location,orient
+def class2angle(bin_class,residual):
+    # angle_per_class=2*torch.pi/float(12)
+    angle_per_class=2*np.pi/float(4)
+    angle=float(angle_per_class*bin_class)
+    angle=angle+residual
+    # print(angle)
+    return angle
 
 def main():
 
@@ -80,7 +87,7 @@ def main():
     
     model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
 
-    weight_abs_path='/home/chang0731/Desktop/elan_project/3D-BoundingBox/weights/epoch_100.pkl'
+    weight_abs_path='/home/chang0731/Desktop/elan_project/3D-BoundingBox/weights_cond_test/epoch_40.pkl'
     
     if len(model_lst) == 0:
         print('No previous model found, please train first!')
@@ -88,6 +95,7 @@ def main():
     else:
         #print('Using previous model %s'%model_lst[-1])
         my_vgg = vgg.vgg19_bn(pretrained=True)
+        my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
         # TODO: load bins from file or something
         model = Model.Model(features=my_vgg.features, bins=2).cuda()
         #checkpoint = torch.load(weights_path + '/%s'%model_lst[-1])
@@ -103,7 +111,7 @@ def main():
     averages = ClassAverages.ClassAverages()
 
     # TODO: clean up how this is done. flag?
-    angle_bins = generate_bins(2)
+    # angle_bins = generate_bins(2)
 
     image_dir = FLAGS.image_dir
     cal_dir = FLAGS.cal_dir
@@ -163,13 +171,15 @@ def main():
            
             detected_class = detection.detected_class
             #print('detectionclass:', detection.detected_class)
-            input_tensor = torch.zeros([1,3,224,224]).cuda()
-            input_tensor[0,:,:,:] = input_img #除了batch其他dim都配原圖資訊進去
+            cond = torch.tensor(theta_ray).expand(1, input_img.shape[1], input_img.shape[2])
+            img_cond = torch.concat((input_img, cond), dim=0) # 3+1, 224, 224 + grouploss看看
+            input_tensor = torch.zeros([1,4,224,224]).cuda()
+            input_tensor[0,:,:,:] = img_cond #除了batch其他dim都配原圖資訊進去
            
             [orient, conf, dim] = model(input_tensor)
             
             
-            orient = orient.cpu().data.numpy()[0, :, :]
+            orient = orient.cpu().data.numpy()[0, :]
             conf = conf.cpu().data.numpy()[0, :]
             dim = dim.cpu().data.numpy()[0, :]
             dim += averages.get_item(detected_class)
@@ -177,14 +187,20 @@ def main():
 
             
             #print('dim:',dim)
-            argmax = np.argmax(conf)
-            orient = orient[argmax, :]
-            
-            cos = orient[0]
-            sin = orient[1]
-            alpha = np.arctan2(sin, cos)
-            alpha += angle_bins[argmax]
-            alpha -= np.pi
+            cls_argmax = np.argmax(conf)
+            resdiual_orient = orient[cls_argmax] 
+            # print(cls_argmax)
+            # print('theta_ray:',theta_ray)
+            # print('resdiual_orient:',resdiual_orient)
+            alpha=class2angle(cls_argmax,resdiual_orient)
+            # print('alpha:',alpha)
+            if alpha >np.pi:
+                alpha-=(2*np.pi)
+            # cos = orient[0]
+            # sin = orient[1]
+            # alpha = np.arctan2(sin, cos)
+            # alpha += angle_bins[argmax]
+            # alpha -= np.pi
             #print('alpha:',alpha)
             if FLAGS.show_yolo:
                 location,_ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray,detectionid, truth_img)
@@ -209,10 +225,10 @@ def main():
             numpy_vertical = np.concatenate((truth_img, img), axis=0)
             #cv2.imshow('SPACE for next image, any other key to exit', numpy_vertical)
             #print(pic_dir+img_file)
-            cv2.imwrite(pic_dir+img_id +".png",numpy_vertical)
+            #cv2.imwrite(pic_dir+img_id +".png",numpy_vertical)
         else:
-            #pass
-            cv2.imshow('3D detections', img)
+            pass
+            # cv2.imshow('3D detections', img)
         
         
         if not FLAGS.hide_debug:
@@ -224,15 +240,15 @@ def main():
         os.makedirs(result_path,exist_ok=True)
        
        # write to txt
-        # with open(f'{result_path}{img_id}.txt','w') as f:
-        #     f.writelines(lines)
+        with open(f'{result_path}{img_id}.txt','w') as f:
+            f.writelines(lines)
             
         
         if FLAGS.video:
             cv2.waitKey(1)
-        else:
-            if cv2.waitKey(0) != 32: # space bar
-                exit()
+        # else:
+        #     if cv2.waitKey(0) != 32: # space bar
+        #         exit()
 
 if __name__ == '__main__':
     main()
