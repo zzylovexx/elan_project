@@ -28,7 +28,7 @@ def plot_regressed_3d_bbox(img, truth_img, cam_to_img, box_2d, dimensions, alpha
 
     orient = alpha + theta_ray
 
-    plot_2d_box(truth_img, box_2d)
+    plot_2d_box(truth_img, box_2d,detectionid=None)
     plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
 
     return location
