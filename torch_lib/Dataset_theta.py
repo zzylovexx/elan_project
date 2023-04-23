@@ -23,6 +23,17 @@ def generate_bins(bins): #this case is 2
     angle_bins += interval / 2 # center of the bin
 
     return angle_bins
+num_heading_bin=4
+def angle2class(angle):
+    ''' Convert continuous angle to discrete class and residual. '''
+    angle = angle % (2 * np.pi)
+    assert (angle >= 0 and angle <= 2 * np.pi)
+    angle_per_class = 2 * np.pi / float(num_heading_bin) #degree:30 radius:0.523
+    shifted_angle = (angle + angle_per_class / 2) % (2 * np.pi)
+    class_id = int(shifted_angle / angle_per_class)
+    residual_angle = shifted_angle - (class_id * angle_per_class + angle_per_class / 2) #residual 有正有負
+
+    return class_id, residual_angle
 
 class Dataset(data.Dataset):
     def __init__(self, path, label_path="/label_2/", theta=False, bins=2, overlap=0.1):
@@ -42,20 +53,20 @@ class Dataset(data.Dataset):
         self.num_images = len(self.ids)
 
         # create angle bins
-        self.bins = bins
-        self.angle_bins = np.zeros(bins)
-        self.interval = 2 * np.pi / bins
-        for i in range(1,bins):
-            self.angle_bins[i] = i * self.interval
-        self.angle_bins += self.interval / 2 # center of the bin
+        # self.bins = bins
+        # self.angle_bins = np.zeros(bins)
+        # self.interval = 2 * np.pi / bins
+        # for i in range(1,bins):
+        #     self.angle_bins[i] = i * self.interval
+        # self.angle_bins += self.interval / 2 # center of the bin
 
-        self.overlap = overlap
-        # ranges for confidence
-        # [(min angle in bin, max angle in bin), ... ]
-        self.bin_ranges = []
-        for i in range(0,bins):
-            self.bin_ranges.append(( (i*self.interval - overlap) % (2*np.pi), \
-                                (i*self.interval + self.interval + overlap) % (2*np.pi)) )
+        # self.overlap = overlap
+        # # ranges for confidence
+        # # [(min angle in bin, max angle in bin), ... ]
+        # self.bin_ranges = []
+        # for i in range(0,bins):
+        #     self.bin_ranges.append(( (i*self.interval - overlap) % (2*np.pi), \
+        #                         (i*self.interval + self.interval + overlap) % (2*np.pi)) )
 
         # hold average dimensions
         class_list = ['Car', 'Van', 'Truck', 'Pedestrian','Person_sitting', 'Cyclist', 'Tram', 'Misc']
@@ -160,24 +171,28 @@ class Dataset(data.Dataset):
         Location = [line[11], line[12], line[13]] # x, y, z
         Location[1] -= Dimension[0] / 2 # bring the KITTI center up to the middle of the object
 
-        Orientation = np.zeros((self.bins, 2))
-        Confidence = np.zeros(self.bins)
-        
+        # Orientation = np.zeros((12, 2))
+        # Confidence = np.zeros(12)
+        heading_class,heading_resdiual=angle2class(Alpha)
+
+        '''
+        origin 分bin方法
         # alpha is [-pi..pi], shift it to be [0..2pi]
-        angle = Alpha + np.pi
+        # angle = Alpha + np.pi
 
-        bin_idxs = self.get_bin(angle)
+        # bin_idxs = self.get_bin(angle)
 
-        for bin_idx in bin_idxs:
-            angle_diff = angle - self.angle_bins[bin_idx]
+        # for bin_idx in bin_idxs:
+        #     angle_diff = angle - self.angle_bins[bin_idx]
 
-            Orientation[bin_idx,:] = np.array([np.cos(angle_diff), np.sin(angle_diff)])
-            Confidence[bin_idx] = 1
+        #     Orientation[bin_idx,:] = np.array([np.cos(angle_diff), np.sin(angle_diff)])
+        #     Confidence[bin_idx] = 1
+        '''
         
-        #calib_path = self.top_calib_path + '%s.txt'%id
-        #cam_to_img = get_calibration_cam_to_image(calib_path)
-        #Offset = np.array(ron_utils.calc_center_offset_ratio(Box_2D, Location, cam_to_img))
-        
+        calib_path = self.top_calib_path + '%s.txt'%id
+        cam_to_img = get_calibration_cam_to_image(calib_path)
+        Offset = np.array(ron_utils.calc_center_offset_ratio(Box_2D, Location, cam_to_img))
+               
         if len(line) == 17: # idx:15 alpha group, idx:16 ry group
             Ry = line[14]
             Group = line[16] #line[-1]
@@ -186,8 +201,8 @@ class Dataset(data.Dataset):
                     'Box_2D': Box_2D,
                     'Dimensions': Dimension,
                     'Alpha': Alpha,
-                    'Orientation': Orientation,
-                    'Confidence': Confidence,
+                    'heading_resdiual': heading_resdiual,
+                    'heading_class': heading_class,
                     'Location': Location,
                     'Ry': Ry,
                     'Group': Group,
@@ -199,8 +214,8 @@ class Dataset(data.Dataset):
                     'Box_2D': Box_2D,
                     'Dimensions': Dimension,
                     'Alpha': Alpha,
-                    'Orientation': Orientation,
-                    'Confidence': Confidence,
+                    'heading_resdiual': heading_resdiual,
+                    'heading_class': heading_class,
                     'Location': Location,
                     }
         return label

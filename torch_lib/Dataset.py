@@ -269,6 +269,7 @@ class DetectedObject:
             # proj_matrix = get_calibration_cam_to_image(proj_matrix)
 
         self.proj_matrix = proj_matrix
+        #print(self.proj_matrix)
         self.theta_ray = self.calc_theta_ray(img, box_2d, proj_matrix)
         self.img = self.format_img(img, box_2d)
         self.label = label
