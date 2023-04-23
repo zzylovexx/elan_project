@@ -3,7 +3,7 @@ This script will use the 2D box from the label rather than from YOLO,
 but will still use the neural nets to get the 3D position and plot onto the
 image. Press space for next image and escape to quit
 """
-from torch_lib.Dataset import *
+from torch_lib.Dataset_4dim import *
 from library.Math import *
 from library.Plotting import *
 from torch_lib import Model, ClassAverages
@@ -20,50 +20,40 @@ import numpy as np
 
 import argparse
 parser = argparse.ArgumentParser()
-parser.add_argument('--weight-dir', default='weights_group', help='path to the Kiiti weights folder')
-parser.add_argument('--weights', default='epoch_20.pkl', help='weights name')
-parser.add_argument('--result-path', default='GT_group', help='path to put in the generated txt (suggest name after date i.e. GT_orient_0228)')
+parser.add_argument('--weight-path', default='weights/epoch_20.pkl', help='path to the weights')
+parser.add_argument('--result-path', default='baseline', help='path to put in the generated txt (suggest name after date i.e. GT_orient_0228)')
 
-def plot_regressed_3d_bbox(img, truth_img, cam_to_img, box_2d, dimensions, alpha, theta_ray):
+def regress_location_orient(cam_to_img, box_2d, dimensions, alpha, theta_ray):
 
     # the math! returns X, the corners used for constraint
     location, X = calc_location(dimensions, cam_to_img, box_2d, alpha, theta_ray)
 
     orient = alpha + theta_ray
 
-    plot_2d_box(truth_img, box_2d)
-    plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
-
     return location, orient
 
 def main():
     FLAGS = parser.parse_args()
     
-    weights_path = os.path.abspath(os.path.dirname(__file__)) + '/' + FLAGS.weight_dir
-    model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
+    weights_path = os.path.abspath(os.path.dirname(__file__)) + '/' + FLAGS.weight_path
     result_path= FLAGS.result_path
     os.makedirs(result_path, exist_ok=True)
-
-    if len(model_lst) == 0:
-        print('No previous model found, please train first!')
-        exit()
-    else:
-        print ('Using model %s'%(FLAGS.weight_dir + '/' + FLAGS.weights))
-        my_vgg = vgg.vgg19_bn(pretrained=True)
-        model = Model.Model(features=my_vgg.features, bins=2).cuda()
-        checkpoint = torch.load(os.path.join(weights_path, FLAGS.weights))
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.eval()
+    print ('Using model %s'%(weights_path))
+    my_vgg = vgg.vgg19_bn(pretrained=True)
+    my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
+    model = Model.Model(features=my_vgg.features, bins=2).cuda()
+    checkpoint = torch.load(weights_path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.eval()
 
     dataset = Dataset(os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training')
     averages = ClassAverages.ClassAverages()
+    print('Loading all objects')
     all_images = dataset.all_objects()
+    print('Start loop')
     for key in sorted(all_images.keys()):
 
         data = all_images[key]
-
-        truth_img = data['Image']
-        img = np.copy(truth_img)
         objects = data['Objects']
         cam_to_img = data['Calib']
         
@@ -78,9 +68,10 @@ def main():
             theta_ray = detectedObject.theta_ray
             input_img = detectedObject.img
 
-            input_tensor = torch.zeros([1,3,224,224]).cuda()
-            input_tensor[0,:,:,:] = input_img
-            input_tensor.cuda()
+            #for cond
+            input_tensor = torch.zeros([1,4,224,224]).cuda()
+            input_tensor[0,0:3,:,:] = input_img #除了batch其他dim都配原圖資訊進去
+            input_tensor[0,3,:,:] = torch.tensor(theta_ray).expand(1,224,224) #embed
 
             [orient, conf, dim] = model(input_tensor)
             orient = orient.cpu().data.numpy()[0, :, :]
@@ -97,24 +88,13 @@ def main():
             alpha += dataset.angle_bins[argmax]
             alpha -= np.pi
 
-            location, rotation_y = plot_regressed_3d_bbox(img, truth_img, cam_to_img, label['Box_2D'], dim, alpha, theta_ray)
+            location, rotation_y = regress_location_orient(cam_to_img, label['Box_2D'], dim, alpha, theta_ray)
 
-            #print('Estimated pose: %s'%location)
-            #print('Truth pose: %s'%label['Location'])
-            #print('-------------')
             lines+=f"{label['Class']} 0.0 0 {alpha:.2f} {label['Box_2D'][0][0]} {label['Box_2D'][0][1]} {label['Box_2D'][1][0]} {label['Box_2D'][1][1]} {dim[0]:.2f} {dim[1]:.2f} {dim[2]:.2f} {location[0]:.2f} {location[1]:.2f} {location[2]:.2f} {rotation_y:.2f}\n"
 
 
-        #print('Got %s poses in %.3f seconds\n'%(len(objects), time.time() - start_time))
-
         print(key)
-        '''
-        numpy_vertical = np.concatenate((truth_img, img), axis=0)
-        
-        cv2.imshow('2D detection on top, 3D prediction on bottom', numpy_vertical)
-        if cv2.waitKey(0) == 27:
-            return
-        '''
+
         #write to txt
         with open(f'{result_path}/{key}.txt','w') as f:
             f.writelines(lines)

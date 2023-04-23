@@ -5,6 +5,7 @@
 Kitti/demo
 Kitti/testing
 Kitti/training
+Kitti/training_crop
 legacy
 eval/video/2011_09_26
 .idea/

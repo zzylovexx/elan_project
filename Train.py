@@ -15,7 +15,7 @@ def main():
 
     # hyper parameters
 
-    epochs = 20       #100
+    epochs = 100       #100
     batch_size = 16   #b8 is better than b64
 
     alpha = 0.6
@@ -42,7 +42,7 @@ def main():
     # load any previous weights
 
 
-    model_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_64/'
+    model_path = os.path.abspath(os.path.dirname(__file__)) + '/weights/'
 
 
     latest_model = None
@@ -51,10 +51,11 @@ def main():
         os.mkdir(model_path)
     else:
         try:
-            latest_model = [x for x in sorted(os.listdir(model_path)) if x.endswith('.pkl')][-1]
+            #latest_model = [x for x in sorted(os.listdir(model_path)) if x.endswith('.pkl')][-1]
+            latest_model = 'epoch_75.pkl'
         except:
             pass
-    use_latest=False
+    use_latest=True
     if use_latest==True:
         if latest_model is not None:
             checkpoint = torch.load(model_path + latest_model)
@@ -97,14 +98,14 @@ def main():
             opt_SGD.step()
 
 
-            if passes % 10 == 0:
+            if passes % 100 == 0:
                 print("--- epoch %s | batch %s/%s --- [loss: %s],[orient_loss:%5s],[dim_loss:%5s],[conf_loss:%5s]" %(epoch, curr_batch, total_num_batches, loss.item(),orient_loss.item(),dim_loss.item(),conf_loss.item()))
                 passes = 0
 
             passes += 1
             curr_batch += 1
         # save after every 10 epochs
-        if epoch % 20 == 0:
+        if epoch % 5 == 0:
             name = model_path + 'epoch_%s.pkl' % epoch
             print("====================")
             print ("Done with epoch %s!" % epoch)
