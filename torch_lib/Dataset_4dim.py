@@ -32,7 +32,7 @@ class Dataset(data.Dataset):
         self.top_calib_path = path + "/calib/"
         self.theta = theta
         if self.theta:
-            self.top_width_path = path + '/width/' #0417 generated code is in elan_project/OffsetCenter_widthtxt.ipynb
+            self.extra_label_path = path + '/extra_label/' #using generated extra label
         # use a relative path instead?
 
         # TODO: which camera cal to use, per frame or global one?
@@ -123,12 +123,8 @@ class Dataset(data.Dataset):
         label = self.format_label(lines[line_num], id)
 
         if self.theta:
-            width = int(open(self.top_width_path + '%s.txt'%id).read())
-            calib_path = self.top_calib_path + '%s.txt'%id
-            proj_matrix = get_calibration_cam_to_image(calib_path)
-            # img = cv2.imread(self.top_img_path + '%s.png'%id) take too much time to read img
-            # calc_theta_ray (use width, not img.width)
-            label['Theta'] = ron_utils.calc_theta_ray(width, label['Box_2D'], proj_matrix) #0417 added theta_ray
+            extra_labels = open(self.extra_label_path + '%s.txt'%id).read().splitlines()
+            label['Theta'] = float(extra_labels[line_num].split()[5]) #0417 added theta_ray
 
         return label
 
