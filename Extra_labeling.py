@@ -6,6 +6,18 @@ from library.ron_utils import *
 from library.File import *
 from Alpha_Ry_labeling import *
 
+'''extra label.txt
+0. img-width (pixel) (int)
+1. 2d_box-Width (int)
+2. 2d_box-Height (int)
+3. offset-X (pixel) (int)
+4. offset-Y (pixel) (int)
+5. theta_ray (calib folder) (.3f)
+6. group-alpha (+100*index)
+7. group-rotation_y (+100*index)
+'''
+
+
 def extra_labeling(img_root='Kitti/training/image_2', 
                    label_root='Kitti/training/label_2', 
                    calib_root='Kitti/training/calib',
