@@ -1,5 +1,5 @@
 import torch
-import math
+import numpy as np
 from .Plotting import *
 
 def calc_theta_ray(width, box_2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
@@ -192,3 +192,21 @@ def eachGroupLoss_cos_1(idxs, theta_diff, estimated_theta_diff):
     group_theta_diff = estimated_theta_diff - estimated_theta_diff[closest_idx]
     # cos0 = 1
     return -1 * (torch.cos(group_theta_diff).sum()-1)
+
+def get_alpha(orient_batch, orientGT_batch, confGT_batch):
+
+    batch_size = orient_batch.size()[0]
+    indexes = torch.max(confGT_batch, dim=1)[1]#conf 是在那一個bin上取大
+    orientGT_batch = orientGT_batch[torch.arange(batch_size), indexes]
+    orient_batch = orient_batch[torch.arange(batch_size), indexes]
+
+    GT_alpha = torch.atan2(orientGT_batch[:,1], orientGT_batch[:,0])
+    PRED_alpha = torch.atan2(orient_batch[:,1], orient_batch[:,0])
+
+    return GT_alpha.cpu().data.tolist(), PRED_alpha.cpu().data.tolist() # np array
+
+def angle_criterion(PRED, GT):
+    PRED = np.array(PRED)
+    GT = np.array(GT)
+    cos_delta = np.cos(PRED - GT)
+    return cos_delta
