@@ -35,11 +35,11 @@ def main():
 
     generator = data.DataLoader(dataset, **params)
 
-    # my_vgg = vgg.vgg19_bn(pretrained=True)
+    my_vgg = vgg.vgg19_bn(pretrained=True)
     # # reset the first layer 0407
-    # my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
+    my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
     
-    model = Model().cuda()
+    model = Model(features=my_vgg.features).cuda()
     opt_adam = torch.optim.Adam(model.parameters(), lr=0.000125)
     #conf_loss_func = nn.CrossEntropyLoss().cuda()
     dim_loss_func = nn.MSELoss().cuda()

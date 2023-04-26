@@ -3,7 +3,17 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from torchvision.models import resnet18
+def residual_loss(orient_residual,truth_bin,truth_orient_resdiual):#truth_orient_resdiual:B,truth_bin:B,orient_residual:B,12
+    # cls_onehot=torch.argmax(truth_bin)
+    one_hot_map=torch.zeros((orient_residual.shape)).cuda().scatter_(dim=1,index=truth_bin.view(-1,1),value=1)#(16,bin_class)
+    #cls_onehot=torch.scatter(dim=1,index=truth_bin.view(-1,1),value=1)
+    #cls_onehot=torch.gather(one_hot_map,dim=1,index=truth_bin.view(-1,1))
 
+    heading_res=torch.sum(orient_residual*one_hot_map,dim=1)
+    
+    reg_loss=F.l1_loss(heading_res,truth_orient_resdiual,reduction='mean')
+    return reg_loss,heading_res
 
 def OrientationLoss(orient_batch, orientGT_batch, confGT_batch):
 
@@ -108,31 +118,36 @@ def get_group_idxs(group):
 class Model(nn.Module):
     def __init__(self, features=None, bins=2, w = 0.4):
         super(Model, self).__init__()
-        self.bins = bins #2
-        self.w = w #0.4
+        #self.resnet=resnet18(pretrained=True)
+        #self.resnet.conv1=nn.Conv2d(4, 64, (7,7), (1,1), (1,1))
+        #self.bins = bins #2
+        #self.w = w #0.4
         self.features = features
         self.orientation = nn.Sequential(
-                    nn.Linear(512 * 7 * 7, 256),
+                    nn.Linear( 512 * 7 * 7, 256),
+                    #nn.Linear(1000, 256),
                     nn.ReLU(True),
                     nn.Dropout(),
                     nn.Linear(256, 256),
                     nn.ReLU(True),
                     nn.Dropout(),
-                    nn.Linear(256, bins*2) # to get sin and cos
+                    nn.Linear(256, 4) # to get residual
                 )
         self.confidence = nn.Sequential(
-                    nn.Linear(512 * 7 * 7, 256),
+                    #nn.Linear( 1000, 256),
+                    nn.Linear( 512 * 7 * 7, 256),
                     nn.ReLU(True),
                     nn.Dropout(),
                     nn.Linear(256, 256),
                     nn.ReLU(True),
                     nn.Dropout(),
-                    nn.Linear(256, bins),
+                    nn.Linear(256, 4)
                     # nn.Softmax()
                     #nn.Sigmoid()
                 )
         self.dimension = nn.Sequential(
-                    nn.Linear(512 * 7 * 7, 512),
+                    #nn.Linear( 1000, 512),
+                    nn.Linear( 512 * 7 * 7, 512),
                     nn.ReLU(True),
                     nn.Dropout(),
                     nn.Linear(512, 512),
@@ -142,11 +157,13 @@ class Model(nn.Module):
                 )
 
     def forward(self, x):
+        #x=self.resnet(x)
+        #x=x.view(-1,1000)
         x = self.features(x) # 512 x 7 x 7
         x = x.view(-1, 512 * 7 * 7)
         orientation = self.orientation(x)
-        orientation = orientation.view(-1, self.bins, 2)
-        orientation = F.normalize(orientation, dim=2)
+        # orientation = orientation.view(-1, self.bins, 2)
+        # orientation = F.normalize(orientation, dim=2)
         confidence = self.confidence(x)
         dimension = self.dimension(x)
         return orientation, confidence, dimension
