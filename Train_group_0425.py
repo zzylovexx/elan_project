@@ -14,7 +14,7 @@ import os
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--label-dir", default="/label_2_new_group/", help='dir name of the labels')
+parser.add_argument("--label-dir", default="/label_2/", help='dir name of the labels')
 parser.add_argument("--group", action='store_true', help='with group label or not')
 parser.add_argument("--latest", action='store_true', help='continue training or not')
 parser.add_argument("--warm-up", type=int, default=10, help='warm up before adding group loss')
@@ -112,13 +112,13 @@ def main():
 
             truth_conf = torch.max(truth_conf, dim=1)[1]
             conf_loss = conf_loss_func(conf, truth_conf)
-
+            
             loss_theta = conf_loss + w * orient_loss #w=0.4
             loss = alpha * dim_loss + loss_theta#alpha=0.6
             
             if FLAGS.group==True and epoch > warm_up:
                 loss += 0.3 * group_loss
-                loss += 0.3 * orient_loss #0.4+0.3=0.7 (added alpha weight)
+                loss -= 0.2 * orient_loss #0.4-0.2=0.2 (added alpha weight)
 
             opt_SGD.zero_grad()
             loss.backward()

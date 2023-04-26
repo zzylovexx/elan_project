@@ -130,8 +130,9 @@ class Dataset(data.Dataset):
     def get_label(self, id, line_num):
         lines = open(self.top_label_path + '%s.txt'%id).read().splitlines()
         label = self.format_label(lines[line_num], id)
+        extra_labels = open(self.extra_label_path + '%s.txt'%id).read().splitlines()
+        label['Group'] = int(extra_labels[line_num].split()[6])
         if self.theta:
-            extra_labels = open(self.extra_label_path + '%s.txt'%id).read().splitlines()
             label['Theta'] = float(extra_labels[line_num].split()[5]) #0417 added theta_ray
         return label
 
@@ -184,35 +185,18 @@ class Dataset(data.Dataset):
 
             Orientation[bin_idx,:] = np.array([np.cos(angle_diff), np.sin(angle_diff)])
             Confidence[bin_idx] = 1
-        
-        
-        #calib_path = self.top_calib_path + '%s.txt'%id
-        #cam_to_img = get_calibration_cam_to_image(calib_path)
-        #Offset = np.array(ron_utils.calc_center_offset_ratio(Box_2D, Location, cam_to_img))
 
-        if len(line) == 17: # idx:15 alpha group, idx:16 ry group
-            Ry = line[14]
-            Group = line[16] #line[-1]
-            label = {
-                    'Class': Class,
-                    'Box_2D': Box_2D,
-                    'Dimensions': Dimension,
-                    'Alpha': Alpha,
-                    'Location': Location,
-                    'Orientation': Orientation,
-                    'Confidence': Confidence,
-                    'Ry': Ry,
-                    'Group': Group,
-                    #'Center_Offset': Offset,
-                    }
-        else:
-            label = {
-                    'Class': Class,
-                    'Box_2D': Box_2D,
-                    'Dimensions': Dimension,
-                    'Alpha': Alpha,
-                    'Location': Location,
-                    }
+        Ry = line[14]
+        label = {
+                'Class': Class,
+                'Box_2D': Box_2D,
+                'Dimensions': Dimension,
+                'Alpha': Alpha,
+                'Location': Location,
+                'Orientation': Orientation,
+                'Confidence': Confidence,
+                'Ry': Ry,
+                }
         return label
 
     # will be deprc soon
