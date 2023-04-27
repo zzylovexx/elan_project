@@ -10,8 +10,7 @@ python ./Run_group.py --weights=epoch_20.pkl --result-path=Predict_orient_0228 -
 
 ## (Step3) yolo-kitti.weights | Generate Kiiti-format labels (result-path is suggested to name after date i.e. GT_orient_0228)
 # (Arguments TO BE FIXED!) python ./Run_kitti_yolo.py --weights=epoch_20.pkl --result-path=Predict_orient_0228 --hide-debug
-python ./Run_kitti_yolo.py --weights=epoch_20.pkl --hide-debug
-python ./Run_kitti_yolo.py --hide-debug(手動改code)
+python ./Run_kitti_yolo.py --weights-path={}
 
 ## After Step2. [Verfiy Correct Rate Part1]  Run_Kitti_no_yolo.py to generate Kiiti-format labels which are based on GT labels (result-path is suggested to name after date i.e. GT_orient_0228)
 python ./Run_GT_2dbox.py --weight-path=weights/20_epoch.pkl --result-path=20_epoch_0424
