@@ -1,9 +1,5 @@
 """
-Images must be in ./Kitti/testing/image_2/ and camera matricies in ./Kitti/testing/calib/
-
-Uses YOLO to obtain 2D box, PyTorch to get 3D box, plots both
-
-SPACE bar for next image, any other key to exit
+要修改Dataset_4dim 轉換為monodle形式
 """
 
 

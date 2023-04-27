@@ -1,7 +1,5 @@
 """
-This script will use the 2D box from the label rather than from YOLO,
-but will still use the neural nets to get the 3D position and plot onto the
-image. Press space for next image and escape to quit
+把group truth  load 進來不需使用yolo
 """
 from torch_lib.Dataset import *
 from library.Math import *

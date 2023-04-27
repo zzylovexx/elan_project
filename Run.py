@@ -1,13 +1,9 @@
 """
-Images must be in ./Kitti/testing/image_2/ and camera matricies in ./Kitti/testing/calib/
-
-Uses YOLO to obtain 2D box, PyTorch to get 3D box, plots both
-
-SPACE bar for next image, any other key to exit
+目前搭配dataset_theta為monodle之分類angle形式
 """
 
 
-from torch_lib.Dataset import *
+from torch_lib.Dataset_monodle import *
 from library.Math import *
 from library.Plotting import *
 from torch_lib import Model, ClassAverages
@@ -72,7 +68,7 @@ def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray
     return location,orient
 def class2angle(bin_class,residual):
     # angle_per_class=2*torch.pi/float(12)
-    angle_per_class=2*np.pi/float(4)
+    angle_per_class=2*np.pi/float(num_heading_bin)
     angle=float(angle_per_class*bin_class)
     angle=angle+residual
     # print(angle)
@@ -110,8 +106,7 @@ def main():
 
     averages = ClassAverages.ClassAverages()
 
-    # TODO: clean up how this is done. flag?
-    # angle_bins = generate_bins(2)
+   
 
     image_dir = FLAGS.image_dir
     cal_dir = FLAGS.cal_dir
@@ -183,7 +178,7 @@ def main():
             conf = conf.cpu().data.numpy()[0, :]
             dim = dim.cpu().data.numpy()[0, :]
             dim += averages.get_item(detected_class)
-            #dim = averages.get_item(detected_class)
+            
 
             
             #print('dim:',dim)
@@ -196,12 +191,7 @@ def main():
             # print('alpha:',alpha)
             if alpha >np.pi:
                 alpha-=(2*np.pi)
-            # cos = orient[0]
-            # sin = orient[1]
-            # alpha = np.arctan2(sin, cos)
-            # alpha += angle_bins[argmax]
-            # alpha -= np.pi
-            #print('alpha:',alpha)
+           
             if FLAGS.show_yolo:
                 location,_ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray,detectionid, truth_img)
                 #this location means object center ,but in kitti lable it label th buttom center of objet ,so the y location need add 1/2 height
