@@ -24,7 +24,9 @@ train_results
 20epoch_continue_cos/
 20epoch_continue_std/
 20_epoch_orient_inverse/
-
+runs/
+log/
+orient_delta/
 PyTorch_YOLOv3_kitti/data/
 PyTorch_YOLOv3_kitti/label_transform/
 PyTorch_YOLOv3_kitti/checkpoints/darknet53.conv.74
