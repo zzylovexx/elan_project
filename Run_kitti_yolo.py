@@ -11,10 +11,10 @@ SPACE bar for next image, any other key to exit
 from PyTorch_YOLOv3_kitti.detect2 import yolo_kitti
 #from PyTorch_YOLOv3_kitti.models import *
 
-from torch_lib.Dataset import *
+from torch_lib.Dataset_4dim import *
 from library.Math import *
 from library.Plotting import *
-from torch_lib import Model, ClassAverages
+from torch_lib import Model, Model_center, ClassAverages
 from yolo.yolo import cv_Yolo
 
 import os
@@ -50,15 +50,17 @@ parser.add_argument("--cal-dir", default="camera_cal/",
                     help="Relative path to the directory containing camera calibration form KITTI. \
                     Default is camera_cal/")
 
-parser.add_argument("--video", action="store_true",
-                    help="Weather or not to advance frame-by-frame as fast as possible. \
-                    By default, this will pull images from ./eval/video")
-
 parser.add_argument("--show-yolo", action="store_true",
                     help="Show the 2D BoundingBox detecions on a separate image")
 
-parser.add_argument("--hide-debug", action="store_true",
+parser.add_argument("--hide-debug", default=True,
                     help="Supress the printing of each 3d location")
+
+parser.add_argument("--weights-path", required=True,
+                    help="abs path for weights")
+
+parser.add_argument("--save-path", default=True,
+                    help="Save path for the generated label")
 
 
 def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray,detectionid, img_2d=None):
@@ -80,28 +82,19 @@ def main():
     FLAGS = parser.parse_args()
 
     # load torch
-    weights_path = os.path.abspath(os.path.dirname(__file__)) + '/weights_group' #/weights_group
-    
-    model_lst = [x for x in sorted(os.listdir(weights_path)) if x.endswith('.pkl')]
-
-    weight_abs_path='weights/epoch_20_b16_no_group.pkl' #my weigh_path
+    weight_abs_path= FLAGS.weights_path
     #weight_abs_path = 'weights_group/epoch_20_b16_cos_1.pkl'
 
-    if len(model_lst) == 0:
-        print('No previous model found, please train first!')
-        exit()
-    else:
-        #print('Using previous model %s'%model_lst[-1])
-        my_vgg = vgg.vgg19_bn(pretrained=True)
-        #0407
-        #my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
-        # TODO: load bins from file or something
-        model = Model.Model(features=my_vgg.features, bins=2).cuda()
-        #checkpoint = torch.load(weights_path + '/%s'%model_lst[-1])
-        checkpoint=torch.load(weight_abs_path)
-        print('use previous weight:',weight_abs_path)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        model.eval()
+    my_vgg = vgg.vgg19_bn(pretrained=True)
+    #0407 for cond
+    #my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
+    # TODO: load bins from file or something
+    model = Model.Model(features=my_vgg.features, bins=2).cuda()
+    #checkpoint = torch.load(weights_path + '/%s'%model_lst[-1])
+    checkpoint=torch.load(weight_abs_path)
+    print('use previous weight:',weight_abs_path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    model.eval()
 
     # load yolo
    
@@ -114,10 +107,6 @@ def main():
 
     image_dir = FLAGS.image_dir
     cal_dir = FLAGS.cal_dir
-    if FLAGS.video:
-        if FLAGS.image_dir == "eval/image_2/" and FLAGS.cal_dir == "camera_cal/":
-            image_dir = "eval/video/2011_09_26/image_2/"
-            cal_dir = "eval/video/2011_09_26/"
 
     
     img_path = os.path.abspath(os.path.dirname(__file__)) + "/" + image_dir
@@ -174,8 +163,11 @@ def main():
             detected_class = detection.detected_class
             #print('detectionclass:', detection.detected_class)
             input_tensor = torch.zeros([1,3,224,224]).cuda()
-
             input_tensor[0,0:3,:,:] = input_img #除了batch其他dim都配原圖資訊進去
+            
+            #for cond
+            #input_tensor = torch.zeros([1,4,224,224]).cuda()
+            #input_tensor[0,0:3,:,:] = input_img #除了batch其他dim都配原圖資訊進去
             #input_tensor[0,3,:,:] = torch.tensor(theta_ray).expand(1,224,224) #embed
 
             [orient, conf, dim] = model(input_tensor)
@@ -218,22 +210,16 @@ def main():
             print('Got %s poses in %.3f seconds'%(len(detections), time.time() - start_time))
             print('-------------')
             print(img_id)
-        result_path='./20epoch_0408/'
+
+        result_path= FLAGS.save_path
         os.makedirs(result_path,exist_ok=True)
        
         #write to txt
-        print(img_id)
         #print(lines)
-        with open(f'{result_path}{img_id}.txt','w') as f:
+        with open(os.path.join(result_path, f'{img_id}.txt'),'w') as f:
             f.writelines(lines)
 
-        '''
-        if FLAGS.video:
-            cv2.waitKey(1)
-        else:
-            if cv2.waitKey(0) != 32: # space bar
-                exit()
-        '''
+    print('Done')
 
 if __name__ == '__main__':
     main()

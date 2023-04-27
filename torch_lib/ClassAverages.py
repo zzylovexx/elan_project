@@ -16,9 +16,9 @@ class NumpyEncoder(json.JSONEncoder):
 Class will hold the average dimension for a class, regressed value is the residual
 """
 class ClassAverages:
-    def __init__(self, classes=[]):
+    def __init__(self, classes=[], average_file='class_averages.txt'):
         self.dimension_map = {}
-        self.filename = os.path.abspath(os.path.dirname(__file__)) + '/class_averages.txt'
+        self.filename = os.path.abspath(os.path.dirname(__file__)) + '/' + average_file
 
         if len(classes) == 0: # eval mode
             self.load_items_from_file()

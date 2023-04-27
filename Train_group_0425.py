@@ -1,4 +1,4 @@
-from torch_lib.Dataset_theta import *
+from torch_lib.Dataset_theta_ron import *
 from torch_lib.Model import Model, OrientationLoss
 from library.ron_utils import *
 
@@ -20,7 +20,7 @@ parser.add_argument("--latest", action='store_true', help='continue training or 
 parser.add_argument("--warm-up", type=int, default=10, help='warm up before adding group loss')
 
 def main():
-
+    os.makedirs('log_group', exist_ok=True)
     writer = SummaryWriter('./log_group')
     FLAGS = parser.parse_args()
     
@@ -32,7 +32,6 @@ def main():
 
     print("Loading all detected objects in dataset...")
         
-
     train_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training'
     dataset = Dataset(train_path, FLAGS.label_dir, theta=True, bins=2)
 
@@ -45,6 +44,8 @@ def main():
     my_vgg = vgg.vgg19_bn(pretrained=True)
     model = Model(features=my_vgg.features).cuda()
     opt_SGD = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+    # milestones:調整lr的epoch數，gamma:decay factor (https://hackmd.io/@Hong-Jia/H1hmbNr1d)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(opt_SGD, milestones=[i for i in range(10, epochs, 10)], gamma=0.5)
     conf_loss_func = nn.CrossEntropyLoss().cuda()
     dim_loss_func = nn.MSELoss().cuda()
     orient_loss_func = OrientationLoss
@@ -79,9 +80,11 @@ def main():
 
 
     total_num_batches = int(len(dataset) / batch_size)#len(dataset)=40570
-    warm_up = int(FLAGS.warm_up) #等收斂再加入grouploss訓練
+    warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0
+        GT_alpha_list = list()
+        pred_alpha_list = list()
         for local_batch, local_labels in generator:
 
             truth_orient = local_labels['Orientation'].float().cuda()
@@ -91,6 +94,11 @@ def main():
 
             local_batch=local_batch.float().cuda()
             [orient, conf, dim] = model(local_batch)
+
+            # return list type
+            GT_alpha, pred_alpha = get_alpha(orient, truth_orient, truth_conf)
+            GT_alpha_list += GT_alpha
+            pred_alpha_list += pred_alpha
             
             orient_loss = orient_loss_func(orient, truth_orient, truth_conf)
             dim_loss = dim_loss_func(dim, truth_dim)
@@ -110,6 +118,7 @@ def main():
             
             if FLAGS.group==True and epoch > warm_up:
                 loss += 0.3 * group_loss
+                loss += 0.3 * orient_loss #0.4+0.3=0.7 (added alpha weight)
 
             opt_SGD.zero_grad()
             loss.backward()
@@ -142,6 +151,12 @@ def main():
             passes += 1
             curr_batch += 1
 
+
+        cos_delta = angle_criterion(pred_alpha_list, GT_alpha_list)
+        print(f'Epoch:{epoch} lr = {scheduler.get_last_lr()[0]}')
+        print(f'cos_delta: sum={cos_delta.sum()}, mean:{cos_delta.mean()}') #sum=40570 is best, mean=1 is best
+        writer.add_scalar('epoch/cos_delta_sum', cos_delta.sum(), epoch)
+        writer.add_scalar('epoch/cos_delta_mean', cos_delta.mean(), epoch)
         #write every epoch
         writer.add_scalar('epoch/orient_loss', orient_loss, epoch)
         writer.add_scalar('epoch/dim_loss', dim_loss, epoch)
@@ -155,6 +170,7 @@ def main():
         #tensorboard --logdir=./{log_foler} --port 8123
 
         # save after every 10 epochs
+        scheduler.step()
         if epoch % 5 == 0:
             name = model_path + 'w03_warmup10_epoch_%s.pkl' % epoch
             print("====================")

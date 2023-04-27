@@ -9,8 +9,9 @@ from library.File import *
 from jenkspy import jenks_breaks
 
 parser = argparse.ArgumentParser()
+#0418 added idx*100+group for consider different imgs
 parser.add_argument("--label-root", default="Kitti/training/label_2", help="group label folder name")
-parser.add_argument("--new-label-dir", default="label_2_new", help="new label folder name")
+parser.add_argument("--new-label-dir", default="label_2_new_group", help="new label folder name")
 
 def main():
     FLAGS = parser.parse_args()
@@ -40,11 +41,11 @@ def main():
                     alphas.append(float(elements[3]))
                     rys.append(float(elements[14]))
                     
-            alpha_classes, alpha_diff = get_bin_classes(alphas, num_class=60)
-            ry_classes, ry_diff = get_bin_classes(rys, num_class=60)
+            alpha_classes, alpha_diff = get_bin_classes(alphas, num_bin=60)
+            ry_classes, ry_diff = get_bin_classes(rys, num_bin=60)
             for line, alpha_class, ry_class in zip(lines, alpha_classes, ry_classes):
                 line = line[:-1]
-                new_labels.append(line + ' ' + str(alpha_class) + ' ' + str(ry_class))
+                new_labels.append(line + ' ' + str(100*i+alpha_class) + ' ' + str(100*i+ry_class))
 
         # write new .txt
         with open(files[i].replace('label_2', dir_name), 'w') as new_f:
@@ -77,8 +78,7 @@ def angle2class(angle, num_heading_bin=60):
     #residual_angle = shifted_angle - (class_id * angle_per_class + angle_per_class / 2)
     return class_id#, residual_angle
 
-def get_bin_classes(array, num_class=60):
-    num_bin = num_class
+def get_bin_classes(array, num_bin=60):
     org_classes = list()
     for value in array:
         org_classes.append(angle2class(value, num_bin))

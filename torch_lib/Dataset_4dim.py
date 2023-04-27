@@ -1,12 +1,16 @@
 import cv2
 import numpy as np
 import os
+import random
+import math
 
 import torch
 from torchvision import transforms
 from torch.utils import data
 
 from library.File import *
+from library.Plotting import *
+from library import ron_utils
 
 from .ClassAverages import ClassAverages
 
@@ -21,11 +25,14 @@ def generate_bins(bins): #this case is 2
     return angle_bins
 
 class Dataset(data.Dataset):
-    def __init__(self, path, label_path="/label_2/", bins=2, overlap=0.1):
+    def __init__(self, path, label_path="/label_2/", theta=False, bins=2, overlap=0.1):
 
         self.top_label_path = path + label_path
         self.top_img_path = path + "/image_2/"
         self.top_calib_path = path + "/calib/"
+        self.theta = theta
+        if self.theta:
+            self.extra_label_path = path + '/extra_label/' #using generated extra label
         # use a relative path instead?
 
         # TODO: which camera cal to use, per frame or global one?
@@ -73,8 +80,6 @@ class Dataset(data.Dataset):
         self.curr_id = ""
         self.curr_img = None
 
-
-    # should return (Input, Label)
     def __getitem__(self, index):
         id = self.object_list[index][0]
         line_num = self.object_list[index][1]
@@ -84,10 +89,11 @@ class Dataset(data.Dataset):
             self.curr_img = cv2.imread(self.top_img_path + '%s.png'%id)
 
         label = self.labels[id][str(line_num)]
-        # P doesn't matter here
-        obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label)
-
-        return obj.img, label
+        obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label) #TOBEFIXED using frame calib will be better?
+        #theta_ray_condition 0407
+        cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
+        img_cond = torch.concat((obj.img, cond), dim=0)
+        return img_cond, label
 
     def __len__(self):
         return len(self.object_list)
@@ -114,7 +120,12 @@ class Dataset(data.Dataset):
 
     def get_label(self, id, line_num):
         lines = open(self.top_label_path + '%s.txt'%id).read().splitlines()
-        label = self.format_label(lines[line_num])
+        label = self.format_label(lines[line_num], id)
+
+        if self.theta:
+            extra_labels = open(self.extra_label_path + '%s.txt'%id).read().splitlines()
+            label['Theta'] = float(extra_labels[line_num].split()[5]) #0417 added theta_ray
+
         return label
 
     def get_bin(self, angle):
@@ -132,7 +143,7 @@ class Dataset(data.Dataset):
 
         return bin_idxs
 
-    def format_label(self, line):
+    def format_label(self, line, id):
         line = line.split(' ')
 
         Class = line[0]
@@ -155,7 +166,7 @@ class Dataset(data.Dataset):
 
         Orientation = np.zeros((self.bins, 2))
         Confidence = np.zeros(self.bins)
-
+        
         # alpha is [-pi..pi], shift it to be [0..2pi]
         angle = Alpha + np.pi
 
@@ -166,7 +177,11 @@ class Dataset(data.Dataset):
 
             Orientation[bin_idx,:] = np.array([np.cos(angle_diff), np.sin(angle_diff)])
             Confidence[bin_idx] = 1
-
+        
+        #calib_path = self.top_calib_path + '%s.txt'%id
+        #cam_to_img = get_calibration_cam_to_image(calib_path)
+        #Offset = np.array(ron_utils.calc_center_offset_ratio(Box_2D, Location, cam_to_img))
+        
         if len(line) == 17: # idx:15 alpha group, idx:16 ry group
             Ry = line[14]
             Group = line[16] #line[-1]
@@ -177,8 +192,10 @@ class Dataset(data.Dataset):
                     'Alpha': Alpha,
                     'Orientation': Orientation,
                     'Confidence': Confidence,
-                    'Ry' : Ry,
-                    'Group': Group
+                    'Location': Location,
+                    'Ry': Ry,
+                    'Group': Group,
+                    #'Center_Offset': Offset,
                     }
         else:
             label = {
@@ -187,7 +204,8 @@ class Dataset(data.Dataset):
                     'Dimensions': Dimension,
                     'Alpha': Alpha,
                     'Orientation': Orientation,
-                    'Confidence': Confidence
+                    'Confidence': Confidence,
+                    'Location': Location,
                     }
         return label
 
@@ -239,7 +257,7 @@ class Dataset(data.Dataset):
             proj_matrix = get_calibration_cam_to_image(calib_path)
 
             # using P_rect from global calib file
-            proj_matrix = self.proj_matrix
+            #proj_matrix = self.proj_matrix (command out 0406 for drawing correct 3d box
 
             data[id]['Calib'] = proj_matrix
 
@@ -269,7 +287,6 @@ class DetectedObject:
             # proj_matrix = get_calibration_cam_to_image(proj_matrix)
 
         self.proj_matrix = proj_matrix
-        #print(self.proj_matrix)
         self.theta_ray = self.calc_theta_ray(img, box_2d, proj_matrix)
         self.img = self.format_img(img, box_2d)
         self.label = label
@@ -314,3 +331,8 @@ class DetectedObject:
         batch = process(crop)
 
         return batch
+    
+    #offset ratio -1~1
+    def calc_center_offset_ratio(self, d2_box, d3_location, cam_to_img):
+        return ron_utils.calc_center_offset_ratio(d2_box, d3_location, cam_to_img)
+        
