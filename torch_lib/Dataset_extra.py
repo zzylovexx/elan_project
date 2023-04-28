@@ -10,7 +10,7 @@ from torch.utils import data
 
 from library.File import *
 from library.Plotting import *
-from library import ron_utils
+from library.ron_utils import *
 
 from .ClassAverages import ClassAverages
 
@@ -114,10 +114,10 @@ class Dataset(data.Dataset):
     def get_label(self, id, line_num):
         lines = open(self.top_label_path + '%s.txt'%id).read().splitlines()
         label = self.format_label(lines[line_num], id)
-        extra_labels = open(self.extra_label_path + '%s.txt'%id).read().splitlines()
-        label['Group'] = int(extra_labels[line_num].split()[6])
+        extra_labels = get_extra_labels(self.extra_label_path + '%s.txt'%id)
+        label['Group'] = extra_labels[line_num]['Group_Ry']
         if self.theta:
-            label['Theta'] = float(extra_labels[line_num].split()[5]) #0417 added theta_ray
+            label['Theta'] = extra_labels[line_num]['Theta_ray']
         return label
 
     def get_bin(self, angle):
@@ -307,6 +307,6 @@ class DetectedObject:
         return batch
     
     #offset ratio -1~1
-    def calc_center_offset_ratio(self, d2_box, d3_location, cam_to_img):
-        return ron_utils.calc_center_offset_ratio(d2_box, d3_location, cam_to_img)
+    def calc_offset_ratio(self, d2_box, d3_location, cam_to_img):
+        return calc_center_offset_ratio(d2_box, d3_location, cam_to_img)
         

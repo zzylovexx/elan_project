@@ -210,3 +210,27 @@ def angle_criterion(PRED, GT):
     GT = np.array(GT)
     cos_delta = np.cos(PRED - GT)
     return cos_delta
+
+def get_extra_labels(file_name):
+    '''
+    [Return] List[Dict]
+
+    [Dict Keys] Group_Ry, Theta_ray, Img_W, Box_W, Box_H, Offset_X, Offset_Y, Group_Alpha 
+    '''
+    extra_label_list = list()
+    with open(file_name) as f:
+        lines = f.readlines()
+        for line in lines:
+            extra_label = dict()
+            elements = line[:-1].split()
+            extra_label['Img_W'] = int(elements[0])
+            extra_label['Box_W'] = int(elements[1])
+            extra_label['Box_H'] = int(elements[2])
+            extra_label['Offset_X'] = int(elements[3])
+            extra_label['Offset_Y'] = int(elements[4])
+            extra_label['Theta_ray'] = float(elements[5]) # (.3f)
+            extra_label['Group_Alpha'] = int(elements[6]) # (+100*index)
+            extra_label['Group_Ry'] = int(elements[7])    # (+100*index)
+            extra_label_list.append(extra_label)
+    return extra_label_list
+            

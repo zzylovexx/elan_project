@@ -196,3 +196,5 @@ PyTorch_YOLOv3_kitti/detect_test.ipynb
 *.png
 */*.txt
 /runs/
+Ron_local/
+weights_local/
