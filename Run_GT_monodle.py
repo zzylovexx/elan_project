@@ -10,19 +10,20 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--weights-path", required=True, default='weights/epoch_20.pkl', help='weighs path')
 parser.add_argument("--result-path", required=True, default='Result', help='path of the generated pred-labels')
-
+parser.add_argument("--device", type=int, default=0, help='select cuda index')
 
 def main():
 
-    FLAGs = parser.parse_args()
-    weights_path = FLAGs.weights_path
-    pred_label_root = FLAGs.result_path
+    FLAGS = parser.parse_args()
+    weights_path = FLAGS.weights_path
+    pred_label_root = FLAGS.result_path
+    device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
 
     os.makedirs(pred_label_root, exist_ok=True)
     my_vgg = vgg.vgg19_bn(pretrained=True)
-    # dim
+    #4 dim
     #my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
-    model = Model(features=my_vgg.features).cuda()
+    model = Model(features=my_vgg.features).to(device)
 
     checkpoint = torch.load(weights_path)
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -90,7 +91,7 @@ def main():
 
             # put together as a batch
             # model regress part
-            input_ = torch.stack(CROPs_tensor).cuda()
+            input_ = torch.stack(CROPs_tensor).to(device)
 
             [ORIENTs, CONFs, delta_DIMs] = model(input_)
 

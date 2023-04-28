@@ -15,8 +15,8 @@ def main():
     labels = glob.glob(os.path.join(label_root, '*.txt'), recursive=True)
     calibs = glob.glob(os.path.join(calib_root, '*.txt'), recursive=True)
 
-    FLAGs = parser.parse_args()
-    extra_label_root = FLAGs.extra_root
+    FLAGS = parser.parse_args()
+    extra_label_root = FLAGS.extra_root
     os.makedirs(extra_label_root, exist_ok=True)
 
     #alpha_diff_txt = list()

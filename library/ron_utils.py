@@ -67,7 +67,7 @@ def offset_to_projected_center(d2_box, offset_ratio):
     return np.array(proj_center, dtype=int)
 
 #added 0417 RyGT_batch unused in std
-def stdGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_batch): #
+def stdGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_batch, device): #
 
     batch_size = orient_batch.size()[0]
     indexes = torch.max(confGT_batch, dim=1)[1]#conf 是在那一個bin上取大
@@ -77,7 +77,7 @@ def stdGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_ba
     estimated_Ry = estimated_alpha + ThetaGT_batch  
 
     group_idxs = get_group_idxs(group_batch)
-    loss = torch.zeros(1)[0].cuda()
+    loss = torch.zeros(1)[0].to(device)
     for idxs in group_idxs:
         if len(idxs) == 1:
             continue
@@ -89,7 +89,7 @@ def stdGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_ba
     return loss.requires_grad_(True)
 
 #added 0417 -1*cos(GT_Ry-pred_Ry) , similar to OrientationLoss -1*cos(GT_alpha-pred_alpha)
-def RyGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_batch): #
+def RyGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_batch, device): #
 
     batch_size = orient_batch.size()[0]
     indexes = torch.max(confGT_batch, dim=1)[1]#conf 是在那一個bin上取大
@@ -99,7 +99,7 @@ def RyGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_bat
     estimated_Ry = estimated_alpha + ThetaGT_batch  
 
     group_idxs = get_group_idxs(group_batch)
-    loss = torch.zeros(1)[0].cuda()
+    loss = torch.zeros(1)[0].to(device)
     for idxs in group_idxs:
         if len(idxs) == 1:
             continue
