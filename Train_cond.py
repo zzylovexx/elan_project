@@ -1,5 +1,5 @@
 from torch_lib.Dataset_monodle import *
-from torch_lib.Model import Model, OrientationLoss,residual_loss
+from torch_lib.Model_heading_bin import Model, residual_loss
 
 import tqdm
 import torch
@@ -38,11 +38,9 @@ def main():
     # # reset the first layer 0407
     my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
     
-    model = Model().cuda()
+    model = Model(features=my_vgg.features, bins=4).cuda()
     opt_adam = torch.optim.Adam(model.parameters(), lr=0.000125)
-    conf_loss_func = nn.CrossEntropyLoss().cuda()    
     dim_loss_func = nn.MSELoss().cuda()
-    orient_loss_func = OrientationLoss
 
     # load any previous weights
 
@@ -76,6 +74,7 @@ def main():
     # progress_bar=tqdm.tqdm(range(0,epochs),dynamic_ncols=True,leave=True,desc='epoch')
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0
+        passes = 0
         # batch_progress_bar=tqdm.tqdm(len(generator),dynamic_ncols=True,leave=True,desc='batch')
         for batch_pass,(local_batch, local_labels) in enumerate(generator):
             opt_adam.zero_grad()
@@ -89,7 +88,7 @@ def main():
             [orient_residual, bin_conf, dim] = model(local_batch)
 
             orient_bin_loss=F.cross_entropy(bin_conf,truth_bin,reduction='mean')
-            orient_redisual_loss,rediual_val=residual_loss(orient_residual,truth_bin,truth_orient_resdiual)
+            orient_redisual_loss,rediual_val=residual_loss(orient_residual,truth_bin,truth_orient_resdiual, 'cuda:0')
             #orient_loss = orient_loss_func(orient, truth_orient_resdiual, truth_label_class_bin)
             dim_loss = dim_loss_func(dim, truth_dim)
 

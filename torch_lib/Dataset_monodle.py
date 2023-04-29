@@ -39,9 +39,8 @@ class Dataset(data.Dataset):
         self.top_label_path = path + label_path
         self.top_img_path = path + "/image_2/"
         self.top_calib_path = path + "/calib/"
+        self.extra_label_path = path + '/extra_label/' #using generated extra label
         self.theta = theta
-        if self.theta:
-            self.extra_label_path = path + '/extra_label/' #using generated extra label
         # use a relative path instead?
 
         # TODO: which camera cal to use, per frame or global one?
@@ -155,10 +154,7 @@ class Dataset(data.Dataset):
         Location = [line[11], line[12], line[13]] # x, y, z
         Location[1] -= Dimension[0] / 2 # bring the KITTI center up to the middle of the object
 
-        # Orientation = np.zeros((12, 2))
-        # Confidence = np.zeros(12)
         heading_class,heading_resdiual=angle2class(Alpha)
-     
         label = {
                 'Class': Class,
                 'Box_2D': Box_2D,
@@ -169,8 +165,6 @@ class Dataset(data.Dataset):
                 'heading_class': heading_class,
                 'Ry': Ry,
                 }
-
-        
         return label
 
     # will be deprc soon
@@ -236,7 +230,6 @@ class Dataset(data.Dataset):
             data[id]['Objects'] = objects
 
         return data
-
 
 """
 What is *sorta* the input to the neural net. Will hold the cropped image and

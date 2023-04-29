@@ -14,20 +14,35 @@ from library.ron_utils import *
 
 from .ClassAverages import ClassAverages
 
+
 '''
-基於原本dataset修改,包含讀取extra label等
-會配合train_group0425.py(train_group0425.py 和 train_group差別在於scheduler)
+orient 分類與loss使用monodle 之類似型式
+使用上需要確認model ouput dim
+目前配合train_cond.py以及run.py
+
 '''
+def angle2class(angle, num_heading_bin):
+    ''' Convert continuous angle to discrete class and residual. '''
+    angle = angle % (2 * np.pi)
+    assert (angle >= 0 and angle <= 2 * np.pi)
+    angle_per_class = 2 * np.pi / float(num_heading_bin) #degree:30 radius:0.523
+    shifted_angle = (angle + angle_per_class / 2) % (2 * np.pi)
+    class_id = int(shifted_angle / angle_per_class)
+    residual_angle = shifted_angle - (class_id * angle_per_class + angle_per_class / 2) #residual 有正有負
+
+    return class_id, residual_angle
 
 class Dataset(data.Dataset):
-    def __init__(self, path, label_path="/label_2/", theta=False, bins=2, overlap=0.1):
-
-        self.top_label_path = path + label_path
+    def __init__(self, path, num_heading_bin=4, condition=False):
+        '''
+        If condition==True, will concat theta_ray as 4-dim
+        '''
+        self.top_label_path = path + '/label_2/'
         self.top_img_path = path + "/image_2/"
         self.top_calib_path = path + "/calib/"
-        self.theta = theta
-        if self.theta:
-            self.extra_label_path = path + '/extra_label/' #using generated extra label
+        self.extra_label_path = path + '/extra_label/' #using generated extra label
+        self.num_heading_bin = num_heading_bin
+        self.condition = condition
         # use a relative path instead?
 
         # TODO: which camera cal to use, per frame or global one?
@@ -36,29 +51,13 @@ class Dataset(data.Dataset):
         self.ids = [x.split('.')[0] for x in sorted(os.listdir(self.top_img_path))] # name of file
         self.num_images = len(self.ids)
 
-        # create angle bins
-        self.bins = bins
-        self.angle_bins = np.zeros(bins)
-        self.interval = 2 * np.pi / bins
-        for i in range(1,bins):
-            self.angle_bins[i] = i * self.interval
-        self.angle_bins += self.interval / 2 # center of the bin
-
-        self.overlap = overlap
-        # ranges for confidence
-        # [(min angle in bin, max angle in bin), ... ]
-        self.bin_ranges = []
-        for i in range(0,bins):
-            self.bin_ranges.append(( (i*self.interval - overlap) % (2*np.pi), \
-                                (i*self.interval + self.interval + overlap) % (2*np.pi)) )
-
         # hold average dimensions
         class_list = ['Car', 'Van', 'Truck', 'Pedestrian','Person_sitting', 'Cyclist', 'Tram', 'Misc']
         self.averages = ClassAverages(class_list)
 
         self.object_list = self.get_objects(self.ids)
 
-        # pre-fetch all labels
+        
         self.labels = {}
         last_id = ""
         for obj in self.object_list:
@@ -86,6 +85,11 @@ class Dataset(data.Dataset):
         label = self.labels[id][str(line_num)]
         obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label) #TOBEFIXED using frame calib will be better?
 
+        if self.condition:
+            cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
+            img_cond = torch.concat((obj.img, cond), dim=0)
+            return img_cond, label
+        
         return obj.img, label
 
     def __len__(self):
@@ -116,8 +120,7 @@ class Dataset(data.Dataset):
         label = self.format_label(lines[line_num], id)
         extra_labels = get_extra_labels(self.extra_label_path + '%s.txt'%id)
         label['Group'] = extra_labels[line_num]['Group_Ry']
-        if self.theta:
-            label['Theta'] = extra_labels[line_num]['Theta_ray']
+        label['Theta'] = extra_labels[line_num]['Theta_ray']
         return label
 
     def get_bin(self, angle):
@@ -156,29 +159,15 @@ class Dataset(data.Dataset):
         Location = [line[11], line[12], line[13]] # x, y, z
         Location[1] -= Dimension[0] / 2 # bring the KITTI center up to the middle of the object
 
-        Orientation = np.zeros((self.bins, 2))
-        Confidence = np.zeros(self.bins)
-
-        # alpha is [-pi..pi], shift it to be [0..2pi]
-        angle = Alpha + np.pi
-
-        bin_idxs = self.get_bin(angle)
-
-        for bin_idx in bin_idxs:
-            angle_diff = angle - self.angle_bins[bin_idx]
-
-            Orientation[bin_idx,:] = np.array([np.cos(angle_diff), np.sin(angle_diff)])
-            Confidence[bin_idx] = 1
-
-        Ry = line[14]
+        heading_class,heading_resdiual=angle2class(Alpha, self.num_heading_bin)
         label = {
                 'Class': Class,
                 'Box_2D': Box_2D,
                 'Dimensions': Dimension,
                 'Alpha': Alpha,
                 'Location': Location,
-                'Orientation': Orientation,
-                'Confidence': Confidence,
+                'heading_resdiual': heading_resdiual,
+                'heading_class': heading_class,
                 'Ry': Ry,
                 }
         return label
@@ -246,7 +235,6 @@ class Dataset(data.Dataset):
             data[id]['Objects'] = objects
 
         return data
-
 
 """
 What is *sorta* the input to the neural net. Will hold the cropped image and

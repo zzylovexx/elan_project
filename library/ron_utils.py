@@ -88,6 +88,25 @@ def stdGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_ba
 
     return loss.requires_grad_(True)
 
+#added 0417 RyGT_batch unused in std
+#stdGroupLoss_heading_bin
+def stdGroupLoss_mono(pred_alpha, truth_Theta, group_batch, device): #
+
+    batch_size = pred_alpha.shape[0]
+    estimated_Ry = pred_alpha + truth_Theta  
+
+    group_idxs = get_group_idxs(group_batch)
+    loss = torch.zeros(1)[0].to(device)
+    for idxs in group_idxs:
+        if len(idxs) == 1:
+            continue
+            
+        value_tensor_list = estimated_Ry[idxs]
+        stddev = torch.std(value_tensor_list)
+        loss += stddev*len(idxs)/batch_size
+
+    return loss.requires_grad_(True)
+
 #added 0417 -1*cos(GT_Ry-pred_Ry) , similar to OrientationLoss -1*cos(GT_alpha-pred_alpha)
 def RyGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_batch, device): #
 
@@ -234,3 +253,10 @@ def get_extra_labels(file_name):
             extra_label_list.append(extra_label)
     return extra_label_list
             
+def class2angle(bin_class,residual):
+    # angle_per_class=2*torch.pi/float(12)
+    angle_per_class=2*np.pi/float(4)
+    angle=float(angle_per_class*bin_class)
+    angle=angle+residual
+    # print(angle)
+    return angle
