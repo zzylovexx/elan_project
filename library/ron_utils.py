@@ -260,3 +260,30 @@ def class2angle(bin_class,residual):
     angle=angle+residual
     # print(angle)
     return angle
+
+def compute_depth_loss(input, target):
+    depth_input, depth_log_variance = input[:, 0:1], input[:, 1:2]
+    depth_input = 1. / (depth_input.sigmoid() + 1e-6) - 1.
+    depth_loss = laplacian_aleatoric_uncertainty_loss(depth_input, target, depth_log_variance)
+    return depth_loss
+
+def laplacian_aleatoric_uncertainty_loss(input, target, log_variance, reduction='mean'):
+    '''
+    References:
+        MonoPair: Monocular 3D Object Detection Using Pairwise Spatial Relationships, CVPR'20
+        Geometry and Uncertainty in Deep Learning for Computer Vision, University of Cambridge
+    '''
+    assert reduction in ['mean', 'sum']
+    loss = 1.4142 * torch.exp(-0.5*log_variance) * torch.abs(input - target) + 0.5*log_variance
+    return loss.mean() if reduction == 'mean' else loss.sum()
+
+
+def calc_depth_with_alpha_theta(img_W, box_2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0):
+    fovx = 2 * np.arctan(img_W / (2 * cam_to_img[0][0]))
+    box_W = get_box_size(box_2d)[0] / (1-trun+0.01) #assume truncate related to W only
+    visual_W = abs(obj_L*np.cos(alpha)) + abs(obj_W*np.sin(alpha))
+    theta_ray = calc_theta_ray(img_W, box_2d, cam_to_img)
+    visual_W /= abs(np.cos(theta_ray)) #new added !
+    Wview = (visual_W)*(img_W/box_W)
+    depth = Wview/2 / np.tan(fovx/2)
+    return depth

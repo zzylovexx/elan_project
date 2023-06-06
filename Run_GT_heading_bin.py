@@ -30,7 +30,7 @@ def main():
 
     my_vgg = vgg.vgg19_bn(pretrained=True)
     if is_cond:
-        print("< 4-dim input, Theta_ray as Condition >")
+        print("< add Condition (4-dim) as input >")
         my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
     model = Model(features=my_vgg.features, bins=bin_num).to(device)
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -44,17 +44,23 @@ def main():
     label_root = "./Kitti/training/label_2"
     calib_root = "./Kitti/training/calib"
     extra_label_root = "./Kitti/training/extra_label"
+    ImageSets_root = './Kitti/ImageSets'
+    split = 'trainval'
 
     images = glob.glob(os.path.join(img_root, '*.png'), recursive=True)
     labels = glob.glob(os.path.join(label_root, '*.txt'), recursive=True)
     calibs = glob.glob(os.path.join(calib_root, '*.txt'), recursive=True)
     extra = glob.glob(os.path.join(extra_label_root, '*.txt'), recursive=True)
 
+    split_dir = os.path.join(ImageSets_root, split + '.txt')
+    ids = [int(x.strip()) for x in open(split_dir).readlines()]
+
     # dim averages
     averages_all = ClassAverages()
     start = time.time()
-    for i in range(len(images)):
+    for i in ids[:20]:
         img = cv2.imread(images[i])
+        img_W = img.shape[1]
         cam_to_img = get_calibration_cam_to_image(calibs[i])
 
         CLASSes = list()
@@ -64,6 +70,7 @@ def main():
         CROPs_tensor = list()
         Alphas = list()
         THETAs = list()
+        depth_GT = list()
         extra_labels = get_extra_labels(extra[i])
 
         with open(labels[i]) as f:
@@ -91,7 +98,8 @@ def main():
                 # Use 'calc_theta_ray(img_width, box, proj_matrix)', if cam_to_img changes to proj_matrix:"camera_cal/calib_cam_to_cam.txt"
                 theta_ray = extra_labels[idx]['Theta_ray']
                 THETAs.append(theta_ray)
-                
+                depth_label = elements[13]
+                depth_GT.append(depth_label)
                 #4dim
                 if is_cond:
                     cond = torch.tensor(theta_ray).expand(1, crop.shape[1], crop.shape[2])
@@ -103,7 +111,7 @@ def main():
             # put together as a batch
             input_ = torch.stack(CROPs_tensor).to(device)
             # model regress part
-            [RESIDUALs, BIN_CONFs, delta_DIMs] = model(input_)
+            [RESIDUALs, BIN_CONFs, delta_DIMs, depth_BIAs] = model(input_)
 
             bin_argmax = torch.max(BIN_CONFs, dim=1)[1]
             orient_residual = RESIDUALs[torch.arange(len(RESIDUALs)), bin_argmax] 
@@ -112,14 +120,20 @@ def main():
         #write pred_label.txt 
         with open(labels[i].replace(label_root, result_root),'w') as new_f:
             pred_labels = ''
-            for class_, truncated, occluded, delta, alpha, theta, box_2d in zip(CLASSes, TRUNCATEDs, OCCLUDEDs, delta_DIMs, Alphas, THETAs, BOX2Ds):
-                delta = delta.cpu().data.numpy() #torch->numpy
-                alpha = alpha.cpu().data.numpy() #torch->numpy
+            for class_, truncated, occluded, delta, alpha, theta, box_2d, bias, gt in zip(CLASSes, TRUNCATEDs, OCCLUDEDs, delta_DIMs, Alphas, THETAs, BOX2Ds, depth_BIAs, depth_GT):
+                delta = delta.cpu().data #torch->numpy
+                alpha = alpha.cpu().data #torch->numpy
+                bias = bias.cpu().data
                 if alpha > np.pi:
                     alpha -= (2*np.pi) #for fitting val-range
                 dim = delta + averages_all.get_item(class_)
                 rotation_y = alpha + theta
                 loc, _ = calc_location(dim, cam_to_img, box_2d, alpha, theta)
+                calc_depth = loc[2]
+                depth_width = calc_depth_with_alpha_theta(img_W, box_2d, cam_to_img, dim[1], dim[2], alpha, truncated)
+                regress_depth = depth_width + bias
+                print(f'Calc:', calc_depth, 'GT', gt)
+                print(f'Width:{depth_width:.2f}, bias:', bias)
 
                 pred_labels += '{CLASS} {T:.1f} {O} {A:.2f} {left} {top} {right} {btm} {H:.2f} {W:.2f} {L:.2f} {X:.2f} {Y:.2f} {Z:.2f} {Ry:.2f}\n'.format(
                     CLASS=class_, T=truncated, O=occluded, A=alpha, left=box_2d[0][0], top=box_2d[0][1], right=box_2d[1][0], btm=box_2d[1][1],

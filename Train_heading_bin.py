@@ -13,7 +13,7 @@ from torch.utils import data
 
 from torch.utils.tensorboard import SummaryWriter
 import os
-
+import time
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -26,7 +26,7 @@ parser.add_argument("--log-dir", default='log', help='tensorboard log-saved path
 
 #training setting
 parser.add_argument("--device", type=int, default=0, help='select cuda index')
-parser.add_argument("--epoch", type=int, default=20, help='epoch num')
+parser.add_argument("--epoch", type=int, default=100, help='epoch num')
 parser.add_argument("--warm-up", type=int, default=10, help='warm up before adding group loss')
 
 #parser.add_argument("--batch-size", type=int, default=16, help='batch size')
@@ -34,8 +34,8 @@ parser.add_argument("--warm-up", type=int, default=10, help='warm up before addi
 # hyper-parameter (group | bin | cond)
 parser.add_argument("--bin", type=int, default=4, help='heading bin num')
 parser.add_argument("--group", action='store_true', help='if True, add stdGroupLoss')
-parser.add_argument("--cond", action='store_true', help='if True, 4-dim with theta_ray')
-# TO BE ADDED (Loss的weights比例alpha, w of groupLoss )
+parser.add_argument("--cond", action='store_true', help='if True, 4-dim with theta_ray | boxH_2d ')
+# TO BE ADDED (Loss的weights比例alpha, w of groupLoss, LRscheduler: milestone, gamma )
 
 # to keep the same random result
 def keep_same_seeds(seed):
@@ -65,16 +65,18 @@ def main():
     print("Loading all detected objects in dataset...")
         
     train_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training'
-    dataset = Dataset(train_path, condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    train_dataset = Dataset(train_path, split='train', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    #val_dataset = Dataset(train_path, split='val', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}
 
-    generator = data.DataLoader(dataset, **params)
+    generator = data.DataLoader(train_dataset, **params)
 
     my_vgg = vgg.vgg19_bn(pretrained=True)
     if FLAGS.cond:
-        print("< 4-dim input, Theta_ray as Condition >")
+        print("< add Condition (4-dim) as input >")
         my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
     model = Model(features=my_vgg.features, bins=FLAGS.bin).to(device)
     angle_per_class=2*np.pi/float(FLAGS.bin)
@@ -104,8 +106,8 @@ def main():
         print('Found previous checkpoint: %s at epoch %s'%(weights_path, first_epoch))
         print('Resuming training....')
 
-    total_num_batches = int(len(dataset) / batch_size)#len(dataset)=40570
-    
+    total_num_batches = int(len(train_dataset) / batch_size)#len(dataset)=40570
+    start = time.time()
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0
         GT_alpha_list = list()
@@ -116,16 +118,21 @@ def main():
             truth_orient_resdiual = local_labels['heading_resdiual'].float().to(device)
             truth_bin = local_labels['heading_class'].long().to(device)#這個角度在哪個class上
             truth_dim = local_labels['Dimensions'].float().to(device)
+            truth_bias = local_labels['Depth_bias'].float().to(device).view(-1, 1)
+            #print(truth_bias)
 
             local_batch=local_batch.float().to(device)
-            [orient_residual, bin_conf, dim] = model(local_batch)
+            [orient_residual, bin_conf, dim, bias] = model(local_batch)
 
             bin_loss = F.cross_entropy(bin_conf,truth_bin,reduction='mean').to(device)
             orient_redisual_loss, rediual_val = residual_loss(orient_residual,truth_bin,truth_orient_resdiual, device)
 
+            #0530 added
+            bias_loss = F.l1_loss(bias, truth_bias)
+
             loss_theta = bin_loss + orient_redisual_loss
             dim_loss = dim_loss_func(dim, truth_dim)
-            loss = alpha * dim_loss + loss_theta
+            loss = alpha * dim_loss + loss_theta + bias_loss
 
             # return list type
             pred_alpha = angle_per_class*truth_bin + orient_residual[torch.arange(len(orient_residual)), truth_bin]
@@ -140,30 +147,33 @@ def main():
                 truth_group = local_labels['Group'].float().to(device)
                 group_loss = group_loss_func(pred_alpha, truth_Theta, truth_group, device)
                 loss += 0.3 * group_loss
-                
+                #loss += 0.4 * bias_loss # after warm-up, 0.1->0.5
+
             opt_SGD.zero_grad()
             loss.backward()
             opt_SGD.step()
 
             if passes % 200 == 0 and group_training==True and epoch> warm_up:
-                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[redisual_loss:%.4f],[dim_loss:%.4f],[group_loss:%.4f]" \
-                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_redisual_loss.item(), dim_loss.item(), group_loss.item()))
+                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[redisual_loss:%.4f],[dim_loss:%.4f],[group_loss:%.4f],[bias_loss:%.4f]" \
+                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_redisual_loss.item(), dim_loss.item(), group_loss.item(), bias_loss.item()))
                 writer.add_scalar('pass/orient_cls_loss', bin_loss, passes//200)
                 writer.add_scalar('pass/residual_loss', orient_redisual_loss, passes//200)
                 writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
                 writer.add_scalar('pass/loss_theta', loss_theta, passes//200)
                 writer.add_scalar('pass/total_loss', loss, passes//200) 
                 writer.add_scalar('pass/group_loss', 0, passes//200) 
+                writer.add_scalar('pass/bias_loss', bias_loss, passes//200) 
 
             elif passes % 200 == 0:
-                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[redisual_loss:%.4f],[dim_loss:%.4f]" \
-                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_redisual_loss.item(),dim_loss.item()))
+                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[redisual_loss:%.4f],[dim_loss:%.4f],[bias_loss:%.4f]" \
+                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_redisual_loss.item(),dim_loss.item(), bias_loss.item()))
                 writer.add_scalar('pass/orient_cls_loss', bin_loss, passes//200)
                 writer.add_scalar('pass/residual_loss', orient_redisual_loss, passes//200)
                 writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
                 writer.add_scalar('pass/loss_theta', loss_theta, passes//200)
                 writer.add_scalar('pass/total_loss', loss, passes//200) 
-                writer.add_scalar('pass/group_loss', 0, passes//200) 
+                writer.add_scalar('pass/group_loss', 0, passes//200)
+                writer.add_scalar('pass/bias_loss', bias_loss, passes//200) 
 
             passes += 1
             curr_batch += 1
@@ -181,6 +191,7 @@ def main():
         writer.add_scalar('pass/residual_loss', orient_redisual_loss, epoch)
         writer.add_scalar('pass/dim_loss', dim_loss, epoch)
         writer.add_scalar('epoch/loss_theta', loss_theta, epoch)
+        writer.add_scalar('epoch/bias_loss', bias_loss, epoch)
         writer.add_scalar('epoch/total_loss', loss, epoch) 
         if group_training==True and epoch > warm_up:
             writer.add_scalar('epoch/group_loss', group_loss, epoch)
@@ -190,7 +201,7 @@ def main():
 
         # save after every 10 epochs
         scheduler.step()
-        if epoch % 1 == 0:
+        if epoch % 10 == 0:
             name = FLAGS.weights_path.split('.')[0] + f'_epoch_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)
@@ -209,6 +220,6 @@ def main():
             print("====================")
             
     writer.close()
-
+    print(f'Elapsed time:{(time.time()-start)//60}min')
 if __name__=='__main__':
     main()

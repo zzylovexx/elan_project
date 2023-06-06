@@ -33,7 +33,7 @@ def angle2class(angle, num_heading_bin):
     return class_id, residual_angle
 
 class Dataset(data.Dataset):
-    def __init__(self, path, num_heading_bin=4, condition=False):
+    def __init__(self, path, split='train', num_heading_bin=4, condition=False):
         '''
         If condition==True, will concat theta_ray as 4-dim
         '''
@@ -43,13 +43,11 @@ class Dataset(data.Dataset):
         self.extra_label_path = path + '/extra_label/' #using generated extra label
         self.num_heading_bin = num_heading_bin
         self.condition = condition
-        # use a relative path instead?
+        split_dir = os.path.join(path, 'ImageSets', split + '.txt')
+        self.ids = [x.strip() for x in open(split_dir).readlines()]
 
         # TODO: which camera cal to use, per frame or global one?
         self.proj_matrix = get_P(os.path.abspath(os.path.dirname(os.path.dirname(__file__)) + '/camera_cal/calib_cam_to_cam.txt'))
-
-        self.ids = [x.split('.')[0] for x in sorted(os.listdir(self.top_img_path))] # name of file
-        self.num_images = len(self.ids)
 
         # hold average dimensions
         class_list = ['Car', 'Van', 'Truck', 'Pedestrian','Person_sitting', 'Cyclist', 'Tram', 'Misc']
@@ -83,10 +81,11 @@ class Dataset(data.Dataset):
             self.curr_img = cv2.imread(self.top_img_path + '%s.png'%id)
 
         label = self.labels[id][str(line_num)]
-        obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label) #TOBEFIXED using frame calib will be better?
-
+        obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label)
+        label['Depth_bias'] = obj.get_depth_bias()
         if self.condition:
-            cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
+            #cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
+            cond = torch.tensor(obj.boxH_ratio).expand(1, obj.img.shape[1], obj.img.shape[2]) #box height ratio
             img_cond = torch.concat((obj.img, cond), dim=0)
             return img_cond, label
         
@@ -121,6 +120,7 @@ class Dataset(data.Dataset):
         extra_labels = get_extra_labels(self.extra_label_path + '%s.txt'%id)
         label['Group'] = extra_labels[line_num]['Group_Ry']
         label['Theta'] = extra_labels[line_num]['Theta_ray']
+        label['boxH_ratio'] = extra_labels[line_num]['Box_H'] / 224.0
         return label
 
     def get_bin(self, angle):
@@ -146,6 +146,7 @@ class Dataset(data.Dataset):
         for i in range(1, len(line)):
             line[i] = float(line[i])
 
+        Truncate = line[1] # truncate ratio
         Alpha = line[3] # what we will be regressing
         Ry = line[14]
         top_left = (int(round(line[4])), int(round(line[5])))
@@ -162,6 +163,7 @@ class Dataset(data.Dataset):
         heading_class,heading_resdiual=angle2class(Alpha, self.num_heading_bin)
         label = {
                 'Class': Class,
+                'Truncate': Truncate,
                 'Box_2D': Box_2D,
                 'Dimensions': Dimension,
                 'Alpha': Alpha,
@@ -186,6 +188,7 @@ class Dataset(data.Dataset):
                 for i in range(1, len(line)):
                     line[i] = float(line[i])
 
+                Truncate = line[1] # truncate ratio
                 Alpha = line[3] # what we will be regressing
                 Ry = line[14]
                 top_left = (int(round(line[4])), int(round(line[5])))
@@ -198,6 +201,7 @@ class Dataset(data.Dataset):
 
                 buf.append({
                         'Class': Class,
+                        'Truncate': Truncate,
                         'Box_2D': Box_2D,
                         'Dimensions': Dimension,
                         'Location': Location,
@@ -248,11 +252,18 @@ class DetectedObject:
             proj_matrix = get_P(proj_matrix)
             # proj_matrix = get_calibration_cam_to_image(proj_matrix)
 
+        self.img_W = img.shape[1]
         self.proj_matrix = proj_matrix
         self.theta_ray = self.calc_theta_ray(img, box_2d, proj_matrix)
         self.img = self.format_img(img, box_2d)
+        self.box_2d = box_2d
         self.label = label
         self.detection_class = detection_class
+        self.boxH_ratio = get_box_size(box_2d)[1] / 224.
+        
+        self.averages = ClassAverages([],'class_averages.txt')
+        #print(self.averages.dimension_map)
+        
 
     def calc_theta_ray(self, img, box_2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
         width = img.shape[1]
@@ -297,4 +308,22 @@ class DetectedObject:
     #offset ratio -1~1
     def calc_offset_ratio(self, d2_box, d3_location, cam_to_img):
         return calc_center_offset_ratio(d2_box, d3_location, cam_to_img)
-        
+    
+    def get_depth_bias(self):
+        if self.label != None:
+            return self.calc_depth_bias(self.img_W, self.box_2d, self.proj_matrix, self.label)
+        else:
+            RuntimeError('No label')
+
+    #img.shape[1], box_2d, proj_matrix, label
+    def calc_depth_bias(self, img_W, box_2d, cam_to_img, label):
+        obj_W = self.averages.get_item(self.detection_class)[1] + label['Dimensions'][1]
+        obj_L = self.averages.get_item(self.detection_class)[2] + label['Dimensions'][2]
+        alpha = label['Alpha']
+        trun = label['Truncate'] 
+        depth_GT = label['Location'][2]
+        depth_calc = calc_depth_with_alpha_theta(img_W, box_2d, cam_to_img, obj_W, obj_L, alpha, trun)
+        #print(img_W, box_2d, cam_to_img, obj_W, obj_L, alpha, trun)
+        #print('GT',depth_GT)
+        #print('calc',depth_calc)
+        return depth_GT - depth_calc
