@@ -51,63 +51,71 @@ def main():
     
     FLAGS = parser.parse_args()
     keep_same_seeds(FLAGS.seed)
-    group_training = FLAGS.group
+    is_group = FLAGS.group
+    is_cond = FLAGS.cond
+    bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
+    
 
     os.makedirs(FLAGS.log_dir, exist_ok=True)
     writer = SummaryWriter(FLAGS.log_dir)
-    # hyper parameters
     epochs = FLAGS.epoch
     batch_size = 16 #64 worse than 8
     alpha = 0.6
 
+    # model
     print("Loading all detected objects in dataset...")
-        
     train_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training'
-    train_dataset = Dataset(train_path, split='train', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
-    #val_dataset = Dataset(train_path, split='val', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
-
+    dataset = Dataset(train_path, condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}
 
-    generator = data.DataLoader(train_dataset, **params)
+    generator = data.DataLoader(dataset, **params)
 
     my_vgg = vgg.vgg19_bn(pretrained=True)
     if FLAGS.cond:
-        print("< add Condition (4-dim) as input >")
+        print("< 4-dim input, Theta_ray as Condition >")
         my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
-    model = Model(features=my_vgg.features, bins=FLAGS.bin).to(device)
-    angle_per_class=2*np.pi/float(FLAGS.bin)
+    model = Model(features=my_vgg.features, bins=bin_num).to(device)
+    angle_per_class=2*np.pi/float(bin_num)
 
     opt_SGD = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
     # milestones:調整lr的epoch數，gamma:decay factor (https://hackmd.io/@Hong-Jia/H1hmbNr1d)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(opt_SGD, milestones=[i for i in range(10, epochs, 20)], gamma=0.5)
-    dim_loss_func = nn.MSELoss().to(device)
-    if group_training==True:
-        print("< Train with GroupLoss >")
-        group_loss_func = stdGroupLoss_mono
 
-    first_epoch = 0
-    passes = 0
-    best = [0, 0] # epoch, best_mean
+    dim_loss_func = nn.MSELoss().to(device)
+    if is_group:
+        print("< Train with GroupLoss >")
+        group_loss_func = stdGroupLoss_heading_bin
+    
+    # Load latest-weights parameters
     weights_folder = FLAGS.weights_path.split('/')[0]
     os.makedirs(weights_folder, exist_ok=True)
     if FLAGS.latest_weights is not None:
+        
         weights_path = os.path.join(weights_folder, FLAGS.latest_weights)
-        checkpoint = torch.load(weights_path)
+        checkpoint = torch.load(weights_path, map_location=device)
+        # 如果--bin跟checkpoint['bin']不同會跳錯誤
+        assert bin_num == checkpoint['bin'], f'--bin:{bin_num} is not the same as ckpt-bin:{checkpoint["bin"]}'
         model.load_state_dict(checkpoint['model_state_dict'])
         opt_SGD.load_state_dict(checkpoint['optimizer_state_dict'])
         first_epoch = checkpoint['epoch']
         loss = checkpoint['loss']
         passes = checkpoint['passes']
         best = checkpoint['best']
+        #bin_num = checkpoint['bin'] 
+        #is_cond = checkpoint['cond'] # for evaluate
         print('Found previous checkpoint: %s at epoch %s'%(weights_path, first_epoch))
         print('Resuming training....')
+    else:
+        first_epoch = 0
+        passes = 0
+        best = [0, 0] # epoch, best_mean
 
-    total_num_batches = int(len(train_dataset) / batch_size)#len(dataset)=40570
-    start = time.time()
+    total_num_batches = int(len(dataset) / batch_size)#len(dataset)=40570
+    
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0
         GT_alpha_list = list()
@@ -141,7 +149,7 @@ def main():
             GT_alpha_list += GT_alpha.tolist()
             
             #added loss
-            if group_training==True and epoch > warm_up:
+            if is_group and epoch > warm_up:
                 truth_Theta = local_labels['Theta'].float().to(device)
                 truth_Ry = local_labels['Ry'].float().to(device)
                 truth_group = local_labels['Group'].float().to(device)
@@ -154,8 +162,8 @@ def main():
             opt_SGD.step()
 
             if passes % 200 == 0 and group_training==True and epoch> warm_up:
-                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[redisual_loss:%.4f],[dim_loss:%.4f],[group_loss:%.4f],[bias_loss:%.4f]" \
-                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_redisual_loss.item(), dim_loss.item(), group_loss.item(), bias_loss.item()))
+                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[redisual_loss:%.4f],[dim_loss:%.4f],[group_loss:%.4f]" \
+                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_redisual_loss.item(), dim_loss.item(), group_loss.item()))
                 writer.add_scalar('pass/orient_cls_loss', bin_loss, passes//200)
                 writer.add_scalar('pass/residual_loss', orient_redisual_loss, passes//200)
                 writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
@@ -193,7 +201,7 @@ def main():
         writer.add_scalar('epoch/loss_theta', loss_theta, epoch)
         writer.add_scalar('epoch/bias_loss', bias_loss, epoch)
         writer.add_scalar('epoch/total_loss', loss, epoch) 
-        if group_training==True and epoch > warm_up:
+        if is_group and epoch > warm_up:
             writer.add_scalar('epoch/group_loss', group_loss, epoch)
         
         # visiualize https://zhuanlan.zhihu.com/p/103630393
@@ -201,7 +209,7 @@ def main():
 
         # save after every 10 epochs
         scheduler.step()
-        if epoch % 10 == 0:
+        if epoch % 1 == 0:
             name = FLAGS.weights_path.split('.')[0] + f'_epoch_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)
@@ -220,6 +228,6 @@ def main():
             print("====================")
             
     writer.close()
-    print(f'Elapsed time:{(time.time()-start)//60}min')
+    #print(f'Elapsed time:{(time.time()-start)//60}min')
 if __name__=='__main__':
     main()

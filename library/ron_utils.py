@@ -90,7 +90,7 @@ def stdGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_ba
 
 #added 0417 RyGT_batch unused in std
 #stdGroupLoss_heading_bin
-def stdGroupLoss_mono(pred_alpha, truth_Theta, group_batch, device): #
+def stdGroupLoss_heading_bin(pred_alpha, truth_Theta, group_batch, device): #
 
     batch_size = pred_alpha.shape[0]
     estimated_Ry = pred_alpha + truth_Theta  
@@ -129,7 +129,9 @@ def RyGroupLoss(orient_batch, confGT_batch, group_batch, ThetaGT_batch, RyGT_bat
 
 def get_group_idxs(group):
     # remove duplicate values
-    values = list(dict.fromkeys(group.tolist()))
+    if type(group) != list: #tensor type
+        group = group.tolist()
+    values = list(dict.fromkeys(group))
     group_idxs = list()
     for val in values:
         tmp = list()
