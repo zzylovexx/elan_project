@@ -3,7 +3,7 @@ This script will use the 2D box from the label rather than from YOLO,
 but will still use the neural nets to get the 3D position and plot onto the
 image. Press space for next image and escape to quit
 """
-from torch_lib.Dataset import *
+from torch_lib.Dataset_heading_bin import *
 from library.Math import *
 from library.Plotting import *
 from torch_lib import Model, ClassAverages
@@ -21,8 +21,8 @@ import numpy as np
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--weight-dir', default='weights', help='path to the Kiiti weights folder')
-parser.add_argument('--weights', required=True, help='The name of weights.pkl')
-parser.add_argument('--data-dir', default='Kitti/demo', help='path to data folder')
+parser.add_argument('--weights', required=False, help='The name of weights.pkl')
+parser.add_argument('--data-dir', default='Kitti/training', help='path to data folder')
 
 def plot_regressed_3d_bbox(img, truth_img, cam_to_img, box_2d, dimensions, alpha, theta_ray):
 
@@ -37,8 +37,9 @@ def plot_regressed_3d_bbox(img, truth_img, cam_to_img, box_2d, dimensions, alpha
     return location, orient
 
 def main():
-    FLAGS = parser.parse_args()
     
+    FLAGS = parser.parse_args()
+    '''
     weights_path = os.path.abspath(os.path.dirname(__file__)) + '/' + FLAGS.weight_dir
     my_vgg = vgg.vgg19_bn(pretrained=True)
     model = Model.Model(features=my_vgg.features, bins=2).cuda()
@@ -48,6 +49,8 @@ def main():
 
     # defaults to /eval
     #dataset = Dataset(os.path.abspath(os.path.dirname(__file__)) + '/eval')
+    dataset = Dataset(os.path.abspath(os.path.dirname(__file__)) + '/' + FLAGS.data_dir)
+    '''
     dataset = Dataset(os.path.abspath(os.path.dirname(__file__)) + '/' + FLAGS.data_dir)
     averages = ClassAverages.ClassAverages()
 
@@ -67,6 +70,9 @@ def main():
         lines = list()
         rys = list()
         for detectedObject in objects:
+
+            print(detectedObject.bias)
+            continue
             label = detectedObject.label
 
             if label['Class'] == 'DontCare':
@@ -97,7 +103,7 @@ def main():
             location, rotation_y = plot_regressed_3d_bbox(img, truth_img, cam_to_img, label['Box_2D'], dim, alpha, theta_ray)
             rys.append(f'{rotation_y:.2f}')
 
-        
+        '''
         numpy_vertical = np.concatenate((truth_img, img), axis=0)
         print(key)
         print(rys)
@@ -105,6 +111,7 @@ def main():
         cv2.imshow(FLAGS.weights, numpy_vertical)
         if cv2.waitKey(0) == 27:
             return
+        '''
         
 if __name__ == '__main__':
     main()
