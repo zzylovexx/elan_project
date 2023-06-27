@@ -14,7 +14,6 @@ parser.add_argument("--device", type=int, default=0, help='select cuda index')
 # path setting
 parser.add_argument("--weights-path", required=True, default='weights/epoch_20.pkl', help='weighs path')
 parser.add_argument("--result-path", required=True, default='Result', help='path (folder name) of the generated pred-labels')
-parser.add_argument("--not-round", action='store_true', help='round the alpha and Ry to .2f')
 
 def main():
 
@@ -59,7 +58,7 @@ def main():
     # dim averages
     averages_all = ClassAverages()
     start = time.time()
-    for i in ids[:20]:
+    for i in ids:
         img = cv2.imread(images[i])
         img_W = img.shape[1]
         cam_to_img = get_calibration_cam_to_image(calibs[i])
@@ -138,14 +137,9 @@ def main():
                 print(f'Width:{depth_width:.2f}, bias:', bias)
 
                 
-                if FLAGS.not_round:
-                    pred_labels += '{CLASS} {T:.1f} {O} {A} {left} {top} {right} {btm} {H:.2f} {W:.2f} {L:.2f} {X:.2f} {Y:.2f} {Z:.2f} {Ry}\n'.format(
-                        CLASS=class_, T=truncated, O=occluded, A=alpha, left=box_2d[0][0], top=box_2d[0][1], right=box_2d[1][0], btm=box_2d[1][1],
-                        H=dim[0], W=dim[1], L=dim[2], X=loc[0], Y=loc[1], Z=loc[2], Ry=rotation_y)
-                else:
-                    pred_labels += '{CLASS} {T:.1f} {O} {A:.2f} {left} {top} {right} {btm} {H:.2f} {W:.2f} {L:.2f} {X:.2f} {Y:.2f} {Z:.2f} {Ry:.2f}\n'.format(
-                        CLASS=class_, T=truncated, O=occluded, A=alpha, left=box_2d[0][0], top=box_2d[0][1], right=box_2d[1][0], btm=box_2d[1][1],
-                        H=dim[0], W=dim[1], L=dim[2], X=loc[0], Y=loc[1], Z=loc[2], Ry=rotation_y)
+                pred_labels += '{CLASS} {T:.1f} {O} {A:.2f} {left} {top} {right} {btm} {H:.2f} {W:.2f} {L:.2f} {X:.2f} {Y:.2f} {Z:.2f} {Ry:.2f}\n'.format(
+                    CLASS=class_, T=truncated, O=occluded, A=alpha, left=box_2d[0][0], top=box_2d[0][1], right=box_2d[1][0], btm=box_2d[1][1],
+                    H=dim[0], W=dim[1], L=dim[2], X=loc[0], Y=loc[1], Z=loc[2], Ry=rotation_y)
 
             #print(pred_labels)
             new_f.writelines(pred_labels)

@@ -289,3 +289,47 @@ def calc_depth_with_alpha_theta(img_W, box_2d, cam_to_img, obj_W, obj_L, alpha, 
     Wview = (visual_W)*(img_W/box_W)
     depth = Wview/2 / np.tan(fovx/2)
     return depth
+
+def angle2class(angle, num_heading_bin):
+    ''' Convert continuous angle to discrete class and residual. '''
+    angle = angle % (2 * np.pi)
+    assert (angle >= 0 and angle <= 2 * np.pi)
+    angle_per_class = 2 * np.pi / float(num_heading_bin) #degree:30 radius:0.523
+    shifted_angle = (angle + angle_per_class / 2) % (2 * np.pi)
+    class_id = int(shifted_angle / angle_per_class)
+    residual_angle = shifted_angle - (class_id * angle_per_class + angle_per_class / 2) #residual 有正有負
+
+    return class_id, residual_angle
+
+# 0613 added 
+def L1_loss_alpha(input, target, alpha, device='cuda:0'):
+    weights = [torch.ones(input.shape[0]).to(device), 1+torch.sin(alpha)**2, 1+torch.cos(alpha)**2]
+    weights = torch.stack(weights, dim=1).to(device)
+    loss = abs(input-target)
+    loss *= weights
+    return torch.mean(loss)
+
+def box_depth_error_calculation(depth_labels, depth_Calcs, out_range=10):
+    class_GT = np.copy(depth_labels) #28742 car
+    print(f'num of Car:', class_GT.shape[0])
+    class_cal = np.copy(depth_Calcs)
+    for depth in [0, 10, 20, 30, 40, 50]:
+        class_GT_depth = class_GT[np.logical_and(class_GT >= depth, class_GT < depth+10.)]
+        print(f'\tnum of depth {depth}-{depth+10}:', class_GT_depth.shape[0], end=' ')
+        class_cal_depth = class_cal[np.logical_and(class_GT >= depth, class_GT < depth+10.)]
+        cal_delta = abs(class_GT_depth - class_cal_depth)
+        #cal_delta, _, out_indexes = filter_out_of_range(cal_delta, out_range) # remove prediction out of 10
+        print(f'\tabs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}')
+
+    # after 60 m
+    class_GT_depth = class_GT[class_GT >= 60.]
+    print(f'\tnum of depth {depth+10}+:', class_GT_depth.shape[0], end='   ')
+    class_cal_depth = class_cal[class_GT >= 60.]
+    cal_delta = abs(class_GT_depth - class_cal_depth)
+    #cal_delta, _, out_indexes = filter_out_of_range(cal_delta, out_range) # remove prediction out of 10
+    print(f'\tabs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}')
+    
+    total = abs(class_GT-class_cal)
+    print(f'[Total] mean:{total.mean():.3f}, std:{total.std():.3f}')
+
+    
