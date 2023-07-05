@@ -45,6 +45,16 @@ class Model(nn.Module):
                     nn.Dropout(),
                     nn.Linear(512, 3)
                 )
+        
+        self.depth_bias = nn.Sequential(
+                    nn.Linear(512 * 7 * 7, 512),
+                    nn.ReLU(True),
+                    nn.Dropout(),
+                    nn.Linear(512, 512),
+                    nn.ReLU(True),
+                    nn.Dropout(),
+                    nn.Linear(512, 1) # depth_bias
+                )
 
     def forward(self, x):
         x = self.features(x) #vgg output 512 x 7 x 7
@@ -52,4 +62,5 @@ class Model(nn.Module):
         orientation = self.orientation(x)
         confidence = self.confidence(x)
         dimension = self.dimension(x)
-        return orientation, confidence, dimension
+        bias = self.depth_bias(x)
+        return orientation, confidence, dimension, bias

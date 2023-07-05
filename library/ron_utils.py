@@ -331,5 +331,3 @@ def box_depth_error_calculation(depth_labels, depth_Calcs, out_range=10):
     
     total = abs(class_GT-class_cal)
     print(f'[Total] mean:{total.mean():.3f}, std:{total.std():.3f}')
-
-    

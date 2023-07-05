@@ -198,3 +198,6 @@ PyTorch_YOLOv3_kitti/detect_test.ipynb
 /runs/
 Ron_local/
 weights_local/
+*.zip
+Elan_3d_box/
+*.txt
