@@ -1,9 +1,7 @@
 import cv2
 import numpy as np
 import os
-import random
-import math
-
+import json
 import torch
 from torchvision import transforms
 from torch.utils import data
@@ -15,6 +13,12 @@ from library.ron_utils import *
 from .ClassAverages import ClassAverages
 
 
+'''
+orient 分類與loss使用monodle 之類似型式
+使用上需要確認model ouput dim
+目前配合train_cond.py以及run.py
+
+'''
 def angle2class(angle, num_heading_bin):
     ''' Convert continuous angle to discrete class and residual. '''
     angle = angle % (2 * np.pi)
@@ -26,26 +30,27 @@ def angle2class(angle, num_heading_bin):
 
     return class_id, residual_angle
 
-class ELAN_Dataset(data.Dataset):
-    def __init__(self, path, num_heading_bin=4, condition=False):
+class Dataset(data.Dataset):
+    def __init__(self, path, split='train', num_heading_bin=4, condition=False):
         '''
         If condition==True, will concat theta_ray as 4-dim
         '''
-        #self.top_label_path = path + '/label_2/' # some wrong labels
-        self.top_label_path = path + '/renew_label/'
+        self.top_label_path = path + '/label_2/'
         self.top_img_path = path + "/image_2/"
+        self.top_calib_path = path + "/calib/"
+        self.extra_label_path = path + '/extra_label/' #using generated extra label
         self.num_heading_bin = num_heading_bin
         self.condition = condition
-        # all images as train data
-        self.ids = [x.split('.')[0] for x in sorted(os.listdir(self.top_img_path))] # name of file
-        self.proj_matrix = np.array([
-            [1.418667e+03, 0.000e+00, 6.4e+02, 0],
-            [0.000e+00, 1.418867e+03, 3.6e+02, 0],
-            [0.000e+00, 000e+00, 1.0e+00, 0] ])
+        split_dir = os.path.join(path, 'ImageSets', split + '.txt')
+        self.ids = [x.strip() for x in open(split_dir).readlines()]
+        with open('dimension_ratio.txt', 'r') as f:
+            self.ratio_map = json.load(f)
+        # TODO: which camera cal to use, per frame or global one?
+        self.proj_matrix = get_P(os.path.abspath(os.path.dirname(os.path.dirname(__file__)) + '/camera_cal/calib_cam_to_cam.txt'))
 
         # hold average dimensions
-        class_list =  ['Cyclist', 'Car', 'Pedestrian', 'Bus', 'Motor', 'Truck']
-        self.averages = ClassAverages(class_list, 'ELAN_class_averages.txt')
+        class_list = ['Car', 'Van', 'Truck', 'Pedestrian','Person_sitting', 'Cyclist', 'Tram', 'Misc']
+        self.averages = ClassAverages(class_list)
 
         self.object_list = self.get_objects(self.ids)
 
@@ -76,9 +81,10 @@ class ELAN_Dataset(data.Dataset):
 
         label = self.labels[id][str(line_num)]
         obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label)
+        label['Depth_bias'] = obj.get_depth_bias()
         if self.condition:
             #cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
-            cond = torch.tensor(obj.boxW_ratio).expand(1, obj.img.shape[1], obj.img.shape[2]) #box width ratio
+            cond = torch.tensor(obj.boxH_ratio).expand(1, obj.img.shape[1], obj.img.shape[2]) #box height ratio
             img_cond = torch.concat((obj.img, cond), dim=0)
             return img_cond, label
         
@@ -110,6 +116,10 @@ class ELAN_Dataset(data.Dataset):
     def get_label(self, id, line_num):
         lines = open(self.top_label_path + '%s.txt'%id).read().splitlines()
         label = self.format_label(lines[line_num], id)
+        extra_labels = get_extra_labels(self.extra_label_path + '%s.txt'%id)
+        label['Group'] = extra_labels[line_num]['Group_Ry']
+        label['Theta'] = extra_labels[line_num]['Theta_ray']
+        label['boxH_ratio'] = extra_labels[line_num]['Box_H'] / 224.0
         return label
 
     def get_bin(self, angle):
@@ -143,6 +153,13 @@ class ELAN_Dataset(data.Dataset):
         Box_2D = [top_left, bottom_right]
 
         Dimension = np.array([line[8], line[9], line[10]], dtype=np.double) # height, width, length
+        # 0705 added L / (Height * Width) ratio
+        #L_H_ratio = Dimension[2] / Dimension[[0]
+        #L_W_ratio = Dimension[2] / Dimension0[1]
+        L_HW_ratio = Dimension[2] / (Dimension[0]*Dimension[1])
+        ratio_avg = np.round(self.ratio_map[Class]['L_HW_ratio'] / self.ratio_map[Class]['count'], 4)
+        L_HW_ratio -= ratio_avg
+
         # modify for the average
         Dimension -= self.averages.get_item(Class)
 
@@ -155,6 +172,7 @@ class ELAN_Dataset(data.Dataset):
                 'Truncate': Truncate,
                 'Box_2D': Box_2D,
                 'Dimensions': Dimension,
+                'Ratio': L_HW_ratio,
                 'Alpha': Alpha,
                 'Location': Location,
                 'heading_resdiual': heading_resdiual,
@@ -207,7 +225,15 @@ class ELAN_Dataset(data.Dataset):
             img_path = self.top_img_path + '%s.png'%id
             img = cv2.imread(img_path)
             data[id]['Image'] = img
-            data[id]['Calib'] = self.proj_matrix
+
+            # using p per frame
+            calib_path = self.top_calib_path + '%s.txt'%id
+            proj_matrix = get_calibration_cam_to_image(calib_path)
+
+            # using P_rect from global calib file
+            #proj_matrix = self.proj_matrix (command out 0406 for drawing correct 3d box
+
+            data[id]['Calib'] = proj_matrix
 
             label_path = self.top_label_path + '%s.txt'%id
             labels = self.parse_label(label_path)
@@ -215,7 +241,7 @@ class ELAN_Dataset(data.Dataset):
             for label in labels:
                 box_2d = label['Box_2D']
                 detection_class = label['Class']
-                objects.append(DetectedObject(img, detection_class, box_2d, self.proj_matrix, label=label))
+                objects.append(DetectedObject(img, detection_class, box_2d, proj_matrix, label=label))
 
             data[id]['Objects'] = objects
 
@@ -229,6 +255,10 @@ is to keep this abstract enough so it can be used in combination with YOLO
 class DetectedObject:
     def __init__(self, img, detection_class, box_2d, proj_matrix, label=None):
 
+        if isinstance(proj_matrix, str): # filename
+            proj_matrix = get_P(proj_matrix)
+            # proj_matrix = get_calibration_cam_to_image(proj_matrix)
+
         self.img_W = img.shape[1]
         self.proj_matrix = proj_matrix
         self.theta_ray = self.calc_theta_ray(img, box_2d, proj_matrix)
@@ -236,9 +266,11 @@ class DetectedObject:
         self.box_2d = box_2d
         self.label = label
         self.detection_class = detection_class
-        self.boxW_ratio = get_box_size(box_2d)[0] / 224.
         self.boxH_ratio = get_box_size(box_2d)[1] / 224.
-        self.averages = ClassAverages([],'ELAN_class_averages.txt')
+        
+        self.averages = ClassAverages([],'class_averages.txt')
+        #print(self.averages.dimension_map)
+        
 
     def calc_theta_ray(self, img, box_2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
         width = img.shape[1]
@@ -283,3 +315,22 @@ class DetectedObject:
     #offset ratio -1~1
     def calc_offset_ratio(self, d2_box, d3_location, cam_to_img):
         return calc_center_offset_ratio(d2_box, d3_location, cam_to_img)
+    
+    def get_depth_bias(self):
+        if self.label != None:
+            return self.calc_depth_bias(self.img_W, self.box_2d, self.proj_matrix, self.label)
+        else:
+            RuntimeError('No label')
+
+    #img.shape[1], box_2d, proj_matrix, label
+    def calc_depth_bias(self, img_W, box_2d, cam_to_img, label):
+        obj_W = self.averages.get_item(self.detection_class)[1] + label['Dimensions'][1]
+        obj_L = self.averages.get_item(self.detection_class)[2] + label['Dimensions'][2]
+        alpha = label['Alpha']
+        trun = label['Truncate'] 
+        depth_GT = label['Location'][2]
+        depth_calc = calc_depth_with_alpha_theta(img_W, box_2d, cam_to_img, obj_W, obj_L, alpha, trun)
+        #print(img_W, box_2d, cam_to_img, obj_W, obj_L, alpha, trun)
+        #print('GT',depth_GT)
+        #print('calc',depth_calc)
+        return depth_GT - depth_calc
