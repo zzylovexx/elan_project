@@ -1,5 +1,5 @@
 from torchvision.models import vgg
-from torch_lib.Model_heading_bin import *
+from torch_lib.Model_heading_bin_bias import *
 from torch_lib.ClassAverages import *
 from torchvision import transforms
 import os, glob, cv2

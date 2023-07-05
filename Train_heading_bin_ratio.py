@@ -74,7 +74,7 @@ def main():
 
     generator = data.DataLoader(dataset, **params)
 
-    my_vgg = vgg.vgg19_bn(pretrained=True)
+    my_vgg = vgg.vgg19_bn(weights='DEFAULT')
     if is_cond:
         print("< 4-dim input, Theta_ray as Condition >")
         my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
@@ -145,6 +145,8 @@ def main():
             #dim_loss = F.mse_loss(dim, truth_dim, reduction='mean')  # org use mse_loss
             dim_loss = F.l1_loss(dim, truth_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
             #dim_loss = L1_loss_alpha(dim, truth_dim, GT_alpha, device) # 0613 try elevate dim performance
+
+            ratio = ratio.flatten()
             ratio_loss = F.l1_loss(ratio, truth_ratio, reduction='mean') # 0613 try elevate dim performance
 
 

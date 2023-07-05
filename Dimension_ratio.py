@@ -38,6 +38,7 @@ def calc_class_dimension_ratio(labels, filename):
     return CLASS_INFO
 
 if __name__ == '__main__':
+    
     FLAGS = parser.parse_args()
     kitti_labels = glob.glob('Kitti/training/label_2/*.txt')
     elan_labels = glob.glob('Elan_3d_box/label_2/*.txt')
