@@ -43,7 +43,7 @@ class Dataset(data.Dataset):
         self.condition = condition
         split_dir = os.path.join(path, 'ImageSets', split + '.txt')
         self.ids = [x.strip() for x in open(split_dir).readlines()]
-        with open('dimension_ratio.txt', 'r') as f:
+        with open('kitti_dim_ratio.txt', 'r') as f:
             self.ratio_map = json.load(f)
         # TODO: which camera cal to use, per frame or global one?
         self.proj_matrix = get_P(os.path.abspath(os.path.dirname(os.path.dirname(__file__)) + '/camera_cal/calib_cam_to_cam.txt'))
