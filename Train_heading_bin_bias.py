@@ -1,7 +1,5 @@
-'''
-可以跟train_cond整理成一個
-'''
 from torch_lib.Dataset_heading_bin import *
+from torch_lib.ELAN_Dataset import *
 from torch_lib.Model_heading_bin_bias import Model, residual_loss
 from library.ron_utils import *
 
@@ -19,6 +17,7 @@ import argparse
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--seed", type=int, default=2023, help='keep seeds to represent same result')
+parser.add_argument("--type", type=int, default=0, help='0:Kitti, 1:Elan')
 # path setting
 parser.add_argument("--weights-path", required=True, default='weights/bin4_dim4_group.pkl', help='weights_folder/weights_name.pkl')
 parser.add_argument("--latest-weights", default=None, help='only input the weights-name.pkl') #in the same folder as above
@@ -66,15 +65,20 @@ def main():
 
     # model
     print("Loading all detected objects in dataset...")
-    train_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training'
-    dataset = Dataset(train_path, condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    if FLAGS.type == 0:
+        print('Kitti dataset')
+        train_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training'
+        dataset = Dataset(train_path, condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    elif FLAGS.type == 1 :
+        print('ELAN dataset')
+        dataset = ELAN_Dataset('Elan_3d_box', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}
 
     generator = data.DataLoader(dataset, **params)
 
-    my_vgg = vgg.vgg19_bn(pretrained=True)
+    my_vgg = vgg.vgg19_bn(weights='DEFAULT')
     if FLAGS.cond:
         print("< 4-dim input, Theta_ray as Condition >")
         my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
@@ -161,7 +165,7 @@ def main():
             loss.backward()
             opt_SGD.step()
 
-            if passes % 200 == 0 and group_training==True and epoch> warm_up:
+            if passes % 200 == 0 and is_group==True and epoch> warm_up:
                 print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[redisual_loss:%.4f],[dim_loss:%.4f],[group_loss:%.4f]" \
                     %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_redisual_loss.item(), dim_loss.item(), group_loss.item()))
                 writer.add_scalar('pass/orient_cls_loss', bin_loss, passes//200)
@@ -209,8 +213,8 @@ def main():
 
         # save after every 10 epochs
         scheduler.step()
-        if epoch % 1 == 0:
-            name = FLAGS.weights_path.split('.')[0] + f'_epoch_{epoch}.pkl'
+        if epoch % 10 == 0:
+            name = FLAGS.weights_path.split('.')[0] + f'_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)
             print(f'Best mean:{best[1]} @ epoch {best[0]}')

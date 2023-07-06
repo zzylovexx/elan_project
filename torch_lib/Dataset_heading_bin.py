@@ -85,7 +85,8 @@ class Dataset(data.Dataset):
         label['Depth_bias'] = obj.get_depth_bias()
         if self.condition:
             #cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
-            cond = torch.tensor(obj.boxH_ratio).expand(1, obj.img.shape[1], obj.img.shape[2]) #box height ratio
+            #cond = torch.tensor(obj.boxH_ratio).expand(1, obj.img.shape[1], obj.img.shape[2]) #box height ratio         
+            cond = torch.tensor(obj.Y_axis_ratio).expand(1, obj.img.shape[1], obj.img.shape[2]) #Y coord ratio, 0706 added
             img_cond = torch.concat((obj.img, cond), dim=0)
             return img_cond, label
         
@@ -260,6 +261,7 @@ class DetectedObject:
         self.label = label
         self.detection_class = detection_class
         self.boxH_ratio = get_box_size(box_2d)[1] / 224.
+        self.Y_axis_ratio = get_box_center(box_2d)[1] / 224.
         
         self.averages = ClassAverages([],'class_averages.txt')
         #print(self.averages.dimension_map)

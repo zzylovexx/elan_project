@@ -1,7 +1,5 @@
-'''
-可以跟train_cond整理成一個
-'''
 from torch_lib.Dataset_heading_bin import *
+from torch_lib.ELAN_Dataset import *
 from torch_lib.Model_heading_bin import Model, residual_loss
 from library.ron_utils import *
 
@@ -19,14 +17,15 @@ import argparse
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--seed", type=int, default=2023, help='keep seeds to represent same result')
+parser.add_argument("--type", type=int, default=0, help='0:Kitti, 1:Elan')
 # path setting
-parser.add_argument("--weights-path", required=True, default='weights/bin4_dim4_group.pkl', help='weights_folder/weights_name.pkl')
+parser.add_argument("--weights-path", required=True, help='weights_folder/weights_name.pkl, ie.weights/bin4_dim4_group.pkl')
 parser.add_argument("--latest-weights", default=None, help='only input the weights-name.pkl') #in the same folder as above
 parser.add_argument("--log-dir", default='log', help='tensorboard log-saved path')
 
 #training setting
 parser.add_argument("--device", type=int, default=0, help='select cuda index')
-parser.add_argument("--epoch", type=int, default=100, help='epoch num')
+parser.add_argument("--epoch", type=int, default=50, help='epoch num')
 parser.add_argument("--warm-up", type=int, default=10, help='warm up before adding group loss')
 
 #parser.add_argument("--batch-size", type=int, default=16, help='batch size')
@@ -66,15 +65,20 @@ def main():
 
     # model
     print("Loading all detected objects in dataset...")
-    train_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training'
-    dataset = Dataset(train_path, condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    if FLAGS.type == 0:
+        print('Kitti dataset')
+        train_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training'
+        dataset = Dataset(train_path, condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    elif FLAGS.type == 1 :
+        print('ELAN dataset')
+        dataset = ELAN_Dataset('Elan_3d_box', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}
 
     generator = data.DataLoader(dataset, **params)
 
-    my_vgg = vgg.vgg19_bn(pretrained=True)
+    my_vgg = vgg.vgg19_bn(weights='DEFAULT')
     if is_cond:
         print("< 4-dim input, Theta_ray as Condition >")
         my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
@@ -203,8 +207,8 @@ def main():
 
         # save after every 10 epochs
         scheduler.step()
-        if epoch % 1 == 0:
-            name = FLAGS.weights_path.split('.')[0] + f'_epoch_{epoch}.pkl'
+        if epoch % 10 == 0:
+            name = FLAGS.weights_path.split('.')[0] + f'_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)
             print(f'Best mean:{best[1]} @ epoch {best[0]}')
