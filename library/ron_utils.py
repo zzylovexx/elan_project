@@ -331,3 +331,26 @@ def box_depth_error_calculation(depth_labels, depth_Calcs, out_range=10):
     
     total = abs(class_GT-class_cal)
     print(f'[Total] mean:{total.mean():.3f}, std:{total.std():.3f}')
+
+def box_correction(box_2d:list[list[int,int], list[int,int]], H:int, W:int) -> list[list[int,int], list[int,int]]:
+    '''
+    [USAGE] fixing out of image boundary 2d box in Elan dataset
+    '''
+    top_left, btm_right = box_2d
+    left, top = top_left
+    right, btm = btm_right
+    left = min(max(1, left), W-1)
+    right = min(max(1, right), W-1)
+    top = min(max(1, top), H-1)
+    btm = min(max(1, btm), H-1)
+    return [[left, top], [right, btm]]
+
+def angle_correction(angle:float) -> float:
+    '''
+    [USAGE] Transform angle to kitti-format: -pi~pi of .2f
+    '''
+    if angle > np.pi:
+        angle -= 2* np.pi
+    elif angle < -1*np.pi:
+        angle += 2* np.pi
+    return round(angle, 2)
