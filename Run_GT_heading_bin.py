@@ -1,5 +1,5 @@
 from torchvision.models import vgg
-from torch_lib.Model_heading_bin_bias import *
+from torch_lib.Model_heading_bin import *
 from torch_lib.ClassAverages import *
 from torchvision import transforms
 import os, glob, cv2
@@ -111,7 +111,7 @@ def main():
             # put together as a batch
             input_ = torch.stack(CROPs_tensor).to(device)
             # model regress part
-            [RESIDUALs, BIN_CONFs, delta_DIMs, depth_BIAs] = model(input_)
+            [RESIDUALs, BIN_CONFs, delta_DIMs] = model(input_)
 
             bin_argmax = torch.max(BIN_CONFs, dim=1)[1]
             orient_residual = RESIDUALs[torch.arange(len(RESIDUALs)), bin_argmax] 
@@ -120,23 +120,13 @@ def main():
         #write pred_label.txt 
         with open(labels[i].replace(label_root, result_root),'w') as new_f:
             pred_labels = ''
-            for class_, truncated, occluded, delta, alpha, theta, box_2d, bias, gt in zip(CLASSes, TRUNCATEDs, OCCLUDEDs, delta_DIMs, Alphas, THETAs, BOX2Ds, depth_BIAs, depth_GT):
+            for class_, truncated, occluded, delta, alpha, theta, box_2d, depth_gt in zip(CLASSes, TRUNCATEDs, OCCLUDEDs, delta_DIMs, Alphas, THETAs, BOX2Ds, depth_GT):
                 delta = delta.cpu().data #torch->numpy
                 alpha = alpha.cpu().data #torch->numpy
-                bias = bias.cpu().data
-                if alpha > np.pi:
-                    alpha -= (2*np.pi) #for fitting val-range
+                alpha = angle_correction(alpha)
                 dim = delta + averages_all.get_item(class_)
                 rotation_y = alpha + theta
-                loc, _ = calc_location(dim, cam_to_img, box_2d, alpha, theta)
-
-                calc_depth = loc[2]
-                depth_width = calc_depth_with_alpha_theta(img_W, box_2d, cam_to_img, dim[1], dim[2], alpha, truncated)
-                regress_depth = depth_width + bias
-                print(f'Calc:', calc_depth, 'GT', gt)
-                print(f'Width:{depth_width:.2f}, bias:', bias)
-
-                
+                loc, _ = calc_location(dim, cam_to_img, box_2d, alpha, theta)    
                 pred_labels += '{CLASS} {T:.1f} {O} {A:.2f} {left} {top} {right} {btm} {H:.2f} {W:.2f} {L:.2f} {X:.2f} {Y:.2f} {Z:.2f} {Ry:.2f}\n'.format(
                     CLASS=class_, T=truncated, O=occluded, A=alpha, left=box_2d[0][0], top=box_2d[0][1], right=box_2d[1][0], btm=box_2d[1][1],
                     H=dim[0], W=dim[1], L=dim[2], X=loc[0], Y=loc[1], Z=loc[2], Ry=rotation_y)
