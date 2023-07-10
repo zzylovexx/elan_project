@@ -332,7 +332,8 @@ def box_depth_error_calculation(depth_labels, depth_Calcs, out_range=10):
     total = abs(class_GT-class_cal)
     print(f'[Total] mean:{total.mean():.3f}, std:{total.std():.3f}')
 
-def box_correction(box_2d:list[list[int,int], list[int,int]], H:int, W:int) -> list[list[int,int], list[int,int]]:
+#def box_correction(box_2d:list[list[int,int], list[int,int]], H:int, W:int) -> list[list[int,int], list[int,int]]:
+def box_correction(box_2d, H, W):
     '''
     [USAGE] fixing out of image boundary 2d box in Elan dataset
     '''

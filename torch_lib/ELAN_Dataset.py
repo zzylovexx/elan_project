@@ -114,22 +114,7 @@ class ELAN_Dataset(data.Dataset):
         lines = open(self.top_label_path + '%s.txt'%id).read().splitlines()
         label = self.format_label(lines[line_num], id)
         return label
-
-    def get_bin(self, angle):
-
-        bin_idxs = []
-
-        def is_between(min, max, angle):
-            max = (max - min) if (max - min) > 0 else (max - min) + 2*np.pi
-            angle = (angle - min) if (angle - min) > 0 else (angle - min) + 2*np.pi
-            return angle < max
-
-        for bin_idx, bin_range in enumerate(self.bin_ranges):
-            if is_between(bin_range[0], bin_range[1], angle):
-                bin_idxs.append(bin_idx)
-
-        return bin_idxs
-
+    
     def format_label(self, line, id):
         line = line.split(' ')
 
@@ -153,6 +138,7 @@ class ELAN_Dataset(data.Dataset):
         Location[1] -= Dimension[0] / 2 # bring the KITTI center up to the middle of the object
 
         heading_class,heading_resdiual=angle2class(Alpha, self.num_heading_bin)
+        Theta = Ry-Alpha
         label = {
                 'Class': Class,
                 'Truncate': Truncate,
@@ -163,6 +149,7 @@ class ELAN_Dataset(data.Dataset):
                 'heading_resdiual': heading_resdiual,
                 'heading_class': heading_class,
                 'Ry': Ry,
+                'Theta': Theta
                 }
         return label
 

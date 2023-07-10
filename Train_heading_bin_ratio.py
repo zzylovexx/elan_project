@@ -127,10 +127,11 @@ def main():
             truth_orient_resdiual = local_labels['heading_resdiual'].float().to(device)
             truth_bin = local_labels['heading_class'].long().to(device)#這個角度在哪個class上
             truth_dim = local_labels['Dimensions'].float().to(device)
+            truth_ratio_delta = local_labels['Ratio_delta'].float().to(device)
             truth_ratio = local_labels['Ratio'].float().to(device)
 
             local_batch=local_batch.float().to(device)
-            [orient_residual, bin_conf, dim, ratio] = model(local_batch)
+            [orient_residual, bin_conf, dim, ratio_delta] = model(local_batch)
 
             bin_loss = F.cross_entropy(bin_conf,truth_bin,reduction='mean').to(device)
             orient_redisual_loss, rediual_val = residual_loss(orient_residual,truth_bin,truth_orient_resdiual, device)
@@ -146,8 +147,11 @@ def main():
             dim_loss = F.l1_loss(dim, truth_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
             #dim_loss = L1_loss_alpha(dim, truth_dim, GT_alpha, device) # 0613 try elevate dim performance
 
-            ratio = ratio.flatten()
-            ratio_loss = F.l1_loss(ratio, truth_ratio, reduction='mean') # 0613 try elevate dim performance
+            #ratio_delta = ratio_delta.flatten() # for 1-dim
+            ratio_loss = F.l1_loss(ratio_delta, truth_ratio_delta, reduction='mean') # 0613 try elevate dim performance
+
+            #truth_length = truth_dim[2]
+            #calc_length = dim[0] * dim[1] * truth_ratio
 
 
             loss = alpha * (dim_loss+ratio_loss) + loss_theta
@@ -187,7 +191,7 @@ def main():
 
             passes += 1
             curr_batch += 1
-
+        '''
         cos_delta = angle_criterion(pred_alpha_list, GT_alpha_list)
         print(f'Epoch:{epoch} lr = {scheduler.get_last_lr()[0]}')
         print(f'cos_delta: sum={cos_delta.sum()}, mean:{cos_delta.mean()}') #sum=40570 is best, mean=1 is best
@@ -196,6 +200,7 @@ def main():
             best = [epoch, cos_delta.mean()]
         writer.add_scalar('epoch/cos_delta_sum', cos_delta.sum(), epoch)
         writer.add_scalar('epoch/cos_delta_mean', cos_delta.mean(), epoch)
+        '''
         #write every epoch
         writer.add_scalar('pass/orient_cls_loss', bin_loss, epoch)
         writer.add_scalar('pass/residual_loss', orient_redisual_loss, epoch)

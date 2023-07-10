@@ -261,7 +261,7 @@ class DetectedObject:
         self.label = label
         self.detection_class = detection_class
         self.boxH_ratio = get_box_size(box_2d)[1] / 224.
-        self.Y_axis_ratio = get_box_center(box_2d)[1] / 224.
+        self.Y_axis_ratio = get_box_center(box_2d)[1] / img.shape[0]
         
         self.averages = ClassAverages([],'class_averages.txt')
         #print(self.averages.dimension_map)

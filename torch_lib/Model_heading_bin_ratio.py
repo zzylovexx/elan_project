@@ -53,7 +53,7 @@ class Model(nn.Module):
                     nn.Linear(512, 512),
                     nn.ReLU(True),
                     nn.Dropout(),
-                    nn.Linear(512, 1) # ratio
+                    nn.Linear(512, 3) # H, W, HW
                 )
 
     def forward(self, x):

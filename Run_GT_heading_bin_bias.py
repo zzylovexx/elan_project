@@ -12,8 +12,8 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument("--device", type=int, default=0, help='select cuda index')
 # path setting
-parser.add_argument("--weights-path", required=True, default='weights/epoch_20.pkl', help='weighs path')
-parser.add_argument("--result-path", required=True, default='Result', help='path (folder name) of the generated pred-labels')
+parser.add_argument("--weights-path", required=True, help='weighs path ie. weights/epoch_20.pkl')
+parser.add_argument("--result-path", required=True, help='path (folder name) of the generated pred-labels')
 
 def main():
 

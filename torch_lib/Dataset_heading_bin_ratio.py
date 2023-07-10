@@ -154,14 +154,23 @@ class Dataset(data.Dataset):
 
         Dimension = np.array([line[8], line[9], line[10]], dtype=np.double) # height, width, length
         # 0705 added L / (Height * Width) ratio
-        #L_H_ratio = Dimension[2] / Dimension[[0]
-        #L_W_ratio = Dimension[2] / Dimension0[1]
-        L_HW_ratio = Dimension[2] / (Dimension[0]*Dimension[1])
-        ratio_avg = np.round(self.ratio_map[Class]['L_HW_ratio'] / self.ratio_map[Class]['count'], 4)
-        L_HW_ratio -= ratio_avg
+        H_ratio = Dimension[2] / Dimension[0]
+        H_ratio_avg = np.round(self.ratio_map[Class]['L_H_ratio'] / self.ratio_map[Class]['count'], 4)
+        H_ratio_delta = H_ratio - H_ratio_avg
+        W_ratio = Dimension[2] / Dimension[1]
+        W_ratio_avg = np.round(self.ratio_map[Class]['L_W_ratio'] / self.ratio_map[Class]['count'], 4)
+        W_ratio_delta = W_ratio - W_ratio_avg
+        HW_ratio = Dimension[2] / (Dimension[0]*Dimension[1])
+        HW_ratio_avg = np.round(self.ratio_map[Class]['L_HW_ratio'] / self.ratio_map[Class]['count'], 4)
+        HW_ratio_delta = HW_ratio - HW_ratio_avg
+
+        Ratio = np.array([H_ratio, W_ratio, HW_ratio])
+        Ratio_avg = np.array([H_ratio_avg, W_ratio_avg, HW_ratio_avg])
+        Ratio_delta = np.array([H_ratio_delta, W_ratio_delta, HW_ratio_delta])
 
         # modify for the average
-        Dimension -= self.averages.get_item(Class)
+        Dim_avg = self.averages.get_item(Class)
+        Dim_delta = Dimension - Dim_avg
 
         Location = [line[11], line[12], line[13]] # x, y, z
         Location[1] -= Dimension[0] / 2 # bring the KITTI center up to the middle of the object
@@ -172,7 +181,10 @@ class Dataset(data.Dataset):
                 'Truncate': Truncate,
                 'Box_2D': Box_2D,
                 'Dimensions': Dimension,
-                'Ratio': L_HW_ratio,
+                'Dim_delta': Dim_delta,
+                'Ratio_delta': Ratio_delta,
+                'Ratio_avg': Ratio_avg,
+                'Ratio': Ratio,
                 'Alpha': Alpha,
                 'Location': Location,
                 'heading_resdiual': heading_resdiual,
