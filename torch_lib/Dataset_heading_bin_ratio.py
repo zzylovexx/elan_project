@@ -156,10 +156,14 @@ class Dataset(data.Dataset):
         # 0705 added L / (Height * Width) ratio
         H_ratio = Dimension[2] / Dimension[0]
         H_ratio_avg = np.round(self.ratio_map[Class]['L_H_ratio'] / self.ratio_map[Class]['count'], 4)
+        L_by_H_delta = Dimension[0] * H_ratio_avg - Dimension[2]
         H_ratio_delta = H_ratio - H_ratio_avg
+
         W_ratio = Dimension[2] / Dimension[1]
         W_ratio_avg = np.round(self.ratio_map[Class]['L_W_ratio'] / self.ratio_map[Class]['count'], 4)
+        L_by_W_delta = Dimension[1] * W_ratio_avg - Dimension[2]
         W_ratio_delta = W_ratio - W_ratio_avg
+
         HW_ratio = Dimension[2] / (Dimension[0]*Dimension[1])
         HW_ratio_avg = np.round(self.ratio_map[Class]['L_HW_ratio'] / self.ratio_map[Class]['count'], 4)
         HW_ratio_delta = HW_ratio - HW_ratio_avg
@@ -171,6 +175,8 @@ class Dataset(data.Dataset):
         # modify for the average
         Dim_avg = self.averages.get_item(Class)
         Dim_delta = Dimension - Dim_avg
+        Dim_delta = Dim_delta[0:2]
+        Dim_delta2 = np.array([L_by_H_delta, L_by_W_delta])
 
         Location = [line[11], line[12], line[13]] # x, y, z
         Location[1] -= Dimension[0] / 2 # bring the KITTI center up to the middle of the object
@@ -182,6 +188,7 @@ class Dataset(data.Dataset):
                 'Box_2D': Box_2D,
                 'Dimensions': Dimension,
                 'Dim_delta': Dim_delta,
+                'Dim_delta2': Dim_delta2,
                 'Ratio_delta': Ratio_delta,
                 'Ratio_avg': Ratio_avg,
                 'Ratio': Ratio,
