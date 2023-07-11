@@ -126,12 +126,13 @@ def main():
 
             truth_orient_resdiual = local_labels['heading_resdiual'].float().to(device)
             truth_bin = local_labels['heading_class'].long().to(device)#這個角度在哪個class上
-            truth_dim_delta = local_labels['Dim_delta2'].float().to(device)
+            truth_dim_delta = local_labels['Dim_delta'].float().to(device)
+            truth_dim_delta2 = local_labels['Dim_delta2'].float().to(device)
             #truth_dim = local_labels['Dimensions'].float().to(device)
             truth_ratio_delta = local_labels['Ratio_delta'].float().to(device)
 
             local_batch=local_batch.float().to(device)
-            [orient_residual, bin_conf, dim_delta] = model(local_batch)
+            [orient_residual, bin_conf, dim_delta, dim_delta2] = model(local_batch)
 
             bin_loss = F.cross_entropy(bin_conf,truth_bin,reduction='mean').to(device)
             orient_redisual_loss, rediual_val = residual_loss(orient_residual,truth_bin,truth_orient_resdiual, device)
@@ -147,6 +148,7 @@ def main():
             dim_loss = F.l1_loss(dim_delta, truth_dim_delta, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
             #dim_loss = L1_loss_alpha(dim, truth_dim, GT_alpha, device) # 0613 try elevate dim performance
 
+            dim_loss2 = F.l1_loss(dim_delta2, truth_dim_delta2, reduction='mean')
             #ratio_delta = ratio_delta.flatten() # for 1-dim
             #ratio_loss = F.l1_loss(ratio_delta, truth_ratio_delta, reduction='mean') # 0613 try elevate dim performance
 
@@ -155,7 +157,7 @@ def main():
 
 
             #loss = alpha * (dim_loss+ratio_loss) + loss_theta
-            loss = alpha * (dim_loss) + loss_theta
+            loss = alpha * (dim_loss + dim_loss2) + loss_theta
             #added loss
             if is_group and epoch > warm_up:
                 truth_Theta = local_labels['Theta'].float().to(device)

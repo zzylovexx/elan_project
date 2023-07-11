@@ -45,7 +45,7 @@ class Model(nn.Module):
                     nn.Dropout(),
                     nn.Linear(512, 2) # Height, Width, Length
                 )
-        '''
+        
         self.length_ratio = nn.Sequential(
                     nn.Linear(512 * 7 * 7, 512),
                     nn.ReLU(True),
@@ -53,9 +53,9 @@ class Model(nn.Module):
                     nn.Linear(512, 512),
                     nn.ReLU(True),
                     nn.Dropout(),
-                    nn.Linear(512, 3) # H, W, HW
+                    nn.Linear(512, 2) # H, W, HW
                 )
-        '''
+        
 
     def forward(self, x):
         x = self.features(x) #vgg output 512 x 7 x 7
@@ -63,5 +63,5 @@ class Model(nn.Module):
         orientation = self.orientation(x)
         confidence = self.confidence(x)
         dimension = self.dimension(x)
-        #ratio = self.length_ratio(x)
-        return orientation, confidence, dimension #, ratio
+        ratio = self.length_ratio(x)
+        return orientation, confidence, dimension , ratio
