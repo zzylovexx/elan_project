@@ -11,13 +11,13 @@ def angle_correction(angle):
     return angle
 
 def check_box_range(left, right, top, btm, img_W=1280, img_H=720):
-    if right < 1:
+    if left < 1 or left > img_W:
         return False
-    if left > img_W:
+    if right < 1 or right > img_W:
         return False
-    if btm < 1:
+    if btm < 1 or btm > img_H:
         return False
-    if top > img_H:
+    if top < 1 or top > img_H:
         return False
     return True
 
@@ -53,7 +53,7 @@ def main():
             
             # 2d box out of image
             if check_box_range(left, right, top, btm, img_W, img_H):
-                left, right, top, btm = box_correction(left, right, top, btm, img_W, img_H)
+                #left, right, top, btm = box_correction(left, right, top, btm, img_W, img_H)
                 #correct labels!
                 truncated = elements[1]
                 occluded = elements[2]
