@@ -58,7 +58,7 @@ def main():
                                 transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
                                 ])
     start = time.time()
-    for epoch in range(5):
+    for epoch in range(50):
         batch_count = 0
         count = 0
         passes = 0
