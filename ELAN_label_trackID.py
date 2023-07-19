@@ -12,22 +12,15 @@ def tracking_obj_by_labels(labels, start, end, WRITE_FILE=False, folder='renew_l
         new_lines = [line for line in lines]
         #img = cv2.cvtColor(cv2.imread(images[idx]), cv2.COLOR_BGR2RGB)
         objects = [DetectedObject(line) for line in lines]
-        if len(tracking_dict.keys()) == 0:
-            for id_, obj in enumerate(objects):
-                
-                tracking_dict[id_] = obj
-                tracking_dict[id_].record_frames(idx)
-                new_lines[id_] += f' {id_}'
-                #top_left, btm_right = obj.box2d
-                #crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1]
-                #tracking_dict[id_].crops.append(crop)
-        else:
-            for obj_idx, obj in enumerate(objects):
-                #print(obj.class_)
+        for obj_idx, obj in enumerate(objects):
+            # first frame
+            if len(tracking_dict.keys()) == 0:
+                tracking_dict[obj_idx] = obj
+                tracking_dict[obj_idx].record_frames(idx)
+                new_lines[obj_idx] += f' {obj_idx}'
+            else:
                 now_box2d = obj.box2d
                 match = False
-                #top_left, btm_right = obj.box2d
-                #crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1]
                 for key in tracking_dict.keys():
                     last_box2d = tracking_dict[key].box2d
                     iou_value = iou_2d(now_box2d, last_box2d)
@@ -45,7 +38,7 @@ def tracking_obj_by_labels(labels, start, end, WRITE_FILE=False, folder='renew_l
                     tracking_dict[new_id] = obj
                     tracking_dict[new_id].record_frames(idx)
                     #tracking_dict[new_id].crops.append(crop)
-                    new_lines[obj_idx] += f' {key}'
+                    new_lines[obj_idx] += f' {new_id}'
         if WRITE_FILE:
             with open(labels[idx].replace(folder, new_folder), 'w') as f:
                 for line in new_lines:
@@ -56,6 +49,7 @@ def tracking_obj_by_labels(labels, start, end, WRITE_FILE=False, folder='renew_l
 
 def main():
     renew_labels = glob.glob('Elan_3d_box/renew_label/*.txt')
+    renew_labels = sorted(renew_labels)
     os.makedirs('Elan_3d_box/renew_label_obj', exist_ok=True)
     tracking_dict = tracking_obj_by_labels(renew_labels, 0, len(renew_labels), WRITE_FILE=True)
 
