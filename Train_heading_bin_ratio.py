@@ -37,16 +37,6 @@ parser.add_argument("--group", action='store_true', help='if True, add stdGroupL
 parser.add_argument("--cond", action='store_true', help='if True, 4-dim with theta_ray | boxH_2d ')
 # TO BE ADDED (Loss的weights比例alpha, w of groupLoss, LRscheduler: milestone, gamma )
 
-# to keep the same random result
-def keep_same_seeds(seed):
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-
 def main():
     
     FLAGS = parser.parse_args()

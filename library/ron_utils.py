@@ -415,3 +415,12 @@ def iou_2d(box1, box2):
     else:
         inter_area = abs((x2-x1)*(y2-y1))
     return inter_area/(area_sum-inter_area)
+
+def keep_same_seeds(seed):
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
