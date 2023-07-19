@@ -3,7 +3,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
-def residual_loss(orient_residual,truth_bin,truth_orient_resdiual,device):#truth_orient_resdiual:B,truth_bin:B,orient_residual:B,12
+def compute_residual_loss(orient_residual,truth_bin,truth_orient_resdiual,device):#truth_orient_resdiual:B,truth_bin:B,orient_residual:B,12
 
     one_hot_map=torch.zeros((orient_residual.shape)).to(device).scatter_(dim=1,index=truth_bin.view(-1,1),value=1)#(batch,bin_class)
     heading_res=torch.sum(orient_residual*one_hot_map,dim=1)
