@@ -355,3 +355,63 @@ def angle_correction(angle:float) -> float:
     elif angle < -1*np.pi:
         angle += 2* np.pi
     return round(angle, 2)
+
+class DetectedObject(object):
+    def __init__(self, line):
+        self.line = line
+        self.class_ = None
+        self.box2d = None
+        self.dims = None
+        self.locs = None
+        self.rys = None
+        self.id = None
+        self.frames = list()
+        self.crops = list()
+        self.lines = list()
+        self.set_info(line)
+        
+    def set_info(self, line):
+        self.lines.append(line)
+        elements = line.split()
+        for j in range(1, len(elements)):
+            elements[j] = float(elements[j])
+        top_left = [int(round(elements[4])), int(round(elements[5]))]
+        btm_right = [int(round(elements[6])), int(round(elements[7]))]
+        self.box2d = np.array([top_left, btm_right])
+        self.class_ = elements[0]
+        self.alphas = [elements[3]]
+        self.dims = [[elements[8], elements[9], elements[10]]]
+        self.locs = [[elements[11], elements[12], elements[13]]]
+        self.rys = [elements[14]]
+        if len(elements) == 16:
+            self.id = int(elements[15])
+    
+    def update_info(self, obj):
+        self.box2d = obj.box2d
+        self.alphas += obj.alphas
+        self.dims += obj.dims
+        self.locs += obj.locs
+        self.rys += obj.rys
+        self.lines.append(obj.line)
+        
+    def record_frames(self, frame_id):
+        self.frames.append(frame_id)
+
+def iou_2d(box1, box2):
+    box1 = box1.flatten()
+    box2 = box2.flatten()
+    area1 = (box1[2]-box1[0])*(box1[3]-box1[1])
+    area2 = (box2[2]-box2[0])*(box2[3]-box2[1])
+    area_sum = abs(area1) + abs(area2)
+    
+    #計算重疊方形座標
+    x1 = max(box1[0], box2[0]) # left
+    y1 = max(box1[1], box2[1]) # top
+    x2 = min(box1[2], box2[2]) # right
+    y2 = min(box1[3], box2[3]) # btm
+
+    if x1 >= x2 or y1 >= y2:
+        return 0
+    else:
+        inter_area = abs((x2-x1)*(y2-y1))
+    return inter_area/(area_sum-inter_area)
