@@ -316,10 +316,13 @@ def box_depth_error_calculation(depth_labels, depth_Calcs, out_range=10):
     for depth in [0, 10, 20, 30, 40, 50]:
         class_GT_depth = class_GT[np.logical_and(class_GT >= depth, class_GT < depth+10.)]
         print(f'\tnum of depth {depth}-{depth+10}:', class_GT_depth.shape[0], end=' ')
+        if class_GT_depth.shape[0] == 0:
+            print()
+            continue
         class_cal_depth = class_cal[np.logical_and(class_GT >= depth, class_GT < depth+10.)]
         cal_delta = abs(class_GT_depth - class_cal_depth)
         #cal_delta, _, out_indexes = filter_out_of_range(cal_delta, out_range) # remove prediction out of 10
-        print(f'\tabs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}')
+        print(f'  abs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}')
 
     # after 60 m
     class_GT_depth = class_GT[class_GT >= 60.]
@@ -327,7 +330,7 @@ def box_depth_error_calculation(depth_labels, depth_Calcs, out_range=10):
     class_cal_depth = class_cal[class_GT >= 60.]
     cal_delta = abs(class_GT_depth - class_cal_depth)
     #cal_delta, _, out_indexes = filter_out_of_range(cal_delta, out_range) # remove prediction out of 10
-    print(f'\tabs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}')
+    print(f'  abs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}')
     
     total = abs(class_GT-class_cal)
     print(f'[Total] mean:{total.mean():.3f}, std:{total.std():.3f}')
