@@ -33,6 +33,7 @@ parser.add_argument("--warm-up", type=int, default=10, help='warm up before addi
 parser.add_argument("--bin", type=int, default=4, help='heading bin num')
 parser.add_argument("--group", action='store_true', help='if True, add stdGroupLoss')
 parser.add_argument("--cond", action='store_true', help='if True, 4-dim with theta_ray | boxH_2d ')
+parser.add_argument("--normal", type=int, default=0, help='0:ImageNet, 1:ELAN')
 
 def main():
     
@@ -43,7 +44,7 @@ def main():
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
-    
+    normalize_type = FLAGS.normal
 
     os.makedirs(FLAGS.log_dir, exist_ok=True)
     writer = SummaryWriter(FLAGS.log_dir)
@@ -53,7 +54,7 @@ def main():
 
     # model
     print("Loading all detected objects in ELAN dataset...")
-    dataset = ELAN_Dataset('Elan_3d_box', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    dataset = ELAN_Dataset('Elan_3d_box', condition=FLAGS.cond, num_heading_bin=FLAGS.bin, normal=normalize_type)
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}

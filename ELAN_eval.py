@@ -16,14 +16,14 @@ def evaluation(result_root):
 
     for id_ in valset:
         gt_lines = [x.strip() for x in open(f'Elan_3d_box/renew_label/{id_}.txt').readlines()]
-        gt_objects = [DetectedObject(line) for line in gt_lines if line.split()[0]=='Car']
+        gt_objects = [TrackingObject(line) for line in gt_lines if line.split()[0]=='Car']
         for obj in gt_objects:
             dim_GT.append(obj.dims[0])
             depth_GT.append(obj.locs[0][2])
             alpha_GT.append(obj.alphas[0])
             
         pred_lines = [x.strip() for x in open(f'{result_root}/label_2/{id_}.txt').readlines()]
-        pred_objects = [DetectedObject(line) for line in pred_lines if line.split()[0]=='Car']
+        pred_objects = [TrackingObject(line) for line in pred_lines if line.split()[0]=='Car']
         for obj in pred_objects:
             dim_ELAN.append(obj.dims[0])
             depth_ELAN.append(obj.locs[0][2])

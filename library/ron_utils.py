@@ -357,9 +357,9 @@ def angle_correction(angle:float) -> float:
         angle -= 2* np.pi
     elif angle < -1*np.pi:
         angle += 2* np.pi
-    return round(angle, 2)
+    return angle
 
-class DetectedObject(object):
+class TrackingObject(object):
     def __init__(self, line):
         self.line = line
         self.class_ = None

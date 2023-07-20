@@ -101,6 +101,7 @@ def main():
 
             if count == 0:
                 consist_loss = torch.tensor(0.0)
+                consist_angle_loss = torch.tensor(0.0)
                 count +=1
             else:
                 now_id_list, last_id_list = id_compare(now_id, last_id)
@@ -110,12 +111,30 @@ def main():
                     now_dim_delta = reg_dim_delta[now_id_list]
                     last_dim_delta = last_dim_delta[last_id_list]
                     consist_loss = F.l1_loss(now_dim_delta, last_dim_delta, reduction='mean')*len(now_id_list)/len(now_id)
+                    
+                    #0720 added
+                    now_bin_argmax = torch.max(reg_bin, dim=1)[1]
+                    now_residual = reg_residual[torch.arange(len(reg_residual)), now_bin_argmax] 
+                    now_alphas = angle_per_class*now_bin_argmax + now_residual #mapping bin_class and residual to get alpha
+                    now_alphas = now_alphas[now_id_list]
+                    for i in range(len(now_id_list)):
+                        now_alphas[i] = angle_correction(now_alphas[i])
+
+                    last_bin_argmax = torch.max(last_bin, dim=1)[1]
+                    last_residual = last_residual[torch.arange(len(last_residual)), last_bin_argmax] 
+                    last_alphas = angle_per_class*last_bin_argmax + last_residual #mapping bin_class and residual to get alpha
+                    last_alphas = last_alphas[last_id_list]
+                    for i in range(len(last_id_list)):
+                        last_alphas[i] = angle_correction(last_alphas[i])
+
+                    consist_angle_loss = F.l1_loss(torch.cos(now_alphas), torch.cos(last_alphas), reduction='mean')*len(now_id_list)/len(now_id)
                 else:
                     consist_loss = torch.tensor(0.0)
+                    consist_angle_loss = torch.tensor(0.0)
                 #print(consist_loss)
 
             angle_loss = bin_loss + residual_loss
-            loss = 0.6 * dim_loss + angle_loss + consist_loss
+            loss = 0.6 * dim_loss + angle_loss + consist_loss + consist_angle_loss
 
             last_bin = torch.clone(reg_bin).detach()
             last_residual = torch.clone(reg_residual).detach()
@@ -132,8 +151,8 @@ def main():
                 passes += 1
             
             if passes % 100 == 0:
-                print("--- epoch %s | passes %s --- [loss: %.3f],[bin_loss:%.3f],[residual_loss:%.3f],[dim_loss:%.3f],[consist_loss:%.3f]]" \
-                        %(epoch+1, passes, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item(), consist_loss.item()))
+                print("--- epoch %s | passes %s --- [loss: %.3f],[bin_loss:%.3f],[residual_loss:%.3f],[dim_loss:%.3f],[consist_loss:%.3f],[consist_angle_loss:%.3f]" \
+                        %(epoch+1, passes, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item(), consist_loss.item(), consist_angle_loss.item()))
                 
         if (epoch+1) % 10 == 0:
                 name = FLAGS.weights_path.split('.')[0] + f'_{epoch+1}.pkl'

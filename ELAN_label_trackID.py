@@ -10,7 +10,7 @@ def tracking_obj_by_labels(labels, images, WRITE_FILE=False, folder='renew_label
         lines = [x.strip() for x in open(labels[idx]).readlines()]
         new_lines = [line for line in lines]
         img = cv2.cvtColor(cv2.imread(images[idx]), cv2.COLOR_BGR2RGB)
-        objects = [DetectedObject(line) for line in lines]
+        objects = [TrackingObject(line) for line in lines]
         for obj_idx, obj in enumerate(objects):
             # first frame
             top_left, btm_right = obj.box2d

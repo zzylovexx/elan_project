@@ -27,7 +27,7 @@ def angle2class(angle, num_heading_bin):
     return class_id, residual_angle
 
 class ELAN_Dataset(data.Dataset):
-    def __init__(self, path, split='train', num_heading_bin=4, condition=False):
+    def __init__(self, path, split='train', num_heading_bin=4, condition=False, normal=0):
         '''
         If condition==True, will concat theta_ray as 4-dim
         '''
@@ -38,7 +38,7 @@ class ELAN_Dataset(data.Dataset):
         self.condition = condition
         split_dir = os.path.join(path, 'ImageSets', split + '.txt')
         self.ids = [x.strip() for x in open(split_dir).readlines()]
-
+        self.normal = normal
         # all images as train data
         #self.ids = [x.split('.')[0] for x in sorted(os.listdir(self.top_img_path))] # name of file
         self.proj_matrix = np.array([
@@ -78,7 +78,7 @@ class ELAN_Dataset(data.Dataset):
             self.curr_img = cv2.imread(self.top_img_path + '%s.png'%id)
 
         label = self.labels[id][str(line_num)]
-        obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label)
+        obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, self.normal, label=label)
         if self.condition:
             #cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
             cond = torch.tensor(obj.boxW_ratio).expand(1, obj.img.shape[1], obj.img.shape[2]) #box width ratio
@@ -205,7 +205,7 @@ class ELAN_Dataset(data.Dataset):
             for label in labels:
                 box_2d = label['Box_2D']
                 detection_class = label['Class']
-                objects.append(DetectedObject(img, detection_class, box_2d, self.proj_matrix, label=label))
+                objects.append(DetectedObject(img, detection_class, box_2d, self.proj_matrix, self.normal, label=label))
 
             data[id]['Objects'] = objects
 
@@ -217,11 +217,12 @@ the angle to that image, and (optionally) the label for the object. The idea
 is to keep this abstract enough so it can be used in combination with YOLO
 """
 class DetectedObject:
-    def __init__(self, img, detection_class, box_2d, proj_matrix, label=None):
+    def __init__(self, img, detection_class, box_2d, proj_matrix, normal=0, label=None):
 
         self.img_W = img.shape[1]
         self.proj_matrix = proj_matrix
         self.theta_ray = self.calc_theta_ray(img, box_2d, proj_matrix)
+        self.normal = normal
         self.img = self.format_img(img, box_2d)
         self.box_2d = box_2d
         self.label = label
@@ -229,6 +230,7 @@ class DetectedObject:
         self.boxW_ratio = get_box_size(box_2d)[0] / 224.
         self.boxH_ratio = get_box_size(box_2d)[1] / 224.
         self.averages = ClassAverages([],'ELAN_class_averages.txt')
+        
 
     def calc_theta_ray(self, img, box_2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
         width = img.shape[1]
@@ -250,14 +252,16 @@ class DetectedObject:
         # Should this happen? or does normalize take care of it. YOLO doesnt like
         # img=img.astype(np.float) / 255
 
-        # torch transforms
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                                 std=[0.229, 0.224, 0.225])
+        # 0720 edited
+        if self.normal == 0:
+            normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        elif self.normal == 1:
+            normalize = transforms.Normalize(mean=[0.596, 0.612, 0.587], std=[0.256, 0.254, 0.257])
+
         process = transforms.Compose ([
-            transforms.ToTensor(),
             #transforms.Grayscale(num_output_channels=3), #make it to gray scale
-            normalize
-        ])
+            transforms.ToTensor(), normalize
+        ]) 
         
         # crop image
         pt1 = box_2d[0]
