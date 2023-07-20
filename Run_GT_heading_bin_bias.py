@@ -145,7 +145,7 @@ def main():
             new_f.writelines(pred_labels)
         if i%500==0:
             print(i)
-    #print('Done, take {} min {} sec'.format((time.time()-start)//60, (time.time()-start)%60))# around 10min
+    #print('Done, take {} min {:.2f} sec'.format((time.time()-start)//60, (time.time()-start)%60)) #around 10min
 
 if __name__=='__main__':
     main()

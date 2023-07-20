@@ -43,6 +43,8 @@ def id_compare(now_id, last_id):
     return now_id_list, last_id_list
 
 def main():
+    
+    keep_same_seeds(2023)
     device = 'cuda'
     trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/train.txt').readlines()]
     bin_num = 4
