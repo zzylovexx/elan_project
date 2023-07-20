@@ -4,19 +4,21 @@ import numpy as np
 import cv2
 from library.ron_utils import *
 
-def tracking_obj_by_labels(labels, start, end, WRITE_FILE=False, folder='renew_label', new_folder='renew_label_obj'):
+def tracking_obj_by_labels(labels, images, WRITE_FILE=False, folder='renew_label', new_folder='renew_label_obj'):
     tracking_dict = dict()
-    for idx in range(start, end):
-        #print(f'======{idx}====={label[idx]}====')
+    for idx in range(len(labels)):
         lines = [x.strip() for x in open(labels[idx]).readlines()]
         new_lines = [line for line in lines]
-        #img = cv2.cvtColor(cv2.imread(images[idx]), cv2.COLOR_BGR2RGB)
+        img = cv2.cvtColor(cv2.imread(images[idx]), cv2.COLOR_BGR2RGB)
         objects = [DetectedObject(line) for line in lines]
         for obj_idx, obj in enumerate(objects):
             # first frame
+            top_left, btm_right = obj.box2d
+            crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1]
             if len(tracking_dict.keys()) == 0:
                 tracking_dict[obj_idx] = obj
                 tracking_dict[obj_idx].record_frames(idx)
+                tracking_dict[obj_idx].crops.append(crop)
                 new_lines[obj_idx] += f' {obj_idx}'
             else:
                 now_box2d = obj.box2d
@@ -30,7 +32,7 @@ def tracking_obj_by_labels(labels, start, end, WRITE_FILE=False, folder='renew_l
                         match = True
                         tracking_dict[key].update_info(obj)
                         tracking_dict[key].record_frames(idx)
-                        #tracking_dict[key].crops.append(crop)
+                        tracking_dict[key].crops.append(crop)
                         new_lines[obj_idx] += f' {key}'
                         break
                 if not match: #new obj

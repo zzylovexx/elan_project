@@ -107,7 +107,7 @@ def main():
             f.writelines(txt+'\n')
     '''
 
-    print('Done, take {} min {} sec'.format((time.time()-start)//60, (time.time()-start)%60))
+    print('Done, take {} min {:.2f} sec'.format((time.time()-start)//60, (time.time()-start)%60))
     print(f'Saved in {extra_label_root}')
 
 # For Grouping alpha, Ry (monodle/blob/main/lib/datasets/utils.py)
