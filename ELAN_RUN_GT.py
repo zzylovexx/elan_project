@@ -11,6 +11,7 @@ import argparse
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--device", type=int, default=0, help='select cuda index')
+parser.add_argument("--normal", type=int, default=0, help='0:ImageNet, 1:ELAN')
 # path setting
 parser.add_argument("--weights-path", required=True, help='weights path, ie. weights/epoch_20.pkl')
 parser.add_argument("--result-path", required=True, help='path (folder name) of the generated pred-labels')
@@ -32,6 +33,7 @@ def main():
     FLAGS = parser.parse_args()
     weights_path = FLAGS.weights_path
     result_root = FLAGS.result_path
+    normalize_type = FLAGS.normal
     os.makedirs(result_root, exist_ok=True)
     os.makedirs(result_root+'/image_2', exist_ok=True)
     os.makedirs(result_root+'/label_2', exist_ok=True)
@@ -46,10 +48,11 @@ def main():
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     # for img processing
-    process = transforms.Compose([transforms.ToTensor(), 
-                            #transforms.Normalize(mean=[0.596, 0.612, 0.587], std=[0.256, 0.254, 0.257])
-                              transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
-                            ])
+    if normalize_type == 0:
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
+    if normalize_type == 1:
+        normalize = transforms.Normalize(mean=[0.596, 0.612, 0.587], std=[0.256, 0.254, 0.257])
+    process = transforms.Compose([transforms.ToTensor(), normalize])
 
     # Kitti image_2 dir / label_2 dir
     img_root = "Elan_3d_box/image_2"
