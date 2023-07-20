@@ -11,7 +11,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--weights-path', required=True, help='weights path to save pkl, ie. weights/0720.pkl')
 parser.add_argument('--device', type=int, default=0, help='choose cuda index')
-parser.add_argument("--normal", type=int, default=0, help='0:ImageNet, 1:ELAN')
+parser.add_argument("--normal", type=int, default=0, help='-1:None 0:ImageNet, 1:ELAN')
 
 def get_object_label(objects, bin_num=4):
     ELAN_averages = ClassAverages(average_file='renew_ELAN_class_averages.txt')
@@ -61,7 +61,7 @@ def main():
     my_vgg = vgg.vgg19_bn(weights='DEFAULT')
     model = Model(features=my_vgg.features, bins=bin_num).to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
-    
+
     if normalize_type==0: # IMAGENET
         normal = transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
     elif normalize_type==1: # ELAN
