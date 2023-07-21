@@ -3,14 +3,16 @@ W_PATH="weights/"
 R_PATH=""
 DEVICE=0
 # hyper-parameter
-NORMAL=1 # 0:IMAGENET, 1:ELAN_normal
+NORMAL=0 # 0:IMAGENET, 1:ELAN_normal
+GROUP=1
+
+#FIXED
 EPOCH=50
 BIN=4
-
-# not done yet
-GROUP=0
 WARMUP=10
+# not done yet
 COND=0
+
 TRUE=1
 
 PKL=$W_PATH"BL_B$BIN""_N$NORMAL"
@@ -28,7 +30,7 @@ fi
 PKL=$PKL"_$EPOCH.pkl"
 echo $PKL
 echo $R_PATH
-python ../ELAN_BLtrain.py -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND;
-python ../ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH
-python ../ELAN_EVAL.py -R_PATH=$R_PATH
+python ELAN_BLtrain.py -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND;
+python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH
+python ELAN_EVAL.py -R_PATH=$R_PATH
 echo "SHELL FINISHED"

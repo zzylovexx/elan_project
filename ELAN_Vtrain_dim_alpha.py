@@ -27,50 +27,6 @@ parser.add_argument("--group", "-G", type=int, help='if True, add stdGroupLoss')
 parser.add_argument("--warm-up", "-W", type=int, default=10, help='warm up before adding group loss')
 parser.add_argument("--cond", "-C", type=int, help='if True, 4-dim with theta_ray | boxH_2d ')
 
-
-def get_object_label(objects, bin_num=4):
-    ELAN_averages = ClassAverages(average_file='ELAN_class_averages.txt')
-    label = dict()
-    Heading_class = list()
-    Residual = list()
-    Dim_delta = list()
-    TrackID = list()
-    for obj in objects:
-        heading_class, residual = angle2class(obj.alphas[0], bin_num)
-        dim_delta = np.array(obj.dims[0]) - ELAN_averages.get_item(obj.class_)
-        obj_id = obj.id
-        Heading_class.append(heading_class)
-        Residual.append(residual)
-        Dim_delta.append(dim_delta)
-        TrackID.append(obj_id)
-    label['bin'] = torch.tensor(Heading_class)
-    label['residual'] = torch.tensor(Residual)
-    label['dim_delta'] = torch.tensor(np.array(Dim_delta))
-    label['track_id'] = TrackID
-    return label
-
-def id_compare(now_id, last_id):
-    now_id_list = list()
-    last_id_list = list()
-    for idx, id_ in enumerate(now_id):
-        try:
-            find_idx = last_id.index(id_)
-        except:
-            find_idx = -1
-
-        if find_idx != -1:
-            now_id_list.append(idx)
-            last_id_list.append(find_idx)
-    return now_id_list, last_id_list
-
-def compute_alpha(bin, residual, angle_per_class):
-    bin_argmax = torch.max(bin, dim=1)[1]
-    residual = residual[torch.arange(len(residual)), bin_argmax] 
-    alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
-    for i in range(len(alphas)):
-        alphas[i] = angle_correction(alphas[i])
-    return alphas
-
 def main():
 
     FLAGS = parser.parse_args()
@@ -115,6 +71,7 @@ def main():
         for id_ in trainset:
             img = cv2.cvtColor(cv2.imread(f'Elan_3d_box/image_2/{id_}.png'), cv2.COLOR_BGR2RGB)
             label = f'Elan_3d_box/renew_label_obj/{id_}.txt'
+            extra_labels = get_extra_labels(f'Elan_3d_box/extra_label/{id_}.txt')
             lines = [x.strip() for x in open(label).readlines()]
             obj_count = len(lines)
             batch_count += len(lines)
@@ -137,9 +94,24 @@ def main():
             residual_loss, _ = compute_residual_loss(reg_residual, gt_bin, gt_residual, device)
             dim_loss = F.l1_loss(reg_dim_delta, gt_dim_delta, reduction='mean')
 
+            loss = 0.6*dim_loss + bin_loss + residual_loss
+
+            # GROUP LOSS
+            reg_alphas = compute_alpha(reg_bin, reg_residual, angle_per_class)
+            if is_group and epoch > warm_up:
+                for i in range(len(objects)):
+                    gt_labels['Group'].append(extra_labels[i]['Group_Ry'])
+                    gt_labels['Theta'].append(extra_labels[i]['Theta_ray'])
+                gt_Theta = torch.tensor(gt_labels['Theta']).to(device)
+                #gt_Ry = gt_labels['Ry'].float().to(device)
+                gt_group = torch.tensor(gt_labels['Group']).to(device)
+                group_loss = stdGroupLoss_heading_bin(reg_alphas, gt_Theta, gt_group, device)
+                loss += 0.3 * group_loss
+
+            # CONSISTENCY LOSS
             if count == 0:
                 consist_loss = torch.tensor(0.0)
-                consist_angle_loss = torch.tensor(0.0)
+                angle_loss = torch.tensor(0.0)
                 count +=1
             else:
                 now_id_list, last_id_list = id_compare(now_id, last_id)
@@ -150,16 +122,15 @@ def main():
                     last_dim_delta = last_dim_delta[last_id_list]
                     consist_loss = F.l1_loss(now_dim_delta, last_dim_delta, reduction='mean')*len(now_id_list)/len(now_id)
                     #0721 added
-                    now_alphas = compute_alpha(reg_bin, reg_residual, angle_per_class)[now_id_list]
+                    now_alphas = reg_alphas[now_id_list]
                     last_alphas = compute_alpha(last_bin, last_residual, angle_per_class)[last_id_list]
-                    consist_angle_loss = F.l1_loss(torch.cos(now_alphas), torch.cos(last_alphas), reduction='mean')*len(now_id_list)/len(now_id)
+                    angle_loss = F.l1_loss(torch.cos(now_alphas), torch.cos(last_alphas), reduction='mean')*len(now_id_list)/len(now_id)
                 else:
                     consist_loss = torch.tensor(0.0)
-                    consist_angle_loss = torch.tensor(0.0)
+                    angle_loss = torch.tensor(0.0)
                 #print(consist_loss)
-
-            angle_loss = bin_loss + residual_loss
-            loss = 0.6 * dim_loss + angle_loss + consist_loss.to(device) + 0.1*consist_angle_loss.to(device)
+            
+            loss += consist_loss.to(device) + 0.1*angle_loss.to(device)
 
             last_bin = torch.clone(reg_bin).detach()
             last_residual = torch.clone(reg_residual).detach()
@@ -176,8 +147,10 @@ def main():
                 passes += 1
             
             if passes % 100 == 0:
-                print("--- epoch %s | passes %s --- [loss: %.3f],[bin_loss:%.3f],[residual_loss:%.3f],[dim_loss:%.3f],[consist_loss:%.3f],[consist_angle_loss:%.3f]" \
-                        %(epoch, passes, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item(), consist_loss.item(), consist_angle_loss.item()))
+                print("--- epoch %s | passes %s --- [loss: %.3f],[bin_loss:%.3f],[residual_loss:%.3f],[dim_loss:%.3f],[consist_loss:%.3f],[angle_loss:%.3f]" \
+                        %(epoch, passes, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item(), consist_loss.item(), angle_loss.item()))
+                if is_group and epoch > warm_up:
+                    print("[group_loss:%.3f]"%(group_loss.item()))
                 
         if epoch % 50 == 0:
                 name = save_path + f'_{epoch}.pkl'
@@ -194,6 +167,51 @@ def main():
                         }, name)
                 print("====================")
     print(f'Elapsed time: {(time.time()-start)//60} min')
+
+def get_object_label(objects, bin_num=4):
+    ELAN_averages = ClassAverages(average_file='ELAN_class_averages.txt')
+    label = dict()
+    Heading_class = list()
+    Residual = list()
+    Dim_delta = list()
+    TrackID = list()
+    for obj in objects:
+        heading_class, residual = angle2class(obj.alphas[0], bin_num)
+        dim_delta = np.array(obj.dims[0]) - ELAN_averages.get_item(obj.class_)
+        obj_id = obj.id
+        Heading_class.append(heading_class)
+        Residual.append(residual)
+        Dim_delta.append(dim_delta)
+        TrackID.append(obj_id)
+    label['bin'] = torch.tensor(Heading_class)
+    label['residual'] = torch.tensor(Residual)
+    label['dim_delta'] = torch.tensor(np.array(Dim_delta))
+    label['track_id'] = TrackID
+    label['Group'] = list()
+    label['Theta'] = list()
+    return label
+
+def id_compare(now_id, last_id):
+    now_id_list = list()
+    last_id_list = list()
+    for idx, id_ in enumerate(now_id):
+        try:
+            find_idx = last_id.index(id_)
+        except:
+            find_idx = -1
+
+        if find_idx != -1:
+            now_id_list.append(idx)
+            last_id_list.append(find_idx)
+    return now_id_list, last_id_list
+
+def compute_alpha(bin, residual, angle_per_class):
+    bin_argmax = torch.max(bin, dim=1)[1]
+    residual = residual[torch.arange(len(residual)), bin_argmax] 
+    alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
+    for i in range(len(alphas)):
+        alphas[i] = angle_correction(alphas[i])
+    return alphas
 
 if __name__ == '__main__':
     main()

@@ -143,7 +143,7 @@ def main():
             #added loss
             if is_group and epoch > warm_up:
                 truth_Theta = local_labels['Theta'].float().to(device)
-                truth_Ry = local_labels['Ry'].float().to(device)
+                #truth_Ry = local_labels['Ry'].float().to(device)
                 truth_group = local_labels['Group'].float().to(device)
                 group_loss = group_loss_func(pred_alpha, truth_Theta, truth_group, device)
                 loss += 0.3 * group_loss

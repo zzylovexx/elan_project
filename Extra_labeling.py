@@ -12,12 +12,14 @@ def main():
         print('Kitti dataset')
         images = glob.glob('Kitti/training/image_2/*.png')
         labels = glob.glob('Kitti/training/label_2/*.txt')
+        label_folder = 'label_2'
         calibs = glob.glob('Kitti/training/calib/*.txt')
         os.makedirs('Kitti/training/extra_label', exist_ok=True)
     elif FLAGS.type==1:
         print('ELAN dataset')
         images = glob.glob('Elan_3d_box/image_2/*.png')
-        labels = glob.glob('Elan_3d_box/label_2/*.txt')
+        labels = glob.glob('Elan_3d_box/renew_label/*.txt')
+        label_folder = 'renew_label'
         cam_to_img = np.array([
         [ 1.418667e+03, 0.000000e+00, 6.4e+02,0],
         [ 0.000000e+00, 1.418667e+03, 3.6e+02,0],
@@ -93,7 +95,7 @@ def main():
             new_labels.append(new_label)
 
         # write new .txt
-        with open(labels[i].replace('label_2', 'extra_label'), 'w') as new_f:
+        with open(labels[i].replace(label_folder, 'extra_label'), 'w') as new_f:
             for label in new_labels:
                 new_f.writelines(label+'\n')
 

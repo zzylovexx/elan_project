@@ -34,6 +34,7 @@ class ELAN_Dataset(data.Dataset):
         #self.top_label_path = path + '/label_2/' # some wrong labels
         self.top_label_path = path + '/renew_label/'
         self.top_img_path = path + "/image_2/"
+        self.extra_label_path = path + "/extra_label/"
         self.num_heading_bin = num_heading_bin
         self.condition = condition
         split_dir = os.path.join(path, 'ImageSets', split + '.txt')
