@@ -167,7 +167,6 @@ def main():
                         }, name)
                 print("====================")
     print(f'Elapsed time: {(time.time()-start)//60} min')
-    # 68/1591 是沒有consist_loss的
 
 if __name__ == '__main__':
     main()
