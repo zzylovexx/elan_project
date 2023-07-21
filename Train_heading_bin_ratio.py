@@ -145,7 +145,7 @@ def main():
             #truth_length = truth_dim[2]
             #calc_length = dim[0] * dim[1] * truth_ratio
 
-            ''' ratio_loss2
+            ''' ratio_loss2 not better
             truth_length = truth_dim[2]
             REG_ratio = truth_ratio_avg + ratio_delta
             calc_length_H = truth_dim[0] * REG_ratio[0]

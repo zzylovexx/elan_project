@@ -4,20 +4,28 @@ from library.ron_utils import *
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--extra-root', default='./Kitti/training/extra_label', help='path of the generated extra labels')
+parser.add_argument('--type', '-T', type=int, default=0, help='0:kitti, 1:ELAN')
 
 def main():
-
-    image_root = './Kitti/training/image_2'
-    label_root = 'Kitti/training/label_2'
-    calib_root = './Kitti/training/calib'
-    images = glob.glob(os.path.join(image_root, '*.png'), recursive=True)
-    labels = glob.glob(os.path.join(label_root, '*.txt'), recursive=True)
-    calibs = glob.glob(os.path.join(calib_root, '*.txt'), recursive=True)
-
     FLAGS = parser.parse_args()
-    extra_label_root = FLAGS.extra_root
-    os.makedirs(extra_label_root, exist_ok=True)
+    if FLAGS.type==0:
+        print('Kitti dataset')
+        images = glob.glob('Kitti/training/image_2/*.png')
+        labels = glob.glob('Kitti/training/label_2/*.txt')
+        calibs = glob.glob('Kitti/training/calib/*.txt')
+        os.makedirs('Kitti/training/extra_label', exist_ok=True)
+    elif FLAGS.type==1:
+        print('ELAN dataset')
+        images = glob.glob('Elan_3d_box/image_2/*.png')
+        labels = glob.glob('Elan_3d_box/label_2/*.txt')
+        cam_to_img = np.array([
+        [ 1.418667e+03, 0.000000e+00, 6.4e+02,0],
+        [ 0.000000e+00, 1.418667e+03, 3.6e+02,0],
+        [ 0.000000e+00, 0.000000e+00, 1.000000e+00,0]])
+        os.makedirs('Elan_3d_box/extra_label', exist_ok=True)
+    
+    
+    
 
     #alpha_diff_txt = list()
     #ry_diff_txt = list()
@@ -27,8 +35,9 @@ def main():
     for i in range(len(images)):
 
         img = cv2.imread(images[i])
-        img_width = img.shape[1] 
-        cam_to_img = get_calibration_cam_to_image(calibs[i])
+        img_width = img.shape[1]
+        if FLAGS.type==0:
+            cam_to_img = get_calibration_cam_to_image(calibs[i])
 
         new_labels = list()
 
@@ -84,7 +93,7 @@ def main():
             new_labels.append(new_label)
 
         # write new .txt
-        with open(labels[i].replace(label_root, extra_label_root), 'w') as new_f:
+        with open(labels[i].replace('label_2', 'extra_label'), 'w') as new_f:
             for label in new_labels:
                 new_f.writelines(label+'\n')
 
@@ -108,7 +117,6 @@ def main():
     '''
 
     print('Done, take {} min {:.2f} sec'.format((time.time()-start)//60, (time.time()-start)%60))
-    print(f'Saved in {extra_label_root}')
 
 # For Grouping alpha, Ry (monodle/blob/main/lib/datasets/utils.py)
 def angle2class(angle, num_heading_bin=60):

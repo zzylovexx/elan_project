@@ -113,6 +113,9 @@ class ELAN_Dataset(data.Dataset):
     def get_label(self, id, line_num):
         lines = open(self.top_label_path + '%s.txt'%id).read().splitlines()
         label = self.format_label(lines[line_num], id)
+        extra_labels = get_extra_labels(self.extra_label_path + '%s.txt'%id)
+        label['Group'] = extra_labels[line_num]['Group_Ry']
+        label['Theta'] = extra_labels[line_num]['Theta_ray']
         return label
     
     def format_label(self, line, id):

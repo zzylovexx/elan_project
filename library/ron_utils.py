@@ -96,7 +96,7 @@ def stdGroupLoss_heading_bin(pred_alpha, truth_Theta, group_batch, device): #
     estimated_Ry = pred_alpha + truth_Theta  
 
     group_idxs = get_group_idxs(group_batch)
-    loss = torch.zeros(1)[0].to(device)
+    loss = torch.tensor(0.0).to(device)
     for idxs in group_idxs:
         if len(idxs) == 1:
             continue
