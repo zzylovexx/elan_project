@@ -50,10 +50,10 @@ def tracking_obj_by_labels(labels, images, WRITE_FILE=False, folder='renew_label
     return tracking_dict
 
 def main():
-    renew_labels = glob.glob('Elan_3d_box/renew_label/*.txt')
-    renew_labels = sorted(renew_labels)
+    images = sorted(glob.glob('Elan_3d_box/image_2/*.png'))
+    renew_labels = sorted(glob.glob('Elan_3d_box/renew_label/*.txt'))
     os.makedirs('Elan_3d_box/renew_label_obj', exist_ok=True)
-    tracking_dict = tracking_obj_by_labels(renew_labels, 0, len(renew_labels), WRITE_FILE=True)
+    tracking_dict = tracking_obj_by_labels(renew_labels, images, WRITE_FILE=True)
 
 if __name__=='__main__':
     main()

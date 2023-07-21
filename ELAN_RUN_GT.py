@@ -4,17 +4,15 @@ from torch_lib.ClassAverages import *
 from torchvision import transforms
 import os, glob, cv2
 from library.ron_utils import *
-from ELAN_eval import evaluation
 import argparse
 
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--device", type=int, default=0, help='select cuda index')
-parser.add_argument("--normal", type=int, default=0, help='0:ImageNet, 1:ELAN')
 # path setting
-parser.add_argument("--weights-path", required=True, help='weights path, ie. weights/epoch_20.pkl')
-parser.add_argument("--result-path", required=True, help='path (folder name) of the generated pred-labels')
+parser.add_argument("--weights-path", "-W_PATH", required=True, help='weights path, ie. weights/epoch_20.pkl')
+parser.add_argument("--result-path", "-R_PATH", required=True, help='path (folder name) of the generated pred-labels')
 
 def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray, detectionid):
 
@@ -33,17 +31,17 @@ def main():
     FLAGS = parser.parse_args()
     weights_path = FLAGS.weights_path
     result_root = FLAGS.result_path
-    normalize_type = FLAGS.normal
     os.makedirs(result_root, exist_ok=True)
     os.makedirs(result_root+'/image_2', exist_ok=True)
     os.makedirs(result_root+'/label_2', exist_ok=True)
 
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     checkpoint = torch.load(weights_path, map_location=device) #if training on 2 GPU, mapping on the same device
+    normalize_type = 0#checkpoint['normal']
     bin_num = checkpoint['bin']
     angle_per_class = 2*np.pi/float(bin_num)
 
-    my_vgg = vgg.vgg19_bn(weights='DEFAULT')
+    my_vgg = vgg.vgg19_bn(weights='DEFAULT').to(device)
     model = Model(features=my_vgg.features, bins=bin_num).to(device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
@@ -60,7 +58,7 @@ def main():
     images = glob.glob(os.path.join(img_root, '*.png'), recursive=True)
     renew_labels = glob.glob(os.path.join(label_root, '*.txt'), recursive=True)
     # dim averages
-    ELAN_averages = ClassAverages(average_file='renew_ELAN_class_averages.txt')
+    ELAN_averages = ClassAverages(average_file='all_ELAN_class_averages.txt')
     cam_to_img = np.array([
             [1.418667e+03, 0.000e+00, 6.4e+02, 0],
             [0.000e+00, 1.418867e+03, 3.6e+02, 0],
@@ -89,14 +87,14 @@ def main():
             crop = cv2.resize(src = crop, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
             crop = process(crop) # expand to 224x224
             #2dbox
-            crop = torch.stack([crop])
+            crop = torch.stack([crop]).to(device)
             #Location = [elements[11], elements[12], elements[13]]
             
             alpha_gt = elements[3]
             ry_gt = elements[14]
             theta_ray = ry_gt - alpha_gt
             
-            [RESIDUALs, BIN_CONFs, delta_DIMs] = model(crop.cuda())
+            [RESIDUALs, BIN_CONFs, delta_DIMs] = model(crop)
             bin_argmax = torch.max(BIN_CONFs, dim=1)[1]
             orient_residual = RESIDUALs[torch.arange(len(RESIDUALs)), bin_argmax] 
             Alphas = angle_per_class*bin_argmax + orient_residual #mapping bin_class and residual to get alpha
@@ -119,8 +117,6 @@ def main():
         if i%500==0:
             print(i)
     print('Done, take {} min {:.2f} sec'.format((time.time()-start)//60, (time.time()-start)%60))# around 2min
-
-    evaluation(result_root)
 
 if __name__=='__main__':
     main()

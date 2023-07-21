@@ -9,12 +9,27 @@ import time
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--weights-path', required=True, help='weights path to save pkl, ie. weights/0720.pkl')
-parser.add_argument('--device', type=int, default=0, help='choose cuda index')
-parser.add_argument("--normal", type=int, default=0, help='0:ImageNet, 1:ELAN')
+
+parser.add_argument("--seed", type=int, default=2023, help='keep seeds to represent same result')
+#path setting
+parser.add_argument("--weights-path", "-W_PATH", required=True, help='folder/date ie.weights/0721')
+
+#training setting
+parser.add_argument("--device", "-D", type=int, default=0, help='select cuda index')
+parser.add_argument("--epoch", "-E", type=int, default=50, help='epoch num')
+
+#parser.add_argument("--batch-size", type=int, default=16, help='batch size')
+
+# hyper-parameter (group | bin | cond)
+parser.add_argument("--normal", "-N", type=int, default=0, help='0:ImageNet, 1:ELAN')
+parser.add_argument("--bin", "-B", type=int, default=4, help='heading bin num')
+parser.add_argument("--group", "-G", type=int, help='if True, add stdGroupLoss')
+parser.add_argument("--warm-up", "-W", type=int, default=10, help='warm up before adding group loss')
+parser.add_argument("--cond", "-C", type=int, help='if True, 4-dim with theta_ray | boxH_2d ')
+
 
 def get_object_label(objects, bin_num=4):
-    ELAN_averages = ClassAverages(average_file='renew_ELAN_class_averages.txt')
+    ELAN_averages = ClassAverages(average_file='ELAN_class_averages.txt')
     label = dict()
     Heading_class = list()
     Residual = list()
@@ -48,11 +63,34 @@ def id_compare(now_id, last_id):
             last_id_list.append(find_idx)
     return now_id_list, last_id_list
 
+def compute_alpha(bin, residual, angle_per_class):
+    bin_argmax = torch.max(bin, dim=1)[1]
+    residual = residual[torch.arange(len(residual)), bin_argmax] 
+    alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
+    for i in range(len(alphas)):
+        alphas[i] = angle_correction(alphas[i])
+    return alphas
+
 def main():
-    keep_same_seeds(2023)
+
     FLAGS = parser.parse_args()
-    device = torch.device(f'cuda:{FLAGS.device}')
+    keep_same_seeds(FLAGS.seed)
+    epochs = FLAGS.epoch
+    is_group = FLAGS.group
+    
+    is_cond = FLAGS.cond
+    bin_num = FLAGS.bin
+    warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
+    device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     normalize_type = FLAGS.normal
+
+    save_path = f'{FLAGS.weights_path}Vdim_alpha_B{bin_num}_N{normalize_type}'
+    if is_group==1:
+        save_path += f'_G_W{warm_up}'
+    if is_cond==1:
+        save_path += '_C'
+    print(save_path)
+
     trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/train.txt').readlines()]
     bin_num = 4
     angle_per_class = 2*np.pi/float(bin_num)
@@ -61,7 +99,7 @@ def main():
     my_vgg = vgg.vgg19_bn(weights='DEFAULT')
     model = Model(features=my_vgg.features, bins=bin_num).to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
-    
+
     if normalize_type==0: # IMAGENET
         normal = transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
     elif normalize_type==1: # ELAN
@@ -70,7 +108,7 @@ def main():
 
     model.train()
     start = time.time()
-    for epoch in range(50):
+    for epoch in range(1, epochs+1):
         batch_count = 0
         count = 0
         passes = 0
@@ -111,22 +149,9 @@ def main():
                     now_dim_delta = reg_dim_delta[now_id_list]
                     last_dim_delta = last_dim_delta[last_id_list]
                     consist_loss = F.l1_loss(now_dim_delta, last_dim_delta, reduction='mean')*len(now_id_list)/len(now_id)
-                    
-                    #0720 added
-                    now_bin_argmax = torch.max(reg_bin, dim=1)[1]
-                    now_residual = reg_residual[torch.arange(len(reg_residual)), now_bin_argmax] 
-                    now_alphas = angle_per_class*now_bin_argmax + now_residual #mapping bin_class and residual to get alpha
-                    now_alphas = now_alphas[now_id_list]
-                    for i in range(len(now_id_list)):
-                        now_alphas[i] = angle_correction(now_alphas[i])
-
-                    last_bin_argmax = torch.max(last_bin, dim=1)[1]
-                    last_residual = last_residual[torch.arange(len(last_residual)), last_bin_argmax] 
-                    last_alphas = angle_per_class*last_bin_argmax + last_residual #mapping bin_class and residual to get alpha
-                    last_alphas = last_alphas[last_id_list]
-                    for i in range(len(last_id_list)):
-                        last_alphas[i] = angle_correction(last_alphas[i])
-
+                    #0721 added
+                    now_alphas = compute_alpha(reg_bin, reg_residual, angle_per_class)[now_id_list]
+                    last_alphas = compute_alpha(last_bin, last_residual, angle_per_class)[last_id_list]
                     consist_angle_loss = F.l1_loss(torch.cos(now_alphas), torch.cos(last_alphas), reduction='mean')*len(now_id_list)/len(now_id)
                 else:
                     consist_loss = torch.tensor(0.0)
@@ -134,7 +159,7 @@ def main():
                 #print(consist_loss)
 
             angle_loss = bin_loss + residual_loss
-            loss = 0.6 * dim_loss + angle_loss + consist_loss + consist_angle_loss
+            loss = 0.6 * dim_loss + angle_loss + consist_loss.to(device) + 0.1*consist_angle_loss.to(device)
 
             last_bin = torch.clone(reg_bin).detach()
             last_residual = torch.clone(reg_residual).detach()
@@ -152,18 +177,20 @@ def main():
             
             if passes % 100 == 0:
                 print("--- epoch %s | passes %s --- [loss: %.3f],[bin_loss:%.3f],[residual_loss:%.3f],[dim_loss:%.3f],[consist_loss:%.3f],[consist_angle_loss:%.3f]" \
-                        %(epoch+1, passes, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item(), consist_loss.item(), consist_angle_loss.item()))
+                        %(epoch, passes, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item(), consist_loss.item(), consist_angle_loss.item()))
                 
-        if (epoch+1) % 10 == 0:
-                name = FLAGS.weights_path.split('.')[0] + f'_{epoch+1}.pkl'
+        if epoch % 50 == 0:
+                name = save_path + f'_{epoch}.pkl'
                 print("====================")
-                print ("Done with epoch %s!" % (epoch+1))
+                print ("Done with epoch %s!" % (epoch))
                 print ("Saving weights as %s ..." % name)
                 torch.save({
                         'epoch': epoch,
                         'model_state_dict': model.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
                         'bin': bin_num,
+                        'cond': is_cond,
+                        'normal': normalize_type
                         }, name)
                 print("====================")
     print(f'Elapsed time: {(time.time()-start)//60} min')

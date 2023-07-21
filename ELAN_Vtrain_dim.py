@@ -9,12 +9,27 @@ import time
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--weights-path', required=True, help='weights path to save pkl, ie. weights/0720.pkl')
-parser.add_argument('--device', type=int, default=0, help='choose cuda index')
-parser.add_argument("--normal", type=int, default=0, help='-1:None 0:ImageNet, 1:ELAN')
+
+parser.add_argument("--seed", type=int, default=2023, help='keep seeds to represent same result')
+#path setting
+parser.add_argument("--weights-path", "-W_PATH", required=True, help='folder/date ie.weights/0721')
+
+#training setting
+parser.add_argument("--device", "-D", type=int, default=0, help='select cuda index')
+parser.add_argument("--epoch", "-E", type=int, default=50, help='epoch num')
+
+#parser.add_argument("--batch-size", type=int, default=16, help='batch size')
+
+# hyper-parameter (group | bin | cond)
+parser.add_argument("--normal", "-N", type=int, default=0, help='0:ImageNet, 1:ELAN')
+parser.add_argument("--bin", "-B", type=int, default=4, help='heading bin num')
+parser.add_argument("--group", "-G", type=int, help='if True, add stdGroupLoss')
+parser.add_argument("--warm-up", "-W", type=int, default=10, help='warm up before adding group loss')
+parser.add_argument("--cond", "-C", type=int, help='if True, 4-dim with theta_ray | boxH_2d ')
+
 
 def get_object_label(objects, bin_num=4):
-    ELAN_averages = ClassAverages(average_file='renew_ELAN_class_averages.txt')
+    ELAN_averages = ClassAverages(average_file='ELAN_class_averages.txt')
     label = dict()
     Heading_class = list()
     Residual = list()
@@ -49,10 +64,25 @@ def id_compare(now_id, last_id):
     return now_id_list, last_id_list
 
 def main():
-    keep_same_seeds(2023)
+
     FLAGS = parser.parse_args()
-    device = torch.device(f'cuda:{FLAGS.device}')
+    keep_same_seeds(FLAGS.seed)
+    epochs = FLAGS.epoch
+    is_group = FLAGS.group
+    
+    is_cond = FLAGS.cond
+    bin_num = FLAGS.bin
+    warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
+    device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     normalize_type = FLAGS.normal
+
+    save_path = f'{FLAGS.weights_path}Vdim_B{bin_num}_N{normalize_type}'
+    if is_group==1:
+        save_path += f'_G_W{warm_up}'
+    if is_cond==1:
+        save_path += '_C'
+    print(save_path)
+
     trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/train.txt').readlines()]
     bin_num = 4
     angle_per_class = 2*np.pi/float(bin_num)
@@ -70,7 +100,7 @@ def main():
 
     model.train()
     start = time.time()
-    for epoch in range(50):
+    for epoch in range(epochs):
         batch_count = 0
         count = 0
         passes = 0
@@ -115,7 +145,7 @@ def main():
                 #print(consist_loss)
 
             angle_loss = bin_loss + residual_loss
-            loss = 0.6 * dim_loss + angle_loss + consist_loss
+            loss = 0.6 * dim_loss + angle_loss + consist_loss.to(device)
 
             last_bin = torch.clone(reg_bin).detach()
             last_residual = torch.clone(reg_residual).detach()
@@ -135,8 +165,8 @@ def main():
                 print("--- epoch %s | passes %s --- [loss: %.3f],[bin_loss:%.3f],[residual_loss:%.3f],[dim_loss:%.3f],[consist_loss:%.3f]]" \
                         %(epoch+1, passes, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item(), consist_loss.item()))
                 
-        if (epoch+1) % 10 == 0:
-                name = FLAGS.weights_path.split('.')[0] + f'_{epoch+1}.pkl'
+        if (epoch+1) % 50 == 0:
+                name = save_path + f'_{epoch+1}.pkl'
                 print("====================")
                 print ("Done with epoch %s!" % (epoch+1))
                 print ("Saving weights as %s ..." % name)
@@ -145,6 +175,8 @@ def main():
                         'model_state_dict': model.state_dict(),
                         'optimizer_state_dict': optimizer.state_dict(),
                         'bin': bin_num,
+                        'cond': is_cond,
+                        'normal': normalize_type
                         }, name)
                 print("====================")
     print(f'Elapsed time: {(time.time()-start)//60} min')

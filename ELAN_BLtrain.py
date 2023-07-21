@@ -17,23 +17,23 @@ import argparse
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--seed", type=int, default=2023, help='keep seeds to represent same result')
-# path setting
-parser.add_argument("--weights-path", required=True, help='weights_folder/weights_name.pkl, ie.weights/bin4_dim4_group.pkl')
+#path setting
+parser.add_argument("--weights-path", "-W_PATH", required=True, help='folder/date ie.weights/0721')
 parser.add_argument("--latest-weights", default=None, help='only input the weights-name.pkl') #in the same folder as above
 parser.add_argument("--log-dir", default='log', help='tensorboard log-saved path')
 
 #training setting
-parser.add_argument("--device", type=int, default=0, help='select cuda index')
-parser.add_argument("--epoch", type=int, default=50, help='epoch num')
-parser.add_argument("--warm-up", type=int, default=10, help='warm up before adding group loss')
+parser.add_argument("--device", "-D", type=int, default=0, help='select cuda index')
+parser.add_argument("--epoch", "-E", type=int, default=50, help='epoch num')
 
 #parser.add_argument("--batch-size", type=int, default=16, help='batch size')
 
 # hyper-parameter (group | bin | cond)
-parser.add_argument("--bin", type=int, default=4, help='heading bin num')
-parser.add_argument("--group", action='store_true', help='if True, add stdGroupLoss')
-parser.add_argument("--cond", action='store_true', help='if True, 4-dim with theta_ray | boxH_2d ')
-parser.add_argument("--normal", type=int, default=0, help='0:ImageNet, 1:ELAN')
+parser.add_argument("--normal", "-N", type=int, default=0, help='0:ImageNet, 1:ELAN')
+parser.add_argument("--bin", "-B", type=int, default=4, help='heading bin num')
+parser.add_argument("--group", "-G", type=int, help='if True, add stdGroupLoss')
+parser.add_argument("--warm-up", "-W", type=int, default=10, help='warm up before adding group loss')
+parser.add_argument("--cond", "-C", type=int, help='if True, 4-dim with theta_ray | boxH_2d ')
 
 def main():
     
@@ -45,6 +45,12 @@ def main():
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     normalize_type = FLAGS.normal
+
+    save_path = f'{FLAGS.weights_path}BL_B{bin_num}_N{normalize_type}'
+    if is_group:
+        save_path += f'_G_W{warm_up}'
+    if is_cond:
+        save_path += '_C'
 
     os.makedirs(FLAGS.log_dir, exist_ok=True)
     writer = SummaryWriter(FLAGS.log_dir)
@@ -102,7 +108,7 @@ def main():
         best = [0, 0] # epoch, best_mean
 
     total_num_batches = int(len(dataset) / batch_size)#len(dataset)=40570
-    
+    start = time.time()
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0
         GT_alpha_list = list()
@@ -169,7 +175,7 @@ def main():
             passes += 1
             curr_batch += 1
 
-        cos_delta = angle_criterion(pred_alpha_list, GT_alpha_list)
+        #cos_delta = angle_criterion(pred_alpha_list, GT_alpha_list)
         #print(f'Epoch:{epoch} lr = {scheduler.get_last_lr()[0]}')
         #write every epoch
         writer.add_scalar('pass/orient_cls_loss', bin_loss, epoch)
@@ -185,8 +191,8 @@ def main():
 
         # save after every 10 epochs
         #scheduler.step()
-        if epoch % 10 == 0:
-            name = FLAGS.weights_path.split('.')[0] + f'_{epoch}.pkl'
+        if epoch % 50 == 0:
+            name = save_path + f'_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)
             print(f'Best mean:{best[1]} @ epoch {best[0]}')
@@ -198,12 +204,13 @@ def main():
                     'loss': loss,
                     'passes': passes, # for continue training
                     'best': best,
-                    'bin': FLAGS.bin, # for evaluate
-                    'cond': FLAGS.cond # for evaluate
+                    'bin': bin_num, # for evaluate
+                    'cond': is_cond, # for evaluate
+                    'normal': normalize_type
                     }, name)
             print("====================")
-            
     writer.close()
-    #print(f'Elapsed time:{(time.time()-start)//60}min')
+    print(f'Elapsed time:{(time.time()-start)//60}min')
+    
 if __name__=='__main__':
     main()

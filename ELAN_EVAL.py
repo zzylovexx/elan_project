@@ -1,9 +1,10 @@
 from library.ron_utils import *
+import sys
 import argparse
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--result-path', required=True, help='folder of the predict result')
+parser.add_argument('--result-path', "-R_PATH", required=True, help='folder of the predict result')
 
 def evaluation(result_root):
     valset = [x.strip() for x in open('Elan_3d_box/ImageSets/val.txt').readlines()]
@@ -48,7 +49,13 @@ def evaluation(result_root):
 def main():
     FLAGS = parser.parse_args()
     result_root = FLAGS.result_path
+    org_stdout = sys.stdout
+    f = open(f'{result_root}/eval_result.txt', 'w')
+    sys.stdout = f
     evaluation(result_root)
+    sys.stdout = org_stdout
+    f.close()
+    print(f'EVAL save in {result_root}')
 
 if __name__ == '__main__':
     main()
