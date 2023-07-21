@@ -145,6 +145,15 @@ def main():
             #truth_length = truth_dim[2]
             #calc_length = dim[0] * dim[1] * truth_ratio
 
+            ''' ratio_loss2
+            truth_length = truth_dim[2]
+            REG_ratio = truth_ratio_avg + ratio_delta
+            calc_length_H = truth_dim[0] * REG_ratio[0]
+            calc_length_W = truth_dim[1] * REG_ratio[1]
+            calc_length_HW = truth_dim[0] * truth_dim[1] * REG_ratio[2]
+            ratio_loss = F.l1_loss(calc_length_H, truth_length) + F.l1_loss(calc_length_W, truth_length) + F.l1_loss(calc_length_HW, truth_length)
+            '''
+
 
             #loss = alpha * (dim_loss+ratio_loss) + loss_theta
             loss = alpha * (dim_loss + dim_loss2) + loss_theta
