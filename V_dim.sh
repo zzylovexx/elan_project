@@ -1,7 +1,8 @@
 # check every time
-W_PATH="weights/Vdim"
-R_PATH="Vdim"
-DEVICE=1
+DATE="0724"
+W_PATH="weights/$DATE/V_dim"
+R_PATH="$DATE/V_dim"
+DEVICE=2
 # hyper-parameter
 NORMAL=0 # 0:IMAGENET, 1:ELAN_normal
 GROUP=1

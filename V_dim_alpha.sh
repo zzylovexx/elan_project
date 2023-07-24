@@ -1,6 +1,7 @@
 # check every time
-W_PATH="weights/Vdim_alpha"
-R_PATH="Vdim_alpha"
+DATE="0724"
+W_PATH="weights/$DATE/Vdim_alpha"
+R_PATH="$DATE/Vdim_alpha"
 DEVICE=1
 # hyper-parameter
 NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
@@ -30,6 +31,7 @@ fi
 PKL=$PKL"_$EPOCH.pkl"
 echo $PKL
 echo $R_PATH
+
 python ELAN_Vtrain_dim_alpha.py -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND;
 python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH
 python ELAN_EVAL.py -R_PATH=$R_PATH

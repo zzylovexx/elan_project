@@ -47,6 +47,7 @@ def main():
         save_path += '_C'
     print(save_path)
     W_consist = 0.3
+    W_group = 0.3
 
     trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/train.txt').readlines()]
     bin_num = 4
@@ -107,12 +108,11 @@ def main():
                 #gt_Ry = gt_labels['Ry'].float().to(device)
                 gt_group = torch.tensor(gt_labels['Group']).to(device)
                 group_loss = stdGroupLoss_heading_bin(reg_alphas, gt_Theta, gt_group, device)
-                loss += 0.3 * group_loss
+                loss += W_group * group_loss # before 0724 W_group=0.3
 
             # CONSISTENCY LOSS
             if count == 0:
                 consist_loss = torch.tensor(0.0)
-                angle_loss = torch.tensor(0.0)
                 count +=1
             else:
                 now_id_list, last_id_list = id_compare(now_id, last_id)
