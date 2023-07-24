@@ -1,9 +1,9 @@
 # check every time
-W_PATH="weights/"
-R_PATH=""
+W_PATH="weights/BL"
+R_PATH="BL"
 DEVICE=0
 # hyper-parameter
-NORMAL=0 # 0:IMAGENET, 1:ELAN_normal
+NORMAL=1 # 0:IMAGENET, 1:ELAN_normal
 GROUP=1
 
 #FIXED
@@ -15,8 +15,8 @@ COND=0
 
 TRUE=1
 
-PKL=$W_PATH"BL_B$BIN""_N$NORMAL"
-R_PATH=$R_PATH"BL_B$BIN""_N$NORMAL"
+PKL=$W_PATH"_B$BIN""_N$NORMAL"
+R_PATH=$R_PATH"_B$BIN""_N$NORMAL"
 if [ $GROUP = $TRUE ]
 then
     PKL=$PKL"_G_W$WARMUP"

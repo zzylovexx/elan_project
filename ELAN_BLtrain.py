@@ -46,7 +46,7 @@ def main():
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     normalize_type = FLAGS.normal
 
-    save_path = f'{FLAGS.weights_path}BL_B{bin_num}_N{normalize_type}'
+    save_path = f'{FLAGS.weights_path}_B{bin_num}_N{normalize_type}'
     if is_group:
         save_path += f'_G_W{warm_up}'
     if is_cond:

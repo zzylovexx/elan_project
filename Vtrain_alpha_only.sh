@@ -1,9 +1,9 @@
 # check every time
-W_PATH="weights/Vdim_alpha"
-R_PATH="Vdim_alpha"
+W_PATH="weights/V_alpha"
+R_PATH="V_alpha"
 DEVICE=2
 # hyper-parameter
-NORMAL=1 # 0:IMAGENET, 1:ELAN_normal
+NORMAL=0 # 0:IMAGENET, 1:ELAN_normal
 GROUP=1
 
 #FIXED
@@ -30,7 +30,7 @@ fi
 PKL=$PKL"_$EPOCH.pkl"
 echo $PKL
 echo $R_PATH
-python ELAN_Vtrain_dim_alpha.py -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND;
+python ELAN_Vtrain_only_alpha.py -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND;
 python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH
 python ELAN_EVAL.py -R_PATH=$R_PATH
 echo "SHELL FINISHED"

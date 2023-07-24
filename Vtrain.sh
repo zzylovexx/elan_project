@@ -1,6 +1,6 @@
 # check every time
-W_PATH="weights/"
-R_PATH=""
+W_PATH="weights/Vdim"
+R_PATH="Vdim"
 DEVICE=1
 # hyper-parameter
 NORMAL=0 # 0:IMAGENET, 1:ELAN_normal
@@ -15,8 +15,8 @@ COND=0
 
 TRUE=1
 
-PKL=$W_PATH"Vdim_B$BIN""_N$NORMAL"
-R_PATH=$R_PATH"Vdim_B$BIN""_N$NORMAL"
+PKL=$W_PATH"_B$BIN""_N$NORMAL"
+R_PATH=$R_PATH"_B$BIN""_N$NORMAL"
 if [ $GROUP = $TRUE ]
 then
     PKL=$PKL"_G_W$WARMUP"

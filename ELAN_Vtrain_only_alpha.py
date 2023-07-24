@@ -118,13 +118,20 @@ def main():
                 #print(now_id, last_id)
                 if len(now_id_list) != 0:
                     #0719 added
-                    now_dim_delta = reg_dim_delta[now_id_list]
-                    last_dim_delta = last_dim_delta[last_id_list]
-                    consist_loss = F.l1_loss(now_dim_delta, last_dim_delta, reduction='mean')*len(now_id_list)/len(now_id)
+                    #now_dim_delta = reg_dim_delta[now_id_list]
+                    #last_dim_delta = last_dim_delta[last_id_list]
+                    #consist_loss = F.l1_loss(now_dim_delta, last_dim_delta, reduction='mean')*len(now_id_list)/len(now_id)
+                    #0721 added
+                    now_alphas = reg_alphas[now_id_list]
+                    last_alphas = compute_alpha(last_bin, last_residual, angle_per_class)[last_id_list]
+                    angle_loss = F.l1_loss(torch.cos(now_alphas), torch.cos(last_alphas), reduction='mean')*len(now_id_list)/len(now_id)
                 else:
                     consist_loss = torch.tensor(0.0)
+                    angle_loss = torch.tensor(0.0)
+                #print(consist_loss)
             
-            loss += consist_loss.to(device)
+            consist_loss = torch.tensor(0.0)
+            loss += consist_loss.to(device) + 0.1*angle_loss.to(device)
 
             last_bin = torch.clone(reg_bin).detach()
             last_residual = torch.clone(reg_residual).detach()
@@ -141,8 +148,8 @@ def main():
                 passes += 1
             
             if passes % 100 == 0:
-                print("--- epoch %s | passes %s --- [loss: %.3f],[bin_loss:%.3f],[residual_loss:%.3f],[dim_loss:%.3f],[consist_loss:%.3f]" \
-                        %(epoch, passes, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item(), consist_loss.item()))
+                print("--- epoch %s | passes %s --- [loss: %.3f],[bin_loss:%.3f],[residual_loss:%.3f],[dim_loss:%.3f],[consist_loss:%.3f],[angle_loss:%.3f]" \
+                        %(epoch, passes, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item(), consist_loss.item(), angle_loss.item()))
                 if is_group and epoch > warm_up:
                     print("[group_loss:%.3f]"%(group_loss.item()))
                 
@@ -161,7 +168,6 @@ def main():
                         }, name)
                 print("====================")
     print(f'Elapsed time: {(time.time()-start)//60} min')
-
 
 def get_object_label(objects, bin_num=4):
     ELAN_averages = ClassAverages(average_file='ELAN_class_averages.txt')

@@ -32,7 +32,7 @@ def main():
     weights_path = FLAGS.weights_path
     result_root = FLAGS.result_path
     os.makedirs(result_root, exist_ok=True)
-    os.makedirs(result_root+'/image_2', exist_ok=True)
+    #os.makedirs(result_root+'/image_2', exist_ok=True)
     os.makedirs(result_root+'/label_2', exist_ok=True)
 
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
@@ -55,8 +55,8 @@ def main():
     # Kitti image_2 dir / label_2 dir
     img_root = "Elan_3d_box/image_2"
     label_root = "Elan_3d_box/renew_label"
-    images = glob.glob(os.path.join(img_root, '*.png'), recursive=True)
-    renew_labels = glob.glob(os.path.join(label_root, '*.txt'), recursive=True)
+    images = sorted(glob.glob(os.path.join(img_root, '*.png'), recursive=True))
+    renew_labels = sorted(glob.glob(os.path.join(label_root, '*.txt'), recursive=True))
     # dim averages
     ELAN_averages = ClassAverages(average_file='all_ELAN_class_averages.txt')
     cam_to_img = np.array([
@@ -112,7 +112,7 @@ def main():
         with open(renew_labels[i].replace(label_root, result_root + '/label_2'), 'w') as ELAN_f:
             ELAN_f.writelines(label_ELAN)
 
-        cv2.imwrite(images[i].replace(img_root, result_root + '/image_2'), img)
+        #cv2.imwrite(images[i].replace(img_root, result_root + '/image_2'), img)
         
         if i%500==0:
             print(i)

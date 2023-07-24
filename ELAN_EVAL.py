@@ -1,5 +1,5 @@
 from library.ron_utils import *
-import sys
+import sys, os
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -48,13 +48,15 @@ def evaluation(result_root):
 
 def main():
     FLAGS = parser.parse_args()
+    os.makedirs('ELAN_eval', exist_ok=True)
     result_root = FLAGS.result_path
     org_stdout = sys.stdout
-    f = open(f'{result_root}/eval_result.txt', 'w')
+    f = open(f'ELAN_eval/{result_root}.txt', 'w')
     sys.stdout = f
     evaluation(result_root)
     sys.stdout = org_stdout
     f.close()
+    evaluation(result_root)
     print(f'EVAL save in {result_root}')
 
 if __name__ == '__main__':
