@@ -57,7 +57,7 @@ def main():
     sys.stdout = org_stdout
     f.close()
     evaluation(result_root)
-    print(f'EVAL save in {result_root}')
+    print(f'save in ELAN_eval/{result_root}.txt')
 
 if __name__ == '__main__':
     main()

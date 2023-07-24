@@ -46,6 +46,7 @@ def main():
     if is_cond==1:
         save_path += '_C'
     print(save_path)
+    W_consist = 0.3
 
     trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/train.txt').readlines()]
     bin_num = 4
@@ -124,7 +125,7 @@ def main():
                 else:
                     consist_loss = torch.tensor(0.0)
             
-            loss += consist_loss.to(device)
+            loss += W_consist * consist_loss.to(device) # W_consist=1 before 0723
 
             last_bin = torch.clone(reg_bin).detach()
             last_residual = torch.clone(reg_residual).detach()
@@ -157,7 +158,8 @@ def main():
                         'optimizer_state_dict': optimizer.state_dict(),
                         'bin': bin_num,
                         'cond': is_cond,
-                        'normal': normalize_type
+                        'normal': normalize_type,
+                        'W_consist': W_consist,
                         }, name)
                 print("====================")
     print(f'Elapsed time: {(time.time()-start)//60} min')
