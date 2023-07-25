@@ -141,7 +141,7 @@ class ELAN_Dataset(data.Dataset):
         Location = [line[11], line[12], line[13]] # x, y, z
         Location[1] -= Dimension[0] / 2 # bring the KITTI center up to the middle of the object
 
-        heading_class,heading_resdiual=angle2class(Alpha, self.num_heading_bin)
+        heading_class,heading_residual=angle2class(Alpha, self.num_heading_bin)
         Theta = Ry-Alpha
         label = {
                 'Class': Class,
@@ -150,7 +150,7 @@ class ELAN_Dataset(data.Dataset):
                 'Dimensions': Dimension,
                 'Alpha': Alpha,
                 'Location': Location,
-                'heading_resdiual': heading_resdiual,
+                'heading_residual': heading_residual,
                 'heading_class': heading_class,
                 'Ry': Ry,
                 'Theta': Theta

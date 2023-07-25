@@ -183,11 +183,11 @@ def main():
             
             #print('dim:',dim)
             cls_argmax = np.argmax(conf)
-            resdiual_orient = orient[cls_argmax] 
+            residual_orient = orient[cls_argmax] 
             # print(cls_argmax)
             # print('theta_ray:',theta_ray)
-            # print('resdiual_orient:',resdiual_orient)
-            alpha=class2angle(cls_argmax,resdiual_orient)
+            # print('residual_orient:',residual_orient)
+            alpha=class2angle(cls_argmax,residual_orient)
             # print('alpha:',alpha)
             if alpha >np.pi:
                 alpha-=(2*np.pi)

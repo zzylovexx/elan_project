@@ -50,6 +50,8 @@ def main():
     W_group = 0.3
 
     trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/train.txt').readlines()]
+    valset = [x.strip() for x in open('Elan_3d_box/ImageSets/val.txt').readlines()]
+
     bin_num = 4
     angle_per_class = 2*np.pi/float(bin_num)
     batch_size = 16
@@ -64,12 +66,12 @@ def main():
         normal = transforms.Normalize(mean=[0.596, 0.612, 0.587], std=[0.256, 0.254, 0.257])
     process = transforms.Compose([transforms.ToTensor(), transforms.Resize([224,224]), normal])
 
-    model.train()
     start = time.time()
     for epoch in range(1, epochs+1):
         batch_count = 0
         count = 0
         passes = 0
+        model.train()
         for id_ in trainset:
             img = cv2.cvtColor(cv2.imread(f'Elan_3d_box/image_2/{id_}.png'), cv2.COLOR_BGR2RGB)
             label = f'Elan_3d_box/renew_label_obj/{id_}.txt'
@@ -127,8 +129,6 @@ def main():
             
             loss += W_consist * consist_loss.to(device) # W_consist=1 before 0723
 
-            last_bin = torch.clone(reg_bin).detach()
-            last_residual = torch.clone(reg_residual).detach()
             last_dim_delta = torch.clone(reg_dim_delta).detach()
             last_id = now_id
             #https://zhuanlan.zhihu.com/p/65002487
@@ -146,8 +146,37 @@ def main():
                         %(epoch, passes, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item(), consist_loss.item()))
                 if is_group and epoch > warm_up:
                     print("[group_loss:%.3f]"%(group_loss.item()))
-                
-        if epoch % 50 == 0:
+        
+        model.eval()
+        GT_alpha_list = list()
+        pred_alpha_list = list()
+        for id_ in valset:
+            img = cv2.cvtColor(cv2.imread(f'Elan_3d_box/image_2/{id_}.png'), cv2.COLOR_BGR2RGB)
+            label = f'Elan_3d_box/renew_label_obj/{id_}.txt'
+            extra_labels = get_extra_labels(f'Elan_3d_box/extra_label/{id_}.txt')
+            lines = [x.strip() for x in open(label).readlines()]
+            obj_count = len(lines)
+            batch_count += len(lines)
+
+            if obj_count == 0:
+                continue
+            objects = [TrackingObject(line) for line in lines]
+            crops = [process(img[obj.box2d[0][1]:obj.box2d[1][1]+1 ,obj.box2d[0][0]:obj.box2d[1][0]+1]) for obj in objects]
+            crops = torch.stack(crops).to(device)
+
+            gt_labels = get_object_label(objects, bin_num)
+            gt_bin = gt_labels['bin'].to(device)
+            gt_residual = gt_labels['residual'].to(device)
+            gt_dim_delta = gt_labels['dim_delta'].to(device)
+
+            [reg_residual, reg_bin, reg_dim_delta] = model(crops)
+            bin_argmax = torch.max(reg_bin, dim=1)[1]
+            pred_alpha = angle_per_class*bin_argmax + reg_residual[torch.arange(len(reg_residual)), bin_argmax]
+            GT_alpha = angle_per_class*gt_bin + gt_residual
+            pred_alpha_list += pred_alpha.tolist()
+            GT_alpha_list += GT_alpha.tolist()
+
+        if epoch % (epochs//2) == 0:
                 name = save_path + f'_{epoch}.pkl'
                 print("====================")
                 print ("Done with epoch %s!" % (epoch))

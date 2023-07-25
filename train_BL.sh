@@ -1,11 +1,11 @@
 # check every time
-DATE="0724"
-W_PATH="weights/$DATE/V_dim"
-R_PATH="$DATE/V_dim"
-DEVICE=2
+DATE="0725"
+W_PATH="weights/$DATE/BL"
+R_PATH="$DATE/BL"
+DEVICE=0
 # hyper-parameter
 NORMAL=0 # 0:IMAGENET, 1:ELAN_normal
-GROUP=1
+GROUP=0
 
 #FIXED
 EPOCH=50
@@ -31,7 +31,7 @@ fi
 PKL=$PKL"_$EPOCH.pkl"
 echo $PKL
 echo $R_PATH
-python ELAN_Vtrain_dim.py -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND;
+python ELAN_BLtrain.py -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND;
 python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH
 python ELAN_EVAL.py -R_PATH=$R_PATH
 echo "SHELL FINISHED"

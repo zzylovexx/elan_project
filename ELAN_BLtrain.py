@@ -45,7 +45,7 @@ def main():
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     normalize_type = FLAGS.normal
-
+    W_group = 0.3
     save_path = f'{FLAGS.weights_path}_B{bin_num}_N{normalize_type}'
     if is_group:
         save_path += f'_G_W{warm_up}'
@@ -60,12 +60,14 @@ def main():
 
     # model
     print("Loading all detected objects in ELAN dataset...")
-    dataset = ELAN_Dataset('Elan_3d_box', condition=FLAGS.cond, num_heading_bin=FLAGS.bin, normal=normalize_type)
+    train_dataset = ELAN_Dataset('Elan_3d_box', split='train', condition=FLAGS.cond, num_heading_bin=FLAGS.bin, normal=normalize_type)
+    val_dataset = ELAN_Dataset('Elan_3d_box', split='val', condition=FLAGS.cond, num_heading_bin=FLAGS.bin, normal=normalize_type)
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}
 
-    generator = data.DataLoader(dataset, **params)
+    train_loader = data.DataLoader(train_dataset, **params)
+    val_loader = data.DataLoader(val_dataset, **params)
 
     my_vgg = vgg.vgg19_bn(weights='DEFAULT')
     if is_cond:
@@ -85,7 +87,7 @@ def main():
         group_loss_func = stdGroupLoss_heading_bin
     
     # Load latest-weights parameters
-    weights_folder = FLAGS.weights_path.split('/')[0]
+    weights_folder = FLAGS.weights_path.split('/')[0] + '/' + FLAGS.weights_path.split('/')[1]
     os.makedirs(weights_folder, exist_ok=True)
     if FLAGS.latest_weights is not None:
         weights_path = os.path.join(weights_folder, FLAGS.latest_weights)
@@ -97,7 +99,6 @@ def main():
         first_epoch = checkpoint['epoch']
         loss = checkpoint['loss']
         passes = checkpoint['passes']
-        best = checkpoint['best']
         #bin_num = checkpoint['bin'] 
         #is_cond = checkpoint['cond'] # for evaluate
         print('Found previous checkpoint: %s at epoch %s'%(weights_path, first_epoch))
@@ -105,18 +106,16 @@ def main():
     else:
         first_epoch = 0
         passes = 0
-        best = [0, 0] # epoch, best_mean
 
-    total_num_batches = int(len(dataset) / batch_size)#len(dataset)=40570
+    total_num_batches = int(len(train_dataset) / batch_size) 
+    best = [0, 1] # best_epoch, best_alpha_performance
     start = time.time()
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0
-        GT_alpha_list = list()
-        pred_alpha_list = list()
-        
-        for local_batch, local_labels in generator:
+        model.train()
+        for local_batch, local_labels in train_loader:
 
-            truth_orient_resdiual = local_labels['heading_resdiual'].float().to(device)
+            truth_residual = local_labels['heading_residual'].float().to(device)
             truth_bin = local_labels['heading_class'].long().to(device)#這個角度在哪個class上
             truth_dim = local_labels['Dimensions'].float().to(device)
 
@@ -124,78 +123,89 @@ def main():
             [orient_residual, bin_conf, dim] = model(local_batch)
 
             bin_loss = F.cross_entropy(bin_conf,truth_bin,reduction='mean').to(device)
-            orient_redisual_loss, rediual_val = compute_residual_loss(orient_residual,truth_bin,truth_orient_resdiual, device)
-            
-            # calc GT_alpha,return list type
-            pred_alpha = angle_per_class*truth_bin + orient_residual[torch.arange(len(orient_residual)), truth_bin]
-            GT_alpha = angle_per_class*truth_bin + truth_orient_resdiual
-            pred_alpha_list += pred_alpha.tolist()
-            GT_alpha_list += GT_alpha.tolist()
-
-            loss_theta = bin_loss + orient_redisual_loss
+            residual_loss, _ = compute_residual_loss(orient_residual,truth_bin,truth_residual, device)
+        
             # performance alpha_l1 > l1 > mse
             #dim_loss = F.mse_loss(dim, truth_dim, reduction='mean')  # org use mse_loss
             dim_loss = F.l1_loss(dim, truth_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
             #dim_loss = L1_loss_alpha(dim, truth_dim, GT_alpha, device) # 0613 try elevate dim performance       
 
-
-            loss = alpha * dim_loss + loss_theta
             #added loss
             if is_group and epoch > warm_up:
                 truth_Theta = local_labels['Theta'].float().to(device)
                 #truth_Ry = local_labels['Ry'].float().to(device)
                 truth_group = local_labels['Group'].float().to(device)
                 group_loss = group_loss_func(pred_alpha, truth_Theta, truth_group, device)
-                loss += 0.3 * group_loss
-
+            else:
+                group_loss = torch.tensor(0.0)
+            
+            loss = alpha * dim_loss + bin_loss + residual_loss + W_group * group_loss # W_group=0.3 before0724
+            
             opt_SGD.zero_grad()
             loss.backward()
             opt_SGD.step()
 
-            if passes % 200 == 0 and is_group and epoch> warm_up:
-                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[redisual_loss:%.4f],[dim_loss:%.4f],[group_loss:%.4f]" \
-                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_redisual_loss.item(), dim_loss.item(), group_loss.item()))
-                writer.add_scalar('pass/orient_cls_loss', bin_loss, passes//200)
-                writer.add_scalar('pass/residual_loss', orient_redisual_loss, passes//200)
+            if passes % 200 == 0:
+                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[residual_loss:%.4f],[dim_loss:%.4f]" \
+                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item()))
+                writer.add_scalar('pass/bin_loss', bin_loss, passes//200)
+                writer.add_scalar('pass/residual_loss', residual_loss, passes//200)
                 writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
-                writer.add_scalar('pass/loss_theta', loss_theta, passes//200)
                 writer.add_scalar('pass/total_loss', loss, passes//200) 
-                writer.add_scalar('pass/group_loss', 0, passes//200) 
 
-            elif passes % 200 == 0:
-                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[redisual_loss:%.4f],[dim_loss:%.4f]" \
-                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_redisual_loss.item(),dim_loss.item()))
-                writer.add_scalar('pass/orient_cls_loss', bin_loss, passes//200)
-                writer.add_scalar('pass/residual_loss', orient_redisual_loss, passes//200)
-                writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
-                writer.add_scalar('pass/loss_theta', loss_theta, passes//200)
-                writer.add_scalar('pass/total_loss', loss, passes//200) 
-                writer.add_scalar('pass/group_loss', 0, passes//200)
-
+                if is_group and epoch>warm_up:
+                    print("[group_loss:%.4f]"%(group_loss.item()))
+                    writer.add_scalar('pass/group_loss', group_loss, passes//200)
+            
             passes += 1
             curr_batch += 1
+        
+        # eval part
+        model.eval()
+        GT_alpha_list = list()
+        pred_alpha_list = list()
+        for local_batch, local_labels in val_loader:
 
-        #cos_delta = angle_criterion(pred_alpha_list, GT_alpha_list)
-        #print(f'Epoch:{epoch} lr = {scheduler.get_last_lr()[0]}')
+            truth_residual = local_labels['heading_residual'].float().to(device)
+            truth_bin = local_labels['heading_class'].long().to(device)#這個角度在哪個class上
+            truth_dim = local_labels['Dimensions'].float().to(device)
+
+            local_batch=local_batch.float().to(device)
+
+            [orient_residual, bin_conf, dim] = model(local_batch)
+            # calc GT_alpha,return list type
+            bin_argmax = torch.max(bin_conf, dim=1)[1]
+            pred_alpha = angle_per_class*bin_argmax + orient_residual[torch.arange(len(orient_residual)), bin_argmax]
+            GT_alpha = angle_per_class*truth_bin + truth_residual
+            pred_alpha_list += pred_alpha.tolist()
+            GT_alpha_list += GT_alpha.tolist()
+
+        alpha_performance = angle_criterion(pred_alpha_list, GT_alpha_list)
+        print(f'alpha_performance: {alpha_performance:.4f}') #close to 0 is better\
+        writer.add_scalar('epoch/alpha_performance', alpha_performance, epoch)
+        if alpha_performance < best[1]:
+            best[0] = epoch
+            best[1] = alpha_performance
+    
         #write every epoch
-        writer.add_scalar('pass/orient_cls_loss', bin_loss, epoch)
-        writer.add_scalar('pass/residual_loss', orient_redisual_loss, epoch)
+        writer.add_scalar('pass/bin_loss', bin_loss, epoch)
+        writer.add_scalar('pass/residual_loss', residual_loss, epoch)
         writer.add_scalar('pass/dim_loss', dim_loss, epoch)
-        writer.add_scalar('epoch/loss_theta', loss_theta, epoch)
         writer.add_scalar('epoch/total_loss', loss, epoch) 
         if is_group and epoch > warm_up:
             writer.add_scalar('epoch/group_loss', group_loss, epoch)
         
         # visiualize https://zhuanlan.zhihu.com/p/103630393
+        # https://zhuanlan.zhihu.com/p/138811263
         #tensorboard --logdir=./{log_foler} --port 8123
 
         # save after every 10 epochs
         #scheduler.step()
-        if epoch % 50 == 0:
+        if epoch % (epochs//2) == 0:
             name = save_path + f'_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)
-            print(f'Best mean:{best[1]} @ epoch {best[0]}')
+            print(f'Best alpha performance:{best[1]} @ epoch {best[0]}')
             print ("Saving weights as %s ..." % name)
             torch.save({
                     'epoch': epoch,
@@ -203,14 +213,14 @@ def main():
                     'optimizer_state_dict': opt_SGD.state_dict(),
                     'loss': loss,
                     'passes': passes, # for continue training
-                    'best': best,
                     'bin': bin_num, # for evaluate
                     'cond': is_cond, # for evaluate
-                    'normal': normalize_type
+                    'normal': normalize_type,
+                    'W_group': W_group
                     }, name)
             print("====================")
     writer.close()
     print(f'Elapsed time:{(time.time()-start)//60}min')
-    
+
 if __name__=='__main__':
     main()

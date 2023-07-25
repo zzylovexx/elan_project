@@ -97,9 +97,9 @@ def main():
 
             cls_argmax = torch.max(CONFs, dim=1)[1]
             #print(cls_argmax)
-            resdiual_orient = ORIENTs[torch.arange(len(ORIENTs)), cls_argmax]
-            for argmax, resdiual in zip(cls_argmax, resdiual_orient):
-                alpha=class2angle(argmax,resdiual)
+            residual_orient = ORIENTs[torch.arange(len(ORIENTs)), cls_argmax]
+            for argmax, residual in zip(cls_argmax, residual_orient):
+                alpha=class2angle(argmax,residual)
                 if alpha >np.pi:
                     alpha-=(2*np.pi)
                 Alphas.append(alpha)
