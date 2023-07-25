@@ -164,6 +164,8 @@ def main():
                 truth_group = local_labels['Group'].float().to(device)
                 group_loss = group_loss_func(pred_alpha, truth_Theta, truth_group, device)
                 loss += 0.3 * group_loss
+            else:
+                group_loss = torch.tensor(0.0).to(device)
 
             opt_SGD.zero_grad()
             loss.backward()
@@ -208,8 +210,7 @@ def main():
         writer.add_scalar('pass/dim_loss', dim_loss, epoch)
         writer.add_scalar('epoch/loss_theta', loss_theta, epoch)
         writer.add_scalar('epoch/total_loss', loss, epoch) 
-        if is_group and epoch > warm_up:
-            writer.add_scalar('epoch/group_loss', group_loss, epoch)
+        writer.add_scalar('epoch/group_loss', group_loss, epoch)
         
         # visiualize https://zhuanlan.zhihu.com/p/103630393
         #tensorboard --logdir=./{log_foler} --port 8123

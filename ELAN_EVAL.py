@@ -48,8 +48,8 @@ def evaluation(result_root):
 
 def main():
     FLAGS = parser.parse_args()
-    os.makedirs('ELAN_eval', exist_ok=True)
     result_root = FLAGS.result_path
+    os.makedirs(f'ELAN_eval/{result_root.split("/")[0]}', exist_ok=True)
     org_stdout = sys.stdout
     f = open(f'ELAN_eval/{result_root}.txt', 'w')
     sys.stdout = f

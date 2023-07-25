@@ -40,8 +40,6 @@ class ELAN_Dataset(data.Dataset):
         split_dir = os.path.join(path, 'ImageSets', split + '.txt')
         self.ids = [x.strip() for x in open(split_dir).readlines()]
         self.normal = normal
-        # all images as train data
-        #self.ids = [x.split('.')[0] for x in sorted(os.listdir(self.top_img_path))] # name of file
         self.proj_matrix = np.array([
             [1.418667e+03, 0.000e+00, 6.4e+02, 0],
             [0.000e+00, 1.418867e+03, 3.6e+02, 0],

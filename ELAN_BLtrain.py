@@ -59,8 +59,9 @@ def main():
     alpha = 0.6
 
     # model
-    print("Loading all detected objects in ELAN dataset...")
     train_dataset = ELAN_Dataset('Elan_3d_box', split='train', condition=FLAGS.cond, num_heading_bin=FLAGS.bin, normal=normalize_type)
+    print(f"Loading all training files in ELAN dataset:{len(train_dataset.ids)}")
+
     val_dataset = ELAN_Dataset('Elan_3d_box', split='val', condition=FLAGS.cond, num_heading_bin=FLAGS.bin, normal=normalize_type)
     params = {'batch_size': batch_size,
               'shuffle': False,
@@ -135,9 +136,11 @@ def main():
                 truth_Theta = local_labels['Theta'].float().to(device)
                 #truth_Ry = local_labels['Ry'].float().to(device)
                 truth_group = local_labels['Group'].float().to(device)
+                bin_argmax = torch.max(bin_conf, dim=1)[1]
+                pred_alpha = angle_per_class*bin_argmax + orient_residual[torch.arange(len(orient_residual)), bin_argmax]
                 group_loss = group_loss_func(pred_alpha, truth_Theta, truth_group, device)
             else:
-                group_loss = torch.tensor(0.0)
+                group_loss = torch.tensor(0.0).to(device)
             
             loss = alpha * dim_loss + bin_loss + residual_loss + W_group * group_loss # W_group=0.3 before0724
             
@@ -159,7 +162,7 @@ def main():
             
             passes += 1
             curr_batch += 1
-        
+        '''
         # eval part
         model.eval()
         GT_alpha_list = list()
@@ -186,17 +189,16 @@ def main():
         if alpha_performance < best[1]:
             best[0] = epoch
             best[1] = alpha_performance
-    
+        '''
         #write every epoch
-        writer.add_scalar('pass/bin_loss', bin_loss, epoch)
-        writer.add_scalar('pass/residual_loss', residual_loss, epoch)
-        writer.add_scalar('pass/dim_loss', dim_loss, epoch)
-        writer.add_scalar('epoch/total_loss', loss, epoch) 
-        if is_group and epoch > warm_up:
-            writer.add_scalar('epoch/group_loss', group_loss, epoch)
+        writer.add_scalar('epoch/bin_loss', bin_loss, epoch)
+        writer.add_scalar('epoch/residual_loss', residual_loss, epoch)
+        writer.add_scalar('epoch/dim_loss', dim_loss, epoch)
+        writer.add_scalar('epoch/total_loss', loss, epoch)
+        writer.add_scalar('epoch/group_loss', group_loss, epoch)
         
         # visiualize https://zhuanlan.zhihu.com/p/103630393
-        # https://zhuanlan.zhihu.com/p/138811263
+        # MobaXterm https://zhuanlan.zhihu.com/p/138811263
         #tensorboard --logdir=./{log_foler} --port 8123
 
         # save after every 10 epochs

@@ -16,6 +16,7 @@ parser.add_argument("--seed", type=int, default=2023, help='keep seeds to repres
 parser.add_argument("--weights-path", "-W_PATH", required=True, help='folder/date ie.weights/0721')
 
 #training setting
+parser.add_argument("--type", "-T", type=int, default=0, help='0:dim, 1:alpha, 2:both')
 parser.add_argument("--device", "-D", type=int, default=0, help='select cuda index')
 parser.add_argument("--epoch", "-E", type=int, default=50, help='epoch num')
 
@@ -32,27 +33,24 @@ def main():
 
     FLAGS = parser.parse_args()
     keep_same_seeds(FLAGS.seed)
+    type = FLAGS.type
     epochs = FLAGS.epoch
     is_group = FLAGS.group
-    
     is_cond = FLAGS.cond
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     normalize_type = FLAGS.normal
 
-    save_path = f'{FLAGS.weights_path}_B{bin_num}_N{normalize_type}'
-    if is_group==1:
-        save_path += f'_G_W{warm_up}'
-    if is_cond==1:
-        save_path += '_C'
-    print(save_path)
+    save_path, log_path, train_config = name_by_parameters(FLAGS)
+    print(f'SAVE PATH:{save_path}, LOG PATH:{log_path}')
+    os.makedirs(log_path, exist_ok=True)
+    writer = SummaryWriter(log_path)
+
+    # weights 
     W_consist = 0.3
     W_alpha = 0.1
     W_group = 0.3
-
-    os.makedirs('log', exist_ok=True)
-    writer = SummaryWriter('log')
 
     trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/train.txt').readlines()]
     valset = [x.strip() for x in open('Elan_3d_box/ImageSets/val.txt').readlines()]
@@ -146,8 +144,12 @@ def main():
                 else:
                     consist_loss = torch.tensor(0.0)
                     angle_loss = torch.tensor(0.0)
-                #print(consist_loss)
             
+            if type==0:
+                angle_loss = torch.tensor(0.0)
+            elif type==1:
+                consist_loss = torch.tensor(0.0)
+
             loss += W_consist*consist_loss.to(device) + W_alpha*angle_loss.to(device) # W_consist=1, W_alpha=0.1 before 0723
 
             last_bin = torch.clone(reg_bin).detach()
@@ -158,7 +160,6 @@ def main():
             loss /= obj_count
             loss.backward()  # 计算梯度
 
-
             acc_total_loss += loss * obj_count
             acc_bin_loss += bin_loss
             acc_residual_loss += residual_loss
@@ -167,7 +168,6 @@ def main():
             acc_consist_loss += consist_loss
             acc_angle_loss += angle_loss
             
-
             if(batch_count//batch_size)== 1:
                 #print(batch_count)
                 batch_count = 0 
@@ -182,18 +182,27 @@ def main():
                     print("[group_loss:%.3f]"%(group_loss.item()))
         
         # record to tensorboard
-        writer.add_scalar('epoch/total_loss', acc_total_loss, epoch) 
-        writer.add_scalar('epoch/bin_loss', acc_bin_loss, epoch)
-        writer.add_scalar('epoch/residual_loss', acc_residual_loss, epoch)
-        writer.add_scalar('epoch/dim_loss', acc_dim_loss, epoch)
-        writer.add_scalar('epoch/group_loss', group_loss, epoch)
-        writer.add_scalar('epoch/consist_loss', acc_consist_loss, epoch)
-        writer.add_scalar('epoch/angle_loss', acc_angle_loss, epoch)
+        writer.add_scalar(f'{train_config}/total', acc_total_loss, epoch) 
+        writer.add_scalar(f'{train_config}/bin', acc_bin_loss, epoch)
+        writer.add_scalar(f'{train_config}/residual', acc_residual_loss, epoch)
+        writer.add_scalar(f'{train_config}/dim', acc_dim_loss, epoch)
+        writer.add_scalar(f'{train_config}/group', group_loss, epoch)
+        writer.add_scalar(f'{train_config}/consist', acc_consist_loss, epoch)
+        writer.add_scalar(f'{train_config}/angle', acc_angle_loss, epoch)
+        '''
+        if type!=1:
+            writer.add_scalars(f'{train_config}/DIM', {'dim': acc_dim_loss, 'consist': acc_consist_loss}, epoch)
+        if type!=0:
+            writer.add_scalars(f'{train_config}/Alpha', {'bin': acc_bin_loss, 'residual': acc_residual_loss,'angle_loss': acc_angle_loss}, epoch)
+        '''
+        # visiualize https://zhuanlan.zhihu.com/p/103630393
+        # MobaXterm https://zhuanlan.zhihu.com/p/138811263
+        #tensorboard --logdir=./{log_foler} --port 8123
 
         #
         model.eval()
         GT_alpha_list = list()
-        pred_alpha_list = list()
+        REG_alpha_list = list()
         with torch.no_grad():
             for id_ in valset:
                 img = cv2.cvtColor(cv2.imread(f'Elan_3d_box/image_2/{id_}.png'), cv2.COLOR_BGR2RGB)
@@ -216,14 +225,14 @@ def main():
 
                 [reg_residual, reg_bin, reg_dim_delta] = model(crops)
                 bin_argmax = torch.max(reg_bin, dim=1)[1]
-                pred_alpha = angle_per_class*bin_argmax + reg_residual[torch.arange(len(reg_residual)), bin_argmax]
+                reg_alpha = angle_per_class*bin_argmax + reg_residual[torch.arange(len(reg_residual)), bin_argmax]
                 GT_alpha = angle_per_class*gt_bin + gt_residual
-                pred_alpha_list += pred_alpha.tolist()
+                REG_alpha_list += reg_alpha.tolist()
                 GT_alpha_list += GT_alpha.tolist()
         
-        alpha_performance = angle_criterion(pred_alpha_list, GT_alpha_list)
+        alpha_performance = angle_criterion(REG_alpha_list, GT_alpha_list)
         print(f'alpha_performance: {alpha_performance:.4f}') #close to 0 is better\
-        writer.add_scalar('epoch/alpha_performance', alpha_performance, epoch)
+        writer.add_scalar(f'{train_config}/alpha_eval', alpha_performance, epoch)
         #write every epoch
             
         if epoch % (epochs//2) == 0:
@@ -239,11 +248,29 @@ def main():
                         'cond': is_cond,
                         'normal': normalize_type,
                         'W_consist': W_consist,
-                        'W_alpha': W_alpha
+                        'W_group': W_group,
                         }, name)
                 print("====================")
     writer.close()
     print(f'Elapsed time: {(time.time()-start)//60} min')
+
+def name_by_parameters(FLAGS):
+    is_group = FLAGS.group
+    is_cond = FLAGS.cond
+    bin_num = FLAGS.bin
+    warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
+    normalize_type = FLAGS.normal
+    
+    save_path = f'{FLAGS.weights_path}_B{bin_num}_N{normalize_type}'
+    if is_group==1:
+        save_path += f'_G_W{warm_up}'
+    if is_cond==1:
+        save_path += '_C'
+
+    train_config = save_path.split("weights/")[1]
+    log_path = f'log/{train_config}'
+
+    return save_path, log_path, train_config
 
 def get_object_label(objects, bin_num=4):
     ELAN_averages = ClassAverages(average_file='all_ELAN_class_averages.txt')

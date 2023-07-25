@@ -1,16 +1,16 @@
 # check every time
-DATE="0724"
+DATE="0725"
 W_PATH="weights/$DATE/V_dim"
 R_PATH="$DATE/V_dim"
 DEVICE=2
 # hyper-parameter
-NORMAL=1 # 0:IMAGENET, 1:ELAN_normal
+NORMAL=0 # 0:IMAGENET, 1:ELAN_normal
 GROUP=1
 
 #FIXED
-EPOCH=50
+EPOCH=10
 BIN=4
-WARMUP=10
+WARMUP=0
 # not done yet
 COND=0
 
