@@ -229,8 +229,8 @@ def get_alpha(orient_batch, orientGT_batch, confGT_batch):
 def angle_criterion(PRED, GT):
     PRED = np.array(PRED)
     GT = np.array(GT)
-    cos_delta = np.cos(PRED - GT)
-    return cos_delta
+    cos_diff = np.cos(PRED - GT)
+    return 1 - cos_diff.mean()
 
 def get_extra_labels(file_name):
     '''

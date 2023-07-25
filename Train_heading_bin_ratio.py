@@ -114,7 +114,7 @@ def main():
         
         for local_batch, local_labels in generator:
 
-            truth_orient_resdiual = local_labels['heading_resdiual'].float().to(device)
+            truth_residual = local_labels['heading_residual'].float().to(device)
             truth_bin = local_labels['heading_class'].long().to(device)#這個角度在哪個class上
             truth_dim_delta = local_labels['Dim_delta'].float().to(device)
             truth_dim_delta2 = local_labels['Dim_delta2'].float().to(device)
@@ -125,15 +125,15 @@ def main():
             [orient_residual, bin_conf, dim_delta, dim_delta2] = model(local_batch)
 
             bin_loss = F.cross_entropy(bin_conf,truth_bin,reduction='mean').to(device)
-            orient_redisual_loss, rediual_val = residual_loss(orient_residual,truth_bin,truth_orient_resdiual, device)
+            orient_residual_loss, rediual_val = residual_loss(orient_residual,truth_bin,truth_residual, device)
             
             # calc GT_alpha,return list type
             pred_alpha = angle_per_class*truth_bin + orient_residual[torch.arange(len(orient_residual)), truth_bin]
-            GT_alpha = angle_per_class*truth_bin + truth_orient_resdiual
+            GT_alpha = angle_per_class*truth_bin + truth_residual
             pred_alpha_list += pred_alpha.tolist()
             GT_alpha_list += GT_alpha.tolist()
 
-            loss_theta = bin_loss + orient_redisual_loss
+            loss_theta = bin_loss + orient_residual_loss
             #dim_loss = F.mse_loss(dim, truth_dim, reduction='mean')  # org use mse_loss
             dim_loss = F.l1_loss(dim_delta, truth_dim_delta, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
             #dim_loss = L1_loss_alpha(dim, truth_dim, GT_alpha, device) # 0613 try elevate dim performance
@@ -170,10 +170,10 @@ def main():
             opt_SGD.step()
 
             if passes % 200 == 0 and is_group and epoch> warm_up:
-                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[redisual_loss:%.4f],[dim_loss:%.4f],[group_loss:%.4f]" \
-                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_redisual_loss.item(), dim_loss.item(), group_loss.item()))
-                writer.add_scalar('pass/orient_cls_loss', bin_loss, passes//200)
-                writer.add_scalar('pass/residual_loss', orient_redisual_loss, passes//200)
+                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[residual_loss:%.4f],[dim_loss:%.4f],[group_loss:%.4f]" \
+                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_residual_loss.item(), dim_loss.item(), group_loss.item()))
+                writer.add_scalar('pass/bin_loss', bin_loss, passes//200)
+                writer.add_scalar('pass/residual_loss', orient_residual_loss, passes//200)
                 writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
                 writer.add_scalar('pass/ratio_loss', dim_loss, passes//200) #0705added
                 writer.add_scalar('pass/loss_theta', loss_theta, passes//200)
@@ -181,10 +181,10 @@ def main():
                 writer.add_scalar('pass/group_loss', 0, passes//200) 
 
             elif passes % 200 == 0:
-                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[redisual_loss:%.4f],[dim_loss:%.4f]" \
-                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_redisual_loss.item(),dim_loss.item()))
-                writer.add_scalar('pass/orient_cls_loss', bin_loss, passes//200)
-                writer.add_scalar('pass/residual_loss', orient_redisual_loss, passes//200)
+                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[residual_loss:%.4f],[dim_loss:%.4f]" \
+                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_residual_loss.item(),dim_loss.item()))
+                writer.add_scalar('pass/bin_loss', bin_loss, passes//200)
+                writer.add_scalar('pass/residual_loss', orient_residual_loss, passes//200)
                 writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
                 writer.add_scalar('pass/ratio_loss', dim_loss, passes//200)
                 writer.add_scalar('pass/loss_theta', loss_theta, passes//200)
@@ -194,18 +194,17 @@ def main():
             passes += 1
             curr_batch += 1
         '''
-        cos_delta = angle_criterion(pred_alpha_list, GT_alpha_list)
+        alpha_performance = angle_criterion(pred_alpha_list, GT_alpha_list)
         print(f'Epoch:{epoch} lr = {scheduler.get_last_lr()[0]}')
-        print(f'cos_delta: sum={cos_delta.sum()}, mean:{cos_delta.mean()}') #sum=40570 is best, mean=1 is best
+        print(f'alpha_performance: {alpha_performance:.4f}') #close to 0 is better
         # record the best_epoch and best_mean
-        if cos_delta.mean() > best[1]:
-            best = [epoch, cos_delta.mean()]
-        writer.add_scalar('epoch/cos_delta_sum', cos_delta.sum(), epoch)
-        writer.add_scalar('epoch/cos_delta_mean', cos_delta.mean(), epoch)
+        if alpha_performance < best[1]:
+            best = [epoch, alpha_performance]
+        writer.add_scalar('epoch/alpha_performance', alpha_performance, epoch)
         '''
         #write every epoch
-        writer.add_scalar('pass/orient_cls_loss', bin_loss, epoch)
-        writer.add_scalar('pass/residual_loss', orient_redisual_loss, epoch)
+        writer.add_scalar('pass/bin_loss', bin_loss, epoch)
+        writer.add_scalar('pass/residual_loss', orient_residual_loss, epoch)
         writer.add_scalar('pass/dim_loss', dim_loss, epoch)
         writer.add_scalar('epoch/loss_theta', loss_theta, epoch)
         writer.add_scalar('epoch/total_loss', loss, epoch) 

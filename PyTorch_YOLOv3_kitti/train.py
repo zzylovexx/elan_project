@@ -140,7 +140,7 @@ for epoch in range(opt.epochs):
         losses_precision += model.losses["precision"]
         batch_loss += loss.item()
         
-        if (batch_i+1) % 50 == 0:
+        if (batch_i+1) % (epochs//2) == 0:
             loss_data_file.flush()
             vis.plot('Losses:x',losses_x)
             vis.plot('Losses:y',losses_y)

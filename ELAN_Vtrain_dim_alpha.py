@@ -155,7 +155,7 @@ def main():
                 if is_group and epoch > warm_up:
                     print("[group_loss:%.3f]"%(group_loss.item()))
                 
-        if epoch % 50 == 0:
+        if epoch % (epochs//2) == 0:
                 name = save_path + f'_{epoch}.pkl'
                 print("====================")
                 print ("Done with epoch %s!" % (epoch))
