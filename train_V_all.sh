@@ -1,11 +1,11 @@
 # check every time
-DATE="0725"
+DATE="0729"
 W_PATH="weights/$DATE/"
 R_PATH="$DATE/"
-DEVICE=2
-TYPE=2
+DEVICE=0
+TYPE=0
 # hyper-parameter
-NORMAL=0 # 0:IMAGENET, 1:ELAN_normal better
+NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
 GROUP=0
 
 #FIXED
@@ -18,6 +18,7 @@ ZERO=0
 ONE=1
 TWO=2
 
+mkdir $W_PATH
 if [ $TYPE = $ZERO ]
 then
     W_PATH=$W_PATH"D"
