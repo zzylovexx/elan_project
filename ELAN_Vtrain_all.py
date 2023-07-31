@@ -52,8 +52,8 @@ def main():
     W_alpha = 0.1
     W_group = 0.3
 
-    #trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/train.txt').readlines()]
-    trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/trainval.txt').readlines()]
+    trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/train.txt').readlines()]
+    #trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/trainval.txt').readlines()]
     valset = [x.strip() for x in open('Elan_3d_box/ImageSets/val.txt').readlines()]
 
     bin_num = 4

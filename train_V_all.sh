@@ -2,8 +2,8 @@
 DATE="0731"
 W_PATH="weights/$DATE/"
 R_PATH="$DATE/"
-DEVICE=2
-TYPE=2
+DEVICE=0
+TYPE=0
 # hyper-parameter
 NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
 GROUP=1
