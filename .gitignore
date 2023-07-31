@@ -201,3 +201,4 @@ weights_local/
 *.zip
 Elan_3d_box/
 *.txt
+IVAvalid_for_NCTU/
