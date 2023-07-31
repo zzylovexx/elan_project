@@ -30,7 +30,9 @@ def main():
     model.eval()
     # for img processing
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    process = transforms.Compose([transforms.ToTensor(), normalize])
+    process = transforms.Compose([transforms.ToTensor(), 
+                                  transforms.Resize([224,224], transforms.InterpolationMode.BICUBIC), 
+                                  normalize])
 
     # Kitti image_2 dir / label_2 dir
     img_root = "./Kitti/training/image_2"
@@ -78,7 +80,6 @@ def main():
                 BOX2Ds.append(box)
                 #cv2 is(H,W,3)
                 crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1] 
-                crop = cv2.resize(src = crop, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
                 crop = process(crop)
                 # Use calc function if cam_to_img changes to "camera_cal/calib_cam_to_cam.txt"
                 theta_ray = extra_labels[idx]['Theta_ray']

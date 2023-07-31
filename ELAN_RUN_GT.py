@@ -50,7 +50,9 @@ def main():
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
     if normalize_type == 1:
         normalize = transforms.Normalize(mean=[0.596, 0.612, 0.587], std=[0.256, 0.254, 0.257])
-    process = transforms.Compose([transforms.ToTensor(), normalize])
+    process = transforms.Compose([transforms.ToTensor(), 
+                              transforms.Resize([224,224], transforms.InterpolationMode.BICUBIC), 
+                              normalize])
 
     # Kitti image_2 dir / label_2 dir
     img_root = "Elan_3d_box/image_2"
@@ -84,8 +86,7 @@ def main():
             box_2d = (top_left, btm_right)
             dim_gt = [elements[8], elements[9], elements[10]] # height, width, length
             crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1] 
-            crop = cv2.resize(src = crop, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
-            crop = process(crop) # expand to 224x224
+            crop = process(crop)
             #2dbox
             crop = torch.stack([crop]).to(device)
             #Location = [elements[11], elements[12], elements[13]]
