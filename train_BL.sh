@@ -1,11 +1,11 @@
 # check every time
 DATE="0725"
-W_PATH="weights/$DATE/BL2"
-R_PATH="$DATE/BL2"
+W_PATH="weights/$DATE/BL"
+R_PATH="$DATE/BL"
 DEVICE=0
 # hyper-parameter
-NORMAL=0 # 0:IMAGENET, 1:ELAN_normal
-GROUP=0
+NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
+GROUP=1
 
 #FIXED
 EPOCH=50

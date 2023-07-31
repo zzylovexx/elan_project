@@ -1,12 +1,12 @@
 # check every time
-DATE="0729"
+DATE="0731"
 W_PATH="weights/$DATE/"
 R_PATH="$DATE/"
-DEVICE=0
-TYPE=0
+DEVICE=2
+TYPE=2
 # hyper-parameter
 NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
-GROUP=0
+GROUP=1
 
 #FIXED
 EPOCH=50

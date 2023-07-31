@@ -145,11 +145,13 @@ def main():
                 else:
                     consist_loss = torch.tensor(0.0)
                     angle_loss = torch.tensor(0.0)
-            
+            # angle_consist
             if type==0:
                 angle_loss = torch.tensor(0.0)
+            # dim_consist
             elif type==1:
                 consist_loss = torch.tensor(0.0)
+            # if type==2 : both calculated
 
             loss += W_consist*consist_loss.to(device) + W_alpha*angle_loss.to(device) # W_consist=1, W_alpha=0.1 before 0723
 
