@@ -189,7 +189,7 @@ def main():
         writer.add_scalar(f'{train_config}/bin', acc_bin_loss, epoch)
         writer.add_scalar(f'{train_config}/residual', acc_residual_loss, epoch)
         writer.add_scalar(f'{train_config}/dim', acc_dim_loss, epoch)
-        writer.add_scalar(f'{train_config}/group', group_loss, epoch)
+        writer.add_scalar(f'{train_config}/group', acc_group_loss, epoch)
         writer.add_scalar(f'{train_config}/consist', acc_consist_loss, epoch)
         writer.add_scalar(f'{train_config}/angle', acc_angle_loss, epoch)
         '''
