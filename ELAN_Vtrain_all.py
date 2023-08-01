@@ -52,8 +52,8 @@ def main():
     W_alpha = 0.1
     W_group = 0.3
 
-    #trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/train.txt').readlines()]
-    trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/trainval.txt').readlines()]
+    trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/train.txt').readlines()]
+    #trainset = [x.strip() for x in open('Elan_3d_box/ImageSets/trainval.txt').readlines()]
     valset = [x.strip() for x in open('Elan_3d_box/ImageSets/val.txt').readlines()]
 
     bin_num = 4
@@ -145,11 +145,13 @@ def main():
                 else:
                     consist_loss = torch.tensor(0.0)
                     angle_loss = torch.tensor(0.0)
-            
+            # angle_consist
             if type==0:
                 angle_loss = torch.tensor(0.0)
+            # dim_consist
             elif type==1:
                 consist_loss = torch.tensor(0.0)
+            # if type==2 : both calculated
 
             loss += W_consist*consist_loss.to(device) + W_alpha*angle_loss.to(device) # W_consist=1, W_alpha=0.1 before 0723
 
@@ -187,7 +189,7 @@ def main():
         writer.add_scalar(f'{train_config}/bin', acc_bin_loss, epoch)
         writer.add_scalar(f'{train_config}/residual', acc_residual_loss, epoch)
         writer.add_scalar(f'{train_config}/dim', acc_dim_loss, epoch)
-        writer.add_scalar(f'{train_config}/group', group_loss, epoch)
+        writer.add_scalar(f'{train_config}/group', acc_group_loss, epoch)
         writer.add_scalar(f'{train_config}/consist', acc_consist_loss, epoch)
         writer.add_scalar(f'{train_config}/angle', acc_angle_loss, epoch)
         '''

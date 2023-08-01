@@ -1,21 +1,24 @@
 # check every time
-DATE="0725"
-W_PATH="weights/$DATE/BL2"
-R_PATH="$DATE/BL2"
-DEVICE=0
+DATE="0801"
+W_PATH="weights/$DATE"
+R_PATH="$DATE"
+DEVICE=2
 # hyper-parameter
-NORMAL=0 # 0:IMAGENET, 1:ELAN_normal
-GROUP=0
+NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
+GROUP=1
 
 #FIXED
-EPOCH=50
+EPOCH=1
 BIN=4
-WARMUP=10
+WARMUP=0
 # not done yet
 COND=0
 
 TRUE=1
 
+mkdir $W_PATH
+W_PATH=$W_PATH"/BL"
+R_PATH=$R_PATH"/BL"
 PKL=$W_PATH"_B$BIN""_N$NORMAL"
 R_PATH=$R_PATH"_B$BIN""_N$NORMAL"
 if [ $GROUP = $TRUE ]
