@@ -1,22 +1,28 @@
 # check every time
-DATE="try"
-W_PATH="weights/$DATE/"
-R_PATH="$DATE/"
-DEVICE=0
-TYPE=2
+DATE="0803"
+W_PATH="weights/$DATE"
+R_PATH="$DATE"
+DEVICE=2
+TYPE=2 # 0 dim, 1 angle, 2 both, 3 BL
 # hyper-parameter
-NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
-GROUP=1
+GROUP=0
 
 #FIXED
-EPOCH=2
+EPOCH=50
 BIN=4
-WARMUP=10
+WARMUP=0
 # not done yet
 COND=0
 ZERO=0
 ONE=1
 TWO=2
+THREE=3
+
+
+W_PATH=$W_PATH"/KITTI_"
+R_PATH=$R_PATH"/KITTI_"
+PKL=$W_PATH"_B$BIN"
+R_PATH=$R_PATH"_B$BIN"
 
 
 if [ $TYPE = $ZERO ]
@@ -34,9 +40,12 @@ then
     W_PATH=$W_PATH"DA"
     R_PATH=$R_PATH"DA"
 fi
+if [ $TYPE = $THREE ]
+then
+    W_PATH=$W_PATH"BL"
+    R_PATH=$R_PATH"BL"
+fi
 
-PKL=$W_PATH"_B$BIN""_N$NORMAL"
-R_PATH=$R_PATH"_B$BIN""_N$NORMAL"
 if [ $GROUP = $ONE ]
 then
     PKL=$PKL"_G_W$WARMUP"
@@ -48,8 +57,6 @@ then
     R_PATH=$R_PATH"_G_W$WARMUP"
 fi
 PKL=$PKL"_$EPOCH.pkl"
-
-python ELAN_Vtrain_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND
-python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH
-python ELAN_EVAL.py -R_PATH=$R_PATH
+echo "SHELL W_PATH:"$W_PATH
+python KITTI_Train_consist_edit.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND
 echo "SHELL FINISHED"

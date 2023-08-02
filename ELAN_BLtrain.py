@@ -19,7 +19,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=2023, help='keep seeds to represent same result')
 #path setting
 parser.add_argument("--weights-path", "-W_PATH", required=True, help='folder/date ie.weights/0721')
-parser.add_argument("--latest-weights", default=None, help='only input the weights-name.pkl') #in the same folder as above
 parser.add_argument("--log-dir", default='log', help='tensorboard log-saved path')
 
 #training setting
@@ -46,19 +45,14 @@ def main():
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     normalize_type = FLAGS.normal
     W_group = 0.3
-    save_path = f'{FLAGS.weights_path}_B{bin_num}_N{normalize_type}'
-    if is_group:
-        save_path += f'_G_W{warm_up}'
-    if is_cond:
-        save_path += '_C'
 
-    train_config = save_path.split("weights/")[1]
-    log_path = os.path.join(FLAGS.log_dir, train_config)
+    # make weights folder
+    weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
+    os.makedirs(weights_folder, exist_ok=True)
+    save_path, log_path, train_config = name_by_parameters(FLAGS)
     os.makedirs(log_path, exist_ok=True)
     print(f'SAVE PATH:{save_path}, LOG PATH:{log_path}, config:{train_config}')
     writer = SummaryWriter(log_path)
-    
-    writer = SummaryWriter(FLAGS.log_dir)
     epochs = FLAGS.epoch
     batch_size = 16 #64 worse than 8
     alpha = 0.6
@@ -94,31 +88,11 @@ def main():
         #group_loss_func = stdGroupLoss_heading_bin
         group_loss_func = GroupLoss #0801 adjust
     
-    # Load latest-weights parameters
-    weights_folder = FLAGS.weights_path.split('/')[0] + '/' + FLAGS.weights_path.split('/')[1]
-    os.makedirs(weights_folder, exist_ok=True)
-    if FLAGS.latest_weights is not None:
-        weights_path = os.path.join(weights_folder, FLAGS.latest_weights)
-        checkpoint = torch.load(weights_path, map_location=device)
-        # 如果--bin跟checkpoint['bin']不同會跳錯誤
-        assert bin_num == checkpoint['bin'], f'--bin:{bin_num} is not the same as ckpt-bin:{checkpoint["bin"]}'
-        model.load_state_dict(checkpoint['model_state_dict'])
-        opt_SGD.load_state_dict(checkpoint['optimizer_state_dict'])
-        first_epoch = checkpoint['epoch']
-        loss = checkpoint['loss']
-        passes = checkpoint['passes']
-        #bin_num = checkpoint['bin'] 
-        #is_cond = checkpoint['cond'] # for evaluate
-        print('Found previous checkpoint: %s at epoch %s'%(weights_path, first_epoch))
-        print('Resuming training....')
-    else:
-        first_epoch = 0
-        passes = 0
-
+    passes = 0
     total_num_batches = len(train_loader)
     best = [0, 1] # best_epoch, best_alpha_performance
     start = time.time()
-    for epoch in range(first_epoch+1, epochs+1):
+    for epoch in range(1, epochs+1):
         curr_batch = 0
         model.train()
         for local_batch, local_labels in train_loader:
@@ -160,14 +134,8 @@ def main():
             if passes % 200 == 0:
                 print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[residual_loss:%.4f],[dim_loss:%.4f]" \
                     %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item()))
-                writer.add_scalar('pass/bin_loss', bin_loss, passes//200)
-                writer.add_scalar('pass/residual_loss', residual_loss, passes//200)
-                writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
-                writer.add_scalar('pass/total_loss', loss, passes//200) 
-
                 if is_group and epoch>warm_up:
                     print("[group_loss:%.4f]"%(group_loss.item()))
-                    writer.add_scalar('pass/group_loss', group_loss, passes//200)
             
             passes += 1
             curr_batch += 1
@@ -212,7 +180,7 @@ def main():
 
         # save after every 10 epochs
         #scheduler.step()
-        if epoch % (epochs//2) == 0:
+        if epoch % epochs == 0:
             name = save_path + f'_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)
@@ -232,6 +200,24 @@ def main():
             print("====================")
     writer.close()
     print(f'Elapsed time:{(time.time()-start)//60}min')
+
+def name_by_parameters(FLAGS):
+    is_group = FLAGS.group
+    is_cond = FLAGS.cond
+    bin_num = FLAGS.bin
+    warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
+    normalize_type = FLAGS.normal
+    
+    save_path = f'{FLAGS.weights_path}_B{bin_num}_N{normalize_type}'
+    if is_group==1:
+        save_path += f'_G_W{warm_up}'
+    if is_cond==1:
+        save_path += '_C'
+
+    train_config = save_path.split("weights/")[1]
+    log_path = f'log/{train_config}'
+
+    return save_path, log_path, train_config
 
 if __name__=='__main__':
     main()
