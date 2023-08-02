@@ -105,7 +105,7 @@ def main():
         passes = 0
         best = [0, 0] # epoch, best_mean
 
-    total_num_batches = int(len(dataset) / batch_size)#len(dataset)=40570
+    total_num_batches = len(generator)
     
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0

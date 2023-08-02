@@ -16,22 +16,22 @@ import argparse
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--seed", type=int, default=2023, help='keep seeds to represent same result')
-# path setting
-parser.add_argument("--weights-path", required=True, help='weights_folder/weights_name.pkl, ie.weights/bin4_dim4_group.pkl')
-parser.add_argument("--latest-weights", default=None, help='only input the weights-name.pkl') #in the same folder as above
-parser.add_argument("--log-dir", default='log', help='tensorboard log-saved path')
+#path setting
+parser.add_argument("--weights-path", "-W_PATH", required=True, help='folder/date ie.weights/0721')
 
 #training setting
-parser.add_argument("--device", type=int, default=0, help='select cuda index')
-parser.add_argument("--epoch", type=int, default=50, help='epoch num')
-parser.add_argument("--warm-up", type=int, default=10, help='warm up before adding group loss')
+parser.add_argument("--type", "-T", type=int, default=0, help='0:dim, 1:alpha, 2:both')
+parser.add_argument("--device", "-D", type=int, default=0, help='select cuda index')
+parser.add_argument("--epoch", "-E", type=int, default=50, help='epoch num')
 
 #parser.add_argument("--batch-size", type=int, default=16, help='batch size')
 
 # hyper-parameter (group | bin | cond)
-parser.add_argument("--bin", type=int, default=4, help='heading bin num')
-parser.add_argument("--group", action='store_true', help='if True, add stdGroupLoss')
-parser.add_argument("--cond", action='store_true', help='if True, 4-dim with theta_ray | boxH_2d ')
+parser.add_argument("--normal", "-N", type=int, default=0, help='0:ImageNet, 1:ELAN')
+parser.add_argument("--bin", "-B", type=int, default=4, help='heading bin num')
+parser.add_argument("--group", "-G", type=int, help='if True, add stdGroupLoss')
+parser.add_argument("--warm-up", "-W", type=int, default=10, help='warm up before adding group loss')
+parser.add_argument("--cond", "-C", type=int, help='if True, 4-dim with theta_ray | boxH_2d ')
 # TO BE ADDED (Loss的weights比例alpha, w of groupLoss, LRscheduler: milestone, gamma )
 
 def main():
@@ -44,25 +44,30 @@ def main():
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     
-
-    os.makedirs(FLAGS.log_dir, exist_ok=True)
-    writer = SummaryWriter(FLAGS.log_dir)
     epochs = FLAGS.epoch
     batch_size = 16 #64 worse than 8
     alpha = 0.6
+
+    save_path, log_path, train_config = name_by_parameters(FLAGS)
+    print(f'SAVE PATH:{save_path}, LOG PATH:{log_path}, config:{train_config}')
+    os.makedirs(log_path, exist_ok=True)
+    writer = SummaryWriter(log_path)
+    
 
     # model
     print("Loading all detected objects in dataset...")
     print('Kitti dataset')
     train_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training'
-    dataset_L = Dataset(train_path, camera='left', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
-    dataset_R = Dataset(train_path, camera='right', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    dataset_L = Dataset(train_path, split='train', camera='left', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    dataset_R = Dataset(train_path, split='train', camera='right', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    valid_dataset = Dataset(train_path, split='val', camera='left', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}
 
     train_loader_L = data.DataLoader(dataset_L, **params)
     train_loader_R = data.DataLoader(dataset_R, **params)
+    valid_loader = data.DataLoader(valid_dataset, **params)
 
     my_vgg = vgg.vgg19_bn(weights='DEFAULT')
     if is_cond:
@@ -84,36 +89,12 @@ def main():
         print("< Train with GroupLoss >")
         group_loss_func = stdGroupLoss_heading_bin
     
-    # Load latest-weights parameters
     weights_folder = FLAGS.weights_path.split('/')[0]
     os.makedirs(weights_folder, exist_ok=True)
-    if FLAGS.latest_weights is not None:
-        
-        weights_path = os.path.join(weights_folder, FLAGS.latest_weights)
-        checkpoint = torch.load(weights_path, map_location=device)
-        # 如果--bin跟checkpoint['bin']不同會跳錯誤
-        assert bin_num == checkpoint['bin'], f'--bin:{bin_num} is not the same as ckpt-bin:{checkpoint["bin"]}'
-        model.load_state_dict(checkpoint['model_state_dict'])
-        opt_SGD.load_state_dict(checkpoint['optimizer_state_dict'])
-        first_epoch = checkpoint['epoch']
-        loss = checkpoint['loss']
-        passes = checkpoint['passes']
-        best = checkpoint['best']
-        #bin_num = checkpoint['bin'] 
-        #is_cond = checkpoint['cond'] # for evaluate
-        print('Found previous checkpoint: %s at epoch %s'%(weights_path, first_epoch))
-        print('Resuming training....')
-    else:
-        first_epoch = 0
-        passes = 0
-        best = [0, 0] # epoch, best_mean
-
-    total_num_batches = len(train_loader_L)
-    
-    for epoch in range(first_epoch+1, epochs+1):
+    total_num_batches = len(train_loader_L) 
+    passes = 0
+    for epoch in range(1, epochs+1):
         curr_batch = 0
-        GT_alpha_list = list()
-        pred_alpha_list = list()
         
         for (batch_L, labels_L), (batch_R, labels_R) in zip(train_loader_L, train_loader_R):
 
@@ -133,10 +114,7 @@ def main():
             
             # calc GT_alpha,return list type
             bin_argmax = torch.max(bin_L, dim=1)[1]
-            pred_alpha = angle_per_class*bin_argmax + residual_L[torch.arange(len(residual_L)), bin_argmax]
-            GT_alpha = angle_per_class*gt_bin + gt_residual
-            pred_alpha_list += pred_alpha.tolist()
-            GT_alpha_list += GT_alpha.tolist()
+            
 
             loss_theta = bin_loss + residual_loss
             #dim_loss = F.mse_loss(dim, gt_dim, reduction='mean')  # org use mse_loss
@@ -149,7 +127,8 @@ def main():
                 truth_Theta = labels_L['Theta'].float().to(device)
                 truth_Ry = labels_L['Ry'].float().to(device)
                 truth_group = labels_L['Group'].float().to(device)
-                group_loss = group_loss_func(pred_alpha, truth_Theta, truth_group, device)
+                pred_alpha = angle_per_class*bin_argmax + residual_L[torch.arange(len(residual_L)), bin_argmax]
+                group_loss = group_loss_func(pred_alpha.detach(), truth_Theta, truth_group, device)
                 loss += 0.3 * group_loss
             else:
                 group_loss = torch.tensor(0.0).to(device)
@@ -175,47 +154,71 @@ def main():
                     %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item()))
                 print("[consist_loss: %.4f],[Ry_angle_loss:%.4f]" \
                     %(consist_loss.item(), ry_angle_loss.item()))
-                writer.add_scalar('pass/bin_loss', bin_loss, passes//200)
-                writer.add_scalar('pass/residual_loss', residual_loss, passes//200)
-                writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
-                writer.add_scalar('pass/loss_theta', loss_theta, passes//200)
-                writer.add_scalar('pass/total_loss', loss, passes//200)
-                writer.add_scalar('pass/consist_loss', consist_loss, passes//200)
-                writer.add_scalar('pass/ry_angle_loss', ry_angle_loss, passes//200)
                 if is_group and epoch > warm_up:
                     print('[group_loss:%.4f]'%(group_loss.item()))
-                    writer.add_scalar('pass/group_loss', group_loss, passes//200)
 
             passes += 1
             curr_batch += 1
 
-        alpha_performance = angle_criterion(pred_alpha_list, GT_alpha_list)
         #print(f'Epoch:{epoch} lr = {scheduler.get_last_lr()[0]}')
-        print(f'alpha_performance: {alpha_performance:.4f}') #close to 0 is better
-        # record the best_epoch and best_mean
-        if alpha_performance < best[1]:
-            best = [epoch, alpha_performance]
-        writer.add_scalar('epoch/alpha_performance', alpha_performance, epoch)
+        
         #write every epoch
-        writer.add_scalar('epoch/bin_loss', bin_loss, epoch)
-        writer.add_scalar('epoch/residual_loss', residual_loss, epoch)
-        writer.add_scalar('epoch/dim_loss', dim_loss, epoch)
-        writer.add_scalar('epoch/loss_theta', loss_theta, epoch)
-        writer.add_scalar('epoch/total_loss', loss, epoch) 
-        writer.add_scalar('epoch/group_loss', group_loss, epoch)
-        writer.add_scalar('epoch/consist_loss', consist_loss, passes//200)
-        writer.add_scalar('epoch/ry_angle_loss', ry_angle_loss, passes//200)
+        writer.add_scalar(f'{train_config}/bin_loss', bin_loss, epoch)
+        writer.add_scalar(f'{train_config}/residual_loss', residual_loss, epoch)
+        writer.add_scalar(f'{train_config}/dim_loss', dim_loss, epoch)
+        writer.add_scalar(f'{train_config}/loss_theta', loss_theta, epoch)
+        writer.add_scalar(f'{train_config}/total_loss', loss, epoch) 
+        writer.add_scalar(f'{train_config}/group_loss', group_loss, epoch)
+        writer.add_scalar(f'{train_config}/consist_loss', consist_loss, epoch)
+        writer.add_scalar(f'{train_config}/ry_angle_loss', ry_angle_loss, epoch)
         
         # visiualize https://zhuanlan.zhihu.com/p/103630393
         #tensorboard --logdir=./{log_foler} --port 8123
 
         # save after every 10 epochs
         #scheduler.step()
-        if epoch % 10 == 0:
-            name = FLAGS.weights_path.split('.')[0] + f'_{epoch}.pkl'
+
+        model.eval()
+        with torch.no_grad():
+            GT_alpha_list = list()
+            REG_alpha_list = list()
+
+            GT_dim_list = list()
+            REG_dim_list = list()
+            
+            for batch, labels in valid_loader:
+                
+                gt_residual = labels['heading_residual'].float().to(device)
+                gt_bin = labels['heading_class'].long().to(device)#這個角度在哪個class上
+                gt_dim = labels['Dimensions'].float().to(device)
+                gt_theta_ray_L = labels['Theta_ray'].float().to(device)
+
+                batch=batch.float().to(device)
+                [residual, bin, dim] = model(batch)
+                # calc GT_alpha,return list type
+                bin_argmax = torch.max(bin, dim=1)[1]
+                reg_alpha = angle_per_class*bin_argmax + residual[torch.arange(len(residual)), bin_argmax]
+                GT_alpha = angle_per_class*gt_bin + gt_residual
+
+                REG_alpha_list += reg_alpha.cpu().tolist()
+                GT_alpha_list += GT_alpha.cpu().tolist()
+
+                REG_dim_list += dim.cpu().tolist()
+                GT_dim_list += gt_dim.cpu().tolist()
+            
+            alpha_performance = angle_criterion(REG_alpha_list, GT_alpha_list)
+            GT_dim_list = np.array(GT_dim_list)
+            REG_dim_list = np.array(REG_dim_list)
+            dim_performance =  np.mean(abs(GT_dim_list-REG_dim_list), axis=0)
+            print(f'[Alpha diff]: {alpha_performance:.4f}') #close to 0 is better
+            print(f'[DIM diff] H:{dim_performance[0]:.4f}, W:{dim_performance[1]:.4f}, L:{dim_performance[2]:.4f}')
+            #writer.add_scalar(f'{train_config}/alpha_performance', alpha_performance, epoch)
+                
+
+        if epoch % 1 == 0:
+            name = save_path + f'_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)
-            print(f'Best mean:{best[1]} @ epoch {best[0]}')
             print ("Saving weights as %s ..." % name)
             torch.save({
                     'epoch': epoch,
@@ -223,7 +226,6 @@ def main():
                     'optimizer_state_dict': opt_SGD.state_dict(),
                     'loss': loss,
                     'passes': passes, # for continue training
-                    'best': best,
                     'bin': FLAGS.bin, # for evaluate
                     'cond': FLAGS.cond, # for evaluate
                     'W_consist': W_consist,
@@ -242,6 +244,25 @@ def compute_ry(bin, residual, theta_rays, angle_per_class):
     for a, ray in zip(alphas, theta_rays):
         rys.append(angle_correction(a+ray))
     return torch.Tensor(rys)
+
+
+def name_by_parameters(FLAGS):
+    is_group = FLAGS.group
+    is_cond = FLAGS.cond
+    bin_num = FLAGS.bin
+    warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
+    normalize_type = FLAGS.normal
+    
+    save_path = f'{FLAGS.weights_path}_B{bin_num}_N{normalize_type}'
+    if is_group==1:
+        save_path += f'_G_W{warm_up}'
+    if is_cond==1:
+        save_path += '_C'
+
+    train_config = save_path.split("weights/")[1]
+    log_path = f'log/{train_config}'
+
+    return save_path, log_path, train_config
 
 if __name__=='__main__':
     main()

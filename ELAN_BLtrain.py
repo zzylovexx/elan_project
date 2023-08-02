@@ -115,7 +115,7 @@ def main():
         first_epoch = 0
         passes = 0
 
-    total_num_batches = int(len(train_dataset) / batch_size) 
+    total_num_batches = len(train_loader)
     best = [0, 1] # best_epoch, best_alpha_performance
     start = time.time()
     for epoch in range(first_epoch+1, epochs+1):
