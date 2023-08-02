@@ -141,14 +141,14 @@ def get_group_idxs(group):
         group_idxs.append(tmp)
     return group_idxs
 
-def GroupLoss(orient_batch, orientGT_batch, confGT_batch, group_batch):
+def GroupLoss(orient_batch, orientGT_batch, confGT_batch, group_batch, device):
 
     batch_size = orient_batch.size()[0]
     indexes = torch.max(confGT_batch, dim=1)[1]#conf 是在那一個bin上取大
 
     # extract just the important bin
-    orientGT_batch = orientGT_batch[torch.arange(batch_size), indexes]
-    orient_batch = orient_batch[torch.arange(batch_size), indexes]
+    orientGT_batch = orientGT_batch[torch.arange(batch_size), indexes].to(device)
+    orient_batch = orient_batch[torch.arange(batch_size), indexes].to(device)
     theta_diff = torch.atan2(orientGT_batch[:,1], orientGT_batch[:,0])
     estimated_theta_diff = torch.atan2(orient_batch[:,1], orient_batch[:,0])
 
@@ -162,7 +162,7 @@ def GroupLoss(orient_batch, orientGT_batch, confGT_batch, group_batch):
         weighted_loss += loss*len(idxs)/batch_size
 
     #return torch.tensor(weighted_loss)
-    return weighted_loss.requires_grad_(True)
+    return weighted_loss.requires_grad_(True).to(device)
 
 #theta_loss = torch.cos(theta_diff - estimated_theta_diff)
 def eachGroupLoss_sin(idxs, theta_diff, estimated_theta_diff):

@@ -1,5 +1,4 @@
-from torch_lib.Dataset_heading_bin import *
-from torch_lib.ELAN_Dataset import *
+from torch_lib.KITTI_Dataset import *
 from torch_lib.Model_heading_bin import Model, compute_residual_loss
 from library.ron_utils import *
 
@@ -17,7 +16,6 @@ import argparse
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--seed", type=int, default=2023, help='keep seeds to represent same result')
-parser.add_argument("--type", type=int, default=0, help='0:Kitti, 1:Elan')
 # path setting
 parser.add_argument("--weights-path", required=True, help='weights_folder/weights_name.pkl, ie.weights/bin4_dim4_group.pkl')
 parser.add_argument("--latest-weights", default=None, help='only input the weights-name.pkl') #in the same folder as above
@@ -55,18 +53,16 @@ def main():
 
     # model
     print("Loading all detected objects in dataset...")
-    if FLAGS.type == 0:
-        print('Kitti dataset')
-        train_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training'
-        dataset = Dataset(train_path, condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
-    elif FLAGS.type == 1 :
-        print('ELAN dataset')
-        dataset = ELAN_Dataset('Elan_3d_box', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    print('Kitti dataset')
+    train_path = os.path.abspath(os.path.dirname(__file__)) + '/Kitti/training'
+    dataset_L = Dataset(train_path, camera='left', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
+    dataset_R = Dataset(train_path, camera='right', condition=FLAGS.cond, num_heading_bin=FLAGS.bin)
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}
 
-    generator = data.DataLoader(dataset, **params)
+    train_loader_L = data.DataLoader(dataset_L, **params)
+    train_loader_R = data.DataLoader(dataset_R, **params)
 
     my_vgg = vgg.vgg19_bn(weights='DEFAULT')
     if is_cond:
@@ -80,6 +76,9 @@ def main():
     #scheduler = torch.optim.lr_scheduler.MultiStepLR(opt_SGD, milestones=[i for i in range(10, epochs, 20)], gamma=0.5)
 
     #dim_loss_func = nn.MSELoss().to(device) #org function
+    
+    W_consist = 0.3
+    W_ry = 0.1
 
     if is_group:
         print("< Train with GroupLoss >")
@@ -109,71 +108,83 @@ def main():
         passes = 0
         best = [0, 0] # epoch, best_mean
 
-    total_num_batches = int(len(dataset) / batch_size)#len(dataset)=40570
+    total_num_batches = int(len(dataset_L) / batch_size)#len(dataset)=40570
     
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0
         GT_alpha_list = list()
         pred_alpha_list = list()
         
-        for local_batch, local_labels in generator:
+        for (batch_L, labels_L), (batch_R, labels_R) in zip(train_loader_L, train_loader_R):
 
-            truth_residual = local_labels['heading_residual'].float().to(device)
-            truth_bin = local_labels['heading_class'].long().to(device)#這個角度在哪個class上
-            truth_dim = local_labels['Dimensions'].float().to(device)
+            gt_residual = labels_L['heading_residual'].float().to(device)
+            gt_bin = labels_L['heading_class'].long().to(device)#這個角度在哪個class上
+            gt_dim = labels_L['Dimensions'].float().to(device)
+            gt_theta_ray_L = labels_L['Theta_ray'].float().to(device)
+            gt_theta_ray_R = labels_L['Theta_ray'].float().to(device)
 
-            local_batch=local_batch.float().to(device)
-            [orient_residual, bin_conf, dim] = model(local_batch)
+            batch_L=batch_L.float().to(device)
+            batch_R=batch_R.float().to(device)
+            model.train()
+            [residual_L, bin_L, dim_L] = model(batch_L)
 
-            bin_loss = F.cross_entropy(bin_conf,truth_bin,reduction='mean').to(device)
-            orient_residual_loss, rediual_val = compute_residual_loss(orient_residual,truth_bin,truth_residual, device)
+            bin_loss = F.cross_entropy(bin_L, gt_bin,reduction='mean').to(device)
+            residual_loss, rediual_val = compute_residual_loss(residual_L, gt_bin, gt_residual, device)
             
             # calc GT_alpha,return list type
-            bin_argmax = torch.max(bin_conf, dim=1)[1]
-            pred_alpha = angle_per_class*bin_argmax + orient_residual[torch.arange(len(orient_residual)), bin_argmax]
-            GT_alpha = angle_per_class*truth_bin + truth_residual
+            bin_argmax = torch.max(bin_L, dim=1)[1]
+            pred_alpha = angle_per_class*bin_argmax + residual_L[torch.arange(len(residual_L)), bin_argmax]
+            GT_alpha = angle_per_class*gt_bin + gt_residual
             pred_alpha_list += pred_alpha.tolist()
             GT_alpha_list += GT_alpha.tolist()
 
-            loss_theta = bin_loss + orient_residual_loss
-            #dim_loss = F.mse_loss(dim, truth_dim, reduction='mean')  # org use mse_loss
-            #dim_loss = F.l1_loss(dim, truth_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
-            dim_loss = L1_loss_alpha(dim, truth_dim, GT_alpha, device) # 0613 try elevate dim performance            
+            loss_theta = bin_loss + residual_loss
+            #dim_loss = F.mse_loss(dim, gt_dim, reduction='mean')  # org use mse_loss
+            dim_loss = F.l1_loss(dim_L, gt_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
+            #dim_loss = L1_loss_alpha(dim, gt_dim, GT_alpha, device) # 0613 try elevate dim performance            
 
             loss = alpha * dim_loss + loss_theta
             #added loss
             if is_group and epoch > warm_up:
-                truth_Theta = local_labels['Theta'].float().to(device)
-                truth_Ry = local_labels['Ry'].float().to(device)
-                truth_group = local_labels['Group'].float().to(device)
+                truth_Theta = labels_L['Theta'].float().to(device)
+                truth_Ry = labels_L['Ry'].float().to(device)
+                truth_group = labels_L['Group'].float().to(device)
                 group_loss = group_loss_func(pred_alpha, truth_Theta, truth_group, device)
                 loss += 0.3 * group_loss
             else:
                 group_loss = torch.tensor(0.0).to(device)
 
+
+            # 0801 added consist loss
+            #model.eval()
+            reg_ry_L = compute_ry(bin_L, residual_L, gt_theta_ray_L, angle_per_class)
+            [residual_R, bin_R, dim_R] = model(batch_R)
+            reg_ry_R = compute_ry(bin_R, residual_R, gt_theta_ray_R, angle_per_class)
+
+            ry_angle_loss = F.l1_loss(torch.cos(reg_ry_L), torch.cos(reg_ry_R), reduction='mean')
+            consist_loss = F.l1_loss(dim_L, dim_R, reduction='mean')
+
+            loss += W_consist*consist_loss.to(device) + W_ry*ry_angle_loss.to(device)
+
             opt_SGD.zero_grad()
             loss.backward()
             opt_SGD.step()
 
-            if passes % 200 == 0 and is_group and epoch> warm_up:
-                print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[residual_loss:%.4f],[dim_loss:%.4f],[group_loss:%.4f]" \
-                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_residual_loss.item(), dim_loss.item(), group_loss.item()))
-                writer.add_scalar('pass/bin_loss', bin_loss, passes//200)
-                writer.add_scalar('pass/residual_loss', orient_residual_loss, passes//200)
-                writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
-                writer.add_scalar('pass/loss_theta', loss_theta, passes//200)
-                writer.add_scalar('pass/total_loss', loss, passes//200) 
-                writer.add_scalar('pass/group_loss', 0, passes//200) 
-
-            elif passes % 200 == 0:
+            if passes % 200 == 0:
                 print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[residual_loss:%.4f],[dim_loss:%.4f]" \
-                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_residual_loss.item(),dim_loss.item()))
+                    %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item()))
+                print("[consist_loss: %.4f],[Ry_angle_loss:%.4f]" \
+                    %(consist_loss.item(), ry_angle_loss.item()))
                 writer.add_scalar('pass/bin_loss', bin_loss, passes//200)
-                writer.add_scalar('pass/residual_loss', orient_residual_loss, passes//200)
+                writer.add_scalar('pass/residual_loss', residual_loss, passes//200)
                 writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
                 writer.add_scalar('pass/loss_theta', loss_theta, passes//200)
-                writer.add_scalar('pass/total_loss', loss, passes//200) 
-                writer.add_scalar('pass/group_loss', 0, passes//200)
+                writer.add_scalar('pass/total_loss', loss, passes//200)
+                writer.add_scalar('pass/consist_loss', consist_loss, passes//200)
+                writer.add_scalar('pass/ry_angle_loss', ry_angle_loss, passes//200)
+                if is_group and epoch > warm_up:
+                    print('[group_loss:%.4f]'%(group_loss.item()))
+                    writer.add_scalar('pass/group_loss', group_loss, passes//200)
 
             passes += 1
             curr_batch += 1
@@ -186,12 +197,14 @@ def main():
             best = [epoch, alpha_performance]
         writer.add_scalar('epoch/alpha_performance', alpha_performance, epoch)
         #write every epoch
-        writer.add_scalar('pass/bin_loss', bin_loss, epoch)
-        writer.add_scalar('pass/residual_loss', orient_residual_loss, epoch)
-        writer.add_scalar('pass/dim_loss', dim_loss, epoch)
+        writer.add_scalar('epoch/bin_loss', bin_loss, epoch)
+        writer.add_scalar('epoch/residual_loss', residual_loss, epoch)
+        writer.add_scalar('epoch/dim_loss', dim_loss, epoch)
         writer.add_scalar('epoch/loss_theta', loss_theta, epoch)
         writer.add_scalar('epoch/total_loss', loss, epoch) 
         writer.add_scalar('epoch/group_loss', group_loss, epoch)
+        writer.add_scalar('epoch/consist_loss', consist_loss, passes//200)
+        writer.add_scalar('epoch/ry_angle_loss', ry_angle_loss, passes//200)
         
         # visiualize https://zhuanlan.zhihu.com/p/103630393
         #tensorboard --logdir=./{log_foler} --port 8123
@@ -212,11 +225,23 @@ def main():
                     'passes': passes, # for continue training
                     'best': best,
                     'bin': FLAGS.bin, # for evaluate
-                    'cond': FLAGS.cond # for evaluate
+                    'cond': FLAGS.cond, # for evaluate
+                    'W_consist': W_consist,
+                    'W_ry': W_ry
                     }, name)
             print("====================")
             
     writer.close()
     #print(f'Elapsed time:{(time.time()-start)//60}min')
+
+def compute_ry(bin, residual, theta_rays, angle_per_class):
+    bin_argmax = torch.max(bin, dim=1)[1]
+    residual = residual[torch.arange(len(residual)), bin_argmax] 
+    alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
+    rys = list()
+    for a, ray in zip(alphas, theta_rays):
+        rys.append(angle_correction(a+ray))
+    return torch.Tensor(rys)
+
 if __name__=='__main__':
     main()

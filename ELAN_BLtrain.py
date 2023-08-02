@@ -52,7 +52,12 @@ def main():
     if is_cond:
         save_path += '_C'
 
-    os.makedirs(FLAGS.log_dir, exist_ok=True)
+    train_config = save_path.split("weights/")[1]
+    log_path = os.path.join(FLAGS.log_dir, train_config)
+    os.makedirs(log_path, exist_ok=True)
+    print(f'SAVE PATH:{save_path}, LOG PATH:{log_path}, config:{train_config}')
+    writer = SummaryWriter(log_path)
+    
     writer = SummaryWriter(FLAGS.log_dir)
     epochs = FLAGS.epoch
     batch_size = 16 #64 worse than 8
@@ -60,6 +65,7 @@ def main():
 
     # model
     train_dataset = ELAN_Dataset('Elan_3d_box', split='train', condition=FLAGS.cond, num_heading_bin=FLAGS.bin, normal=normalize_type)
+    #train_dataset = ELAN_Dataset('Elan_3d_box', split='trainval', condition=FLAGS.cond, num_heading_bin=FLAGS.bin, normal=normalize_type)
     print(f"Loading all training files in ELAN dataset:{len(train_dataset.ids)}")
 
     val_dataset = ELAN_Dataset('Elan_3d_box', split='val', condition=FLAGS.cond, num_heading_bin=FLAGS.bin, normal=normalize_type)
@@ -85,7 +91,8 @@ def main():
 
     if is_group:
         print("< Train with GroupLoss >")
-        group_loss_func = stdGroupLoss_heading_bin
+        #group_loss_func = stdGroupLoss_heading_bin
+        group_loss_func = GroupLoss #0801 adjust
     
     # Load latest-weights parameters
     weights_folder = FLAGS.weights_path.split('/')[0] + '/' + FLAGS.weights_path.split('/')[1]
@@ -138,6 +145,8 @@ def main():
                 truth_group = local_labels['Group'].float().to(device)
                 bin_argmax = torch.max(bin_conf, dim=1)[1]
                 pred_alpha = angle_per_class*bin_argmax + orient_residual[torch.arange(len(orient_residual)), bin_argmax]
+                #group_loss = group_loss_func(pred_alpha, truth_Theta, truth_group, device)
+                #(orient_batch, orientGT_batch, confGT_batch, group_batch, device)
                 group_loss = group_loss_func(pred_alpha, truth_Theta, truth_group, device)
             else:
                 group_loss = torch.tensor(0.0).to(device)
