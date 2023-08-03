@@ -42,6 +42,9 @@ def main():
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     normalize_type = FLAGS.normal
 
+    # make weights folder
+    weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
+    os.makedirs(weights_folder, exist_ok=True)
     save_path, log_path, train_config = name_by_parameters(FLAGS)
     print(f'SAVE PATH:{save_path}, LOG PATH:{log_path}, config:{train_config}')
     os.makedirs(log_path, exist_ok=True)
@@ -238,7 +241,7 @@ def main():
         writer.add_scalar(f'{train_config}/alpha_eval', alpha_performance, epoch)
         #write every epoch
             
-        if epoch % (epochs//2) == 0:
+        if epoch % epochs == 0:
                 name = save_path + f'_{epoch}.pkl'
                 print("====================")
                 print ("Done with epoch %s!" % (epoch))

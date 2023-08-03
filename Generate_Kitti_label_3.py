@@ -61,7 +61,8 @@ def main():
             
         with open(labels_2[i].replace('label_2', 'label_3'), 'w') as f:
             f.writelines(label_3)
-    print('DONE')
+        if i%500==0:
+            print(i)
 
 #https://github.com/HKUST-Aerial-Robotics/Stereo-RCNN/blob/63c6ab98b7a5e36c7bcfdec4529804fc940ee900/lib/model/utils/kitti_utils.py#L97C5-L97C25
 class FrameCalibrationData:
@@ -152,4 +153,6 @@ class FrameCalibrationData:
         self.tr_velodyne_to_cam0 = np.reshape(tr_v2c, (3, 4))
 
 if __name__ == '__main__':
+    print('START')
     main()
+    print('DONE')

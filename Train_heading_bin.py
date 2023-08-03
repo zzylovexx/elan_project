@@ -109,7 +109,7 @@ def main():
         passes = 0
         best = [0, 0] # epoch, best_mean
 
-    total_num_batches = int(len(dataset) / batch_size)#len(dataset)=40570
+    total_num_batches = len(generator)
     
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0
@@ -158,22 +158,10 @@ def main():
             if passes % 200 == 0 and is_group and epoch> warm_up:
                 print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[residual_loss:%.4f],[dim_loss:%.4f],[group_loss:%.4f]" \
                     %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_residual_loss.item(), dim_loss.item(), group_loss.item()))
-                writer.add_scalar('pass/bin_loss', bin_loss, passes//200)
-                writer.add_scalar('pass/residual_loss', orient_residual_loss, passes//200)
-                writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
-                writer.add_scalar('pass/loss_theta', loss_theta, passes//200)
-                writer.add_scalar('pass/total_loss', loss, passes//200) 
-                writer.add_scalar('pass/group_loss', 0, passes//200) 
 
             elif passes % 200 == 0:
                 print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[residual_loss:%.4f],[dim_loss:%.4f]" \
                     %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), orient_residual_loss.item(),dim_loss.item()))
-                writer.add_scalar('pass/bin_loss', bin_loss, passes//200)
-                writer.add_scalar('pass/residual_loss', orient_residual_loss, passes//200)
-                writer.add_scalar('pass/dim_loss', dim_loss, passes//200)
-                writer.add_scalar('pass/loss_theta', loss_theta, passes//200)
-                writer.add_scalar('pass/total_loss', loss, passes//200) 
-                writer.add_scalar('pass/group_loss', 0, passes//200)
 
             passes += 1
             curr_batch += 1

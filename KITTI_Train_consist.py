@@ -108,7 +108,7 @@ def main():
         passes = 0
         best = [0, 0] # epoch, best_mean
 
-    total_num_batches = int(len(dataset_L) / batch_size)#len(dataset)=40570
+    total_num_batches = len(train_loader_L)
     
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0

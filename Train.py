@@ -67,7 +67,7 @@ def main():
             print('Found previous checkpoint: %s at epoch %s'%(latest_model, first_epoch))
             print('Resuming training....')
 
-    total_num_batches = int(len(dataset) / batch_size)#len(dataset)=40570
+    total_num_batches = int(len(dataset) / batch_size)
 
     for epoch in range(first_epoch+1, epochs+1):
         curr_batch = 0
