@@ -2,8 +2,8 @@
 DATE="0803"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
-DEVICE=2
-TYPE=2 # 0 dim, 1 angle, 2 both, 3 BL
+DEVICE=1
+TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
 # hyper-parameter
 GROUP=0
 
