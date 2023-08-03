@@ -183,8 +183,9 @@ def main():
         writer.add_scalar(f'{train_config}/loss_theta', loss_theta, epoch)
         writer.add_scalar(f'{train_config}/total_loss', loss, epoch) 
         writer.add_scalar(f'{train_config}/group_loss', group_loss, epoch)
-        writer.add_scalar(f'{train_config}/consist_loss', consist_loss, epoch)
-        writer.add_scalar(f'{train_config}/ry_angle_loss', ry_angle_loss, epoch)
+        if type!=3:
+            writer.add_scalar(f'{train_config}/consist_loss', consist_loss, epoch)
+            writer.add_scalar(f'{train_config}/ry_angle_loss', ry_angle_loss, epoch)
         
         # visiualize https://zhuanlan.zhihu.com/p/103630393
         #tensorboard --logdir=./{log_foler} --port 8123
