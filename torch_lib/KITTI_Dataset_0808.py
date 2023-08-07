@@ -1,4 +1,4 @@
-import os, cv2
+import os, cv2, csv
 from torch.utils import data
 import numpy as np
 from library.ron_utils import angle_correction
@@ -21,7 +21,7 @@ def class2angle(cls, residual, bins):
     return angle
 
 class KITTI_Dataset(data.Dataset):
-    def __init__(self, cfg, split='train', camera_pose='left'):
+    def __init__(self, cfg, process, split='train', camera_pose='left', ):
         path = cfg['path']
         self.camera_pose = camera_pose.lower()
         if self.camera_pose == 'left':
@@ -42,19 +42,28 @@ class KITTI_Dataset(data.Dataset):
         self.cls_dims = dict()
         self.objects = self.get_objects(self.ids)
         self.targets = self.get_targets(self.objects)
+        self.transform = process
     
+    def __len__(self):
+        return len(self.objects)
+
+    def __getitem__(self, idx):
+        crop = self.objects[idx].crop
+        label = self.targets[idx]
+        return self.transform(crop), label
+
     def get_objects(self, ids):
         all_objects = list()
         for id_ in ids:
             label_txt = os.path.join(self.label_path, f'{id_}.txt')
-            cam_to_img = FrameCalibrationData(self.calib_path, f'{id_}.txt')
+            cam_to_img = FrameCalibrationData(os.path.join(self.calib_path, f'{id_}.txt'))
             img = cv2.cvtColor(cv2.imread(os.path.join(self.img_path, f'{id_}.png')), cv2.COLOR_BGR2RGB)
             objects = [Object3d(line, img, cam_to_img, self.camera_pose) for line in open(label_txt).readlines()]
             for obj in objects:
                 if obj.cls_type in self.cls_list and obj.level in self.diff_list:
                     all_objects.append(obj)
                     self.update_cls_dims(obj.cls_type, obj.dim)
-        return objects
+        return all_objects
 
     def update_cls_dims(self, cls, dim):
         if cls not in self.cls_dims.keys():
@@ -73,8 +82,8 @@ class KITTI_Dataset(data.Dataset):
             obj_target['Box2D']: obj.box2d
             obj_target['Alpha'] = obj.alpha
             obj_target['Ry'] = obj.ry
-            obj_target['Dim_delta']: obj.dim - self.get_cls_dim_avg(obj.cls_type)
-            obj_target['Location']: obj.pos
+            obj_target['Dim_delta']= obj.dim - self.get_cls_dim_avg(obj.cls_type)
+            obj_target['Location']= obj.pos
             obj_target['Heading_bin'], obj_target['Heading_res'] = angle2class(obj.alpha, self.bins)
             obj_target['Theta_ray'] = obj.theta_ray
             targets.append(obj_target)

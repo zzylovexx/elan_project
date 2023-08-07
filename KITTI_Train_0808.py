@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import vgg
 from torch.utils import data
+from torchvision import transforms
 
 from torch.utils.tensorboard import SummaryWriter
 import os
@@ -63,9 +64,12 @@ def main():
     # model
     print("Loading all detected objects in dataset...")
     print('Kitti dataset')
-    dataset_L = KITTI_Dataset(cfg, split='train', camera_pose='left')
-    dataset_R = KITTI_Dataset(cfg, split='train', camera_pose='right')
-    dataset_valid = KITTI_Dataset(cfg, split='val', camera_pose='left')
+    process = transforms.Compose([transforms.ToTensor(), 
+                                transforms.Resize([224,224], transforms.InterpolationMode.BICUBIC), 
+                                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+    dataset_L = KITTI_Dataset(cfg, process, split='train', camera_pose='left')
+    dataset_R = KITTI_Dataset(cfg, process, split='train', camera_pose='right')
+    dataset_valid = KITTI_Dataset(cfg, process, split='val', camera_pose='left')
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}
@@ -202,9 +206,9 @@ def main():
             
             for batch, labels in valid_loader:
                 
-                gt_residual = labels['heading_residual'].float().to(device)
-                gt_bin = labels['heading_class'].long().to(device)#這個角度在哪個class上
-                gt_dim = labels['Dimensions'].float().to(device)
+                gt_residual = labels['Heading_res'].float().to(device)
+                gt_bin = labels['Heading_bin'].long().to(device)#這個角度在哪個class上
+                gt_dim = labels['Dim_delta'].float().to(device)
                 gt_theta_ray_L = labels['Theta_ray'].float().to(device)
 
                 batch=batch.float().to(device)
