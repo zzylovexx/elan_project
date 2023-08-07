@@ -363,6 +363,8 @@ class TrackingObject(object):
     def __init__(self, line):
         self.line = line
         self.class_ = None
+        self.truncated = None
+        self.occluded = None
         self.box2d = None
         self.dims = None
         self.locs = None
@@ -378,11 +380,13 @@ class TrackingObject(object):
         elements = line.split()
         for j in range(1, len(elements)):
             elements[j] = float(elements[j])
+        self.class_ = elements[0]
+        self.truncated = [elements[1]]
+        self.occluded = [elements[2]]
+        self.alphas = [elements[3]]
         top_left = [int(round(elements[4])), int(round(elements[5]))]
         btm_right = [int(round(elements[6])), int(round(elements[7]))]
         self.box2d = np.array([top_left, btm_right])
-        self.class_ = elements[0]
-        self.alphas = [elements[3]]
         self.dims = [[elements[8], elements[9], elements[10]]]
         self.locs = [[elements[11], elements[12], elements[13]]]
         self.rys = [elements[14]]
@@ -391,14 +395,23 @@ class TrackingObject(object):
     
     def update_info(self, obj):
         self.box2d = obj.box2d
+        self.truncated += obj.truncated
+        self.occluded += obj.occluded
         self.alphas += obj.alphas
         self.dims += obj.dims
         self.locs += obj.locs
         self.rys += obj.rys
         self.lines.append(obj.line)
-        
+    
     def record_frames(self, frame_id):
         self.frames.append(frame_id)
+    
+    def print_info(self):
+        print('Box2d', self.box2d[0], self.box2d[1])
+        print('Loc', self.locs)
+        print('Dim', self.dims)
+        print(f'Alpha:{self.alphas}, Ry:{self.rys}')
+        print(f'Trun:{self.truncated}, Occ:{self.occluded}')
 
 def iou_2d(box1, box2):
     box1 = box1.flatten()
