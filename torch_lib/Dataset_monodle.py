@@ -290,6 +290,6 @@ class DetectedObject:
         return batch
     
     #offset ratio -1~1
-    def calc_offset_ratio(self, d2_box, d3_location, cam_to_img):
-        return calc_center_offset_ratio(d2_box, d3_location, cam_to_img)
+    def calc_offset_ratio(self, box_2d, d3_location, cam_to_img):
+        return calc_center_offset_ratio(box_2d, d3_location, cam_to_img)
         

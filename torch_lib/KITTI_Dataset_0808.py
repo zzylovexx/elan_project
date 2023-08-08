@@ -113,7 +113,7 @@ class KITTI_Dataset(data.Dataset):
             obj_target = dict()
             obj_target['Class'] = obj_L.cls_type
             obj_target['Truncation'] = obj_L.trucation
-            obj_target['Box2D']: obj_L.box2d
+            obj_target['box_2d']: obj_L.box_2d
             obj_target['Alpha'] = obj_L.alpha
             obj_target['Ry'] = obj_L.ry
             obj_target['Dim_delta']= obj_L.dim - self.get_cls_dim_avg(obj_L.cls_type)
@@ -125,7 +125,7 @@ class KITTI_Dataset(data.Dataset):
             obj_target = dict()
             obj_target['Class'] = obj_R.cls_type
             obj_target['Truncation'] = obj_R.trucation
-            obj_target['Box2D']: obj_R.box2d
+            obj_target['box_2d']: obj_R.box_2d
             obj_target['Alpha'] = obj_R.alpha
             obj_target['Ry'] = obj_R.ry
             obj_target['Dim_delta']= obj_R.dim - self.get_cls_dim_avg(obj_R.cls_type)
@@ -145,7 +145,7 @@ class Object3d(object):
         self.occlusion = float(label[2])  # 0:fully visible 1:partly occluded 2:largely occluded 3:unknown
         self.alpha = float(label[3])
         # str->float->np.int32
-        self.box2d = np.array((float(label[4]), float(label[5]), float(label[6]), float(label[7])), dtype=np.int32)
+        self.box_2d = np.array((float(label[4]), float(label[5]), float(label[6]), float(label[7])), dtype=np.int32)
         self.h = float(label[8])
         self.w = float(label[9])
         self.l = float(label[10])
@@ -156,17 +156,17 @@ class Object3d(object):
         self.score = float(label[15]) if label.__len__() == 16 else -1.0
         self.level_str = None
         self.level = self.get_obj_level()
-        self.crop = img[self.box2d[1]:self.box2d[3]+1, self.box2d[0]:self.box2d[2]+1]
+        self.crop = img[self.box_2d[1]:self.box_2d[3]+1, self.box_2d[0]:self.box_2d[2]+1]
         self.calib = calib
         self.camera_pose = camera_pose.lower()
-        self.theta_ray = self.calc_theta_ray(img.shape[1], self.box2d, calib, camera_pose)
+        self.theta_ray = self.calc_theta_ray(img.shape[1], self.box_2d, calib, camera_pose)
     
-    def calc_theta_ray(self, width, box2d, cam_to_img, camera_pose):#透過跟2d bounding box 中心算出射線角度
+    def calc_theta_ray(self, width, box_2d, cam_to_img, camera_pose):#透過跟2d bounding box 中心算出射線角度
         if camera_pose == 'left':
             fovx = 2 * np.arctan(width / (2 * cam_to_img.p2[0][0]))
         elif camera_pose == 'right':
             fovx = 2 * np.arctan(width / (2 * cam_to_img.p3[0][0]))
-        x_center = (box2d[0] + box2d[2]) // 2
+        x_center = (box_2d[0] + box_2d[2]) // 2
         dx = x_center - (width // 2)
         mult = 1 if dx >=0 else -1
         dx = abs(dx)
@@ -174,7 +174,7 @@ class Object3d(object):
         return angle_correction(angle)
                                 
     def get_obj_level(self):
-        height = float(self.box2d[3]) - float(self.box2d[1]) + 1
+        height = float(self.box_2d[3]) - float(self.box_2d[1]) + 1
 
         if self.trucation == -1:
             self.level_str = 'DontCare'
@@ -212,8 +212,8 @@ class Object3d(object):
         return corners3d
 
     def to_str(self):
-        print_str = '%s %.3f %.3f %.3f box2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f' \
-                     % (self.cls_type, self.trucation, self.occlusion, self.alpha, self.box2d, self.h, self.w, self.l,
+        print_str = '%s %.3f %.3f %.3f box_2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f' \
+                     % (self.cls_type, self.trucation, self.occlusion, self.alpha, self.box_2d, self.h, self.w, self.l,
                         self.pos, self.ry)
         return print_str
     

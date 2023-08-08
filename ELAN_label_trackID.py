@@ -13,7 +13,7 @@ def tracking_obj_by_labels(labels, images, WRITE_FILE=False, folder='renew_label
         objects = [TrackingObject(line) for line in lines]
         for obj_idx, obj in enumerate(objects):
             # first frame
-            top_left, btm_right = obj.box2d
+            top_left, btm_right = obj.box_2d
             crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1]
             if len(tracking_dict.keys()) == 0:
                 tracking_dict[obj_idx] = obj
@@ -21,11 +21,11 @@ def tracking_obj_by_labels(labels, images, WRITE_FILE=False, folder='renew_label
                 tracking_dict[obj_idx].crops.append(crop)
                 new_lines[obj_idx] += f' {obj_idx}'
             else:
-                now_box2d = obj.box2d
+                now_box_2d = obj.box_2d
                 match = False
                 for key in tracking_dict.keys():
-                    last_box2d = tracking_dict[key].box2d
-                    iou_value = iou_2d(now_box2d, last_box2d)
+                    last_box_2d = tracking_dict[key].box_2d
+                    iou_value = iou_2d(now_box_2d, last_box_2d)
                     last_frame = tracking_dict[key].frames[-1]
                     if iou_value > 0.6 and idx - last_frame < 5:
                         #print(f'MATCHED:{iou_value:.2f}')

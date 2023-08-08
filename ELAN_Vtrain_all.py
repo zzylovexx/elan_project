@@ -98,7 +98,7 @@ def main():
             if obj_count == 0:
                 continue
             objects = [TrackingObject(line) for line in lines]
-            crops = [process(img[obj.box2d[0][1]:obj.box2d[1][1]+1 ,obj.box2d[0][0]:obj.box2d[1][0]+1]) for obj in objects]
+            crops = [process(img[obj.box_2d[0][1]:obj.box_2d[1][1]+1 ,obj.box_2d[0][0]:obj.box_2d[1][0]+1]) for obj in objects]
             crops = torch.stack(crops).to(device)
 
             gt_labels = get_object_label(objects, bin_num)
@@ -221,7 +221,7 @@ def main():
                 if obj_count == 0:
                     continue
                 objects = [TrackingObject(line) for line in lines]
-                crops = [process(img[obj.box2d[0][1]:obj.box2d[1][1]+1 ,obj.box2d[0][0]:obj.box2d[1][0]+1]) for obj in objects]
+                crops = [process(img[obj.box_2d[0][1]:obj.box_2d[1][1]+1 ,obj.box_2d[0][0]:obj.box_2d[1][0]+1]) for obj in objects]
                 crops = torch.stack(crops).to(device)
 
                 gt_labels = get_object_label(objects, bin_num)

@@ -3,8 +3,9 @@ import numpy as np
 from .Plotting import *
 
 def calc_theta_ray(width, box_2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
+    box_2d = np.array(box_2d).flatten()
     fovx = 2 * np.arctan(width / (2 * proj_matrix[0][0]))
-    center = (box_2d[1][0] + box_2d[0][0]) / 2
+    center = (box_2d[2] + box_2d[0]) / 2
     dx = center - (width / 2)
 
     mult = 1
@@ -19,37 +20,39 @@ def calc_theta_ray(width, box_2d, proj_matrix):#透過跟2d bounding box 中心�
 def sign(num):
     return 1 if num>=0 else -1
 
-def get_box_center(d2_box):
-    return [(d2_box[0][0]+d2_box[1][0])//2, (d2_box[0][1]+d2_box[1][1])//2]
+def get_box_center(box_2d):
+    box_2d = np.array(box_2d).flatten()
+    return [(box_2d[0]+box_2d[2])//2, (box_2d[1]+box_2d[3])//2]
 
-def get_box_size(d2_box):
-    width = max(d2_box[1][0]-d2_box[0][0], 1)
-    height = max(d2_box[1][1]-d2_box[0][1], 1)
+def get_box_size(box_2d):
+    box_2d = np.array(box_2d).flatten()
+    width = max(box_2d[2]-box_2d[0], 1)
+    height = max(box_2d[3]-box_2d[1], 1)
     return width, height
 
-def calc_offset(d2_box, d3_location, cam_to_img):
-    d2_center = get_box_center(d2_box)
+def calc_offset(box_2d, d3_location, cam_to_img):
+    d2_center = get_box_center(box_2d)
     proj_center = project_3d_pt(d3_location, cam_to_img)
-    d2_box_size = get_box_size(d2_box)
+    box_2d_size = get_box_size(box_2d)
     offset_x = proj_center[0] - d2_center[0] #pixel
     offset_y = proj_center[1] - d2_center[1]
     return offset_x, offset_y
 
 #offset ratio -1~1
-def calc_center_offset_ratio(d2_box, d3_location, cam_to_img):
-    d2_center = get_box_center(d2_box)
+def calc_center_offset_ratio(box_2d, d3_location, cam_to_img):
+    d2_center = get_box_center(box_2d)
     proj_center = project_3d_pt(d3_location, cam_to_img)
-    d2_box_size = get_box_size(d2_box)
+    box_2d_size = get_box_size(box_2d)
     
-    if d2_box_size[0] < 10:
+    if box_2d_size[0] < 10:
         offset_x = 0
     else:
-        offset_x = (proj_center[0] - d2_center[0]) / (d2_box_size[0]//2)
+        offset_x = (proj_center[0] - d2_center[0]) / (box_2d_size[0]//2)
 
-    if d2_box_size[1] < 10:
+    if box_2d_size[1] < 10:
         offset_y = 0
     else:
-        offset_y = (proj_center[1] - d2_center[1]) / (d2_box_size[1]//2)
+        offset_y = (proj_center[1] - d2_center[1]) / (box_2d_size[1]//2)
     
     if abs(offset_x) > 1: 
         offset_x = sign(offset_x)*1.0
@@ -58,9 +61,9 @@ def calc_center_offset_ratio(d2_box, d3_location, cam_to_img):
 
     return [offset_x, offset_y]
 
-def offset_to_projected_center(d2_box, offset_ratio):
-    d2_center = get_box_center(d2_box)
-    box_size = get_box_size(d2_box)
+def offset_to_projected_center(box_2d, offset_ratio):
+    d2_center = get_box_center(box_2d)
+    box_size = get_box_size(box_2d)
     proj_center = [0, 0]
     proj_center[0] = d2_center[0] + (offset_ratio[0]*box_size[0])//2
     proj_center[1] = d2_center[1] + (offset_ratio[1]*box_size[1])//2
@@ -280,6 +283,26 @@ def laplacian_aleatoric_uncertainty_loss(input, target, log_variance, reduction=
     return loss.mean() if reduction == 'mean' else loss.sum()
 
 
+# ELAN_method
+def calc_theta_corner(width, box_2d, proj_matrix):
+    img_center = width/2
+    offset = min(abs(img_center-box_2d[0][0]), abs(img_center-box_2d[1][0]))
+    theta = np.arctan(offset/proj_matrix[0][0])
+    return theta
+
+def calc_depth_by_width_corner(img_W, box_2d, cam_to_img, obj_W, obj_L):
+    fovx = 2 * np.arctan(img_W / (2 * cam_to_img[0][0]))
+    theta = calc_theta_corner(img_W, box_2d, cam_to_img)
+    # delta / Length = tan() (meters) caused by vision
+    delta = obj_L * np.tan(theta)
+    # (Wobj+delta) / Wview = box-w / img-w 可以算出Wview
+    box_W = get_box_size(box_2d)[0]
+    Wview = (obj_W+delta)*(img_W/box_W) 
+    #print('radian:', theta,', Delta m:', delta, ', Wview m:', Wview)
+    depth = Wview/2 / np.tan(fovx/2)
+    return depth
+
+# my_method
 def calc_depth_with_alpha_theta(img_W, box_2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0):
     fovx = 2 * np.arctan(img_W / (2 * cam_to_img[0][0]))
     box_W = get_box_size(box_2d)[0] / (1-trun+0.01) #assume truncate related to W only
@@ -315,22 +338,24 @@ def box_depth_error_calculation(depth_labels, depth_Calcs, out_range=10):
     class_cal = np.copy(depth_Calcs)
     for depth in [0, 10, 20, 30, 40, 50]:
         class_GT_depth = class_GT[np.logical_and(class_GT >= depth, class_GT < depth+10.)]
-        print(f'\tnum of depth {depth}-{depth+10}:', class_GT_depth.shape[0], end=' ')
+        print(f'\t[depth {depth}-{depth+10}] num:', class_GT_depth.shape[0], end=' ')
         if class_GT_depth.shape[0] == 0:
             print()
             continue
         class_cal_depth = class_cal[np.logical_and(class_GT >= depth, class_GT < depth+10.)]
         cal_delta = abs(class_GT_depth - class_cal_depth)
         #cal_delta, _, out_indexes = filter_out_of_range(cal_delta, out_range) # remove prediction out of 10
-        print(f'  abs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}')
+        print(f'  abs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}', end='')
+        print(f'  max_delta :{cal_delta.max():.3f}m')
 
     # after 60 m
     class_GT_depth = class_GT[class_GT >= 60.]
-    print(f'\tnum of depth {depth+10}+:', class_GT_depth.shape[0], end='   ')
+    print(f'\t[depth {depth+10}+] num:', class_GT_depth.shape[0], end='')
     class_cal_depth = class_cal[class_GT >= 60.]
     cal_delta = abs(class_GT_depth - class_cal_depth)
     #cal_delta, _, out_indexes = filter_out_of_range(cal_delta, out_range) # remove prediction out of 10
-    print(f'  abs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}')
+    print(f'  abs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}', end='')
+    print(f'  max_delta :{cal_delta.max():.3f}m')
     
     total = abs(class_GT-class_cal)
     print(f'[Total] mean:{total.mean():.3f}, std:{total.std():.3f}')
@@ -365,7 +390,7 @@ class TrackingObject(object):
         self.class_ = None
         self.truncated = None
         self.occluded = None
-        self.box2d = None
+        self.box_2d = None
         self.dims = None
         self.locs = None
         self.rys = None
@@ -386,7 +411,7 @@ class TrackingObject(object):
         self.alphas = [elements[3]]
         top_left = [int(round(elements[4])), int(round(elements[5]))]
         btm_right = [int(round(elements[6])), int(round(elements[7]))]
-        self.box2d = np.array([top_left, btm_right])
+        self.box_2d = np.array([top_left, btm_right])
         self.dims = [[elements[8], elements[9], elements[10]]]
         self.locs = [[elements[11], elements[12], elements[13]]]
         self.rys = [elements[14]]
@@ -394,7 +419,7 @@ class TrackingObject(object):
             self.id = int(elements[15])
     
     def update_info(self, obj):
-        self.box2d = obj.box2d
+        self.box_2d = obj.box_2d
         self.truncated += obj.truncated
         self.occluded += obj.occluded
         self.alphas += obj.alphas
@@ -407,7 +432,7 @@ class TrackingObject(object):
         self.frames.append(frame_id)
     
     def print_info(self):
-        print('Box2d', self.box2d[0], self.box2d[1])
+        print('box_2d', self.box_2d[0], self.box_2d[1])
         print('Loc', self.locs)
         print('Dim', self.dims)
         print(f'Alpha:{self.alphas}, Ry:{self.rys}')

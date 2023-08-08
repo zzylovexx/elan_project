@@ -68,7 +68,7 @@ def main():
         CLASSes = list()
         TRUNCATEDs = list()
         OCCLUDEDs = list()
-        BOX2Ds = list()
+        box_2ds = list()
         CROPs_tensor = list()
         Alphas = list()
         THETAs = list()
@@ -91,7 +91,7 @@ def main():
                 top_left = (int(round(elements[4])), int(round(elements[5])))
                 btm_right = (int(round(elements[6])), int(round(elements[7])))
                 box = [top_left, btm_right]
-                BOX2Ds.append(box)
+                box_2ds.append(box)
                 #cv2 is(H,W,3)
                 crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1] 
                 crop = process(crop)
@@ -121,7 +121,7 @@ def main():
         #write pred_label.txt 
         with open(labels[i].replace(label_root, result_root),'w') as new_f:
             pred_labels = ''
-            for class_, truncated, occluded, delta, alpha, theta, box_2d, bias, gt in zip(CLASSes, TRUNCATEDs, OCCLUDEDs, delta_DIMs, Alphas, THETAs, BOX2Ds, depth_BIAs, depth_GT):
+            for class_, truncated, occluded, delta, alpha, theta, box_2d, bias, gt in zip(CLASSes, TRUNCATEDs, OCCLUDEDs, delta_DIMs, Alphas, THETAs, box_2ds, depth_BIAs, depth_GT):
                 delta = delta.cpu().data #torch->numpy
                 alpha = alpha.cpu().data #torch->numpy
                 bias = bias.cpu().data

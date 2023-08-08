@@ -55,7 +55,7 @@ def main():
         CLASSes = list()
         TRUNCATEDs = list()
         OCCLUDEDs = list()
-        BOX2Ds = list()
+        box_2ds = list()
         CROPs_tensor = list()
         Alphas = list()
         THETAs = list()
@@ -77,7 +77,7 @@ def main():
                 top_left = (int(round(elements[4])), int(round(elements[5])))
                 btm_right = (int(round(elements[6])), int(round(elements[7])))
                 box = [top_left, btm_right]
-                BOX2Ds.append(box)
+                box_2ds.append(box)
                 #cv2 is(H,W,3)
                 crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1] 
                 crop = process(crop)
@@ -109,7 +109,7 @@ def main():
         #write pred_label.txt 
         with open(labels[i].replace(label_root, pred_label_root),'w') as new_f:
             pred_labels = ''
-            for class_, truncated, occluded, delta, alpha, theta, box_2d in zip(CLASSes, TRUNCATEDs, OCCLUDEDs, delta_DIMs, Alphas, THETAs, BOX2Ds):
+            for class_, truncated, occluded, delta, alpha, theta, box_2d in zip(CLASSes, TRUNCATEDs, OCCLUDEDs, delta_DIMs, Alphas, THETAs, box_2ds):
                 delta = delta.cpu().data.numpy() #torch->numpy
                 alpha = alpha.cpu().data.numpy() #torch->numpy
                 dim = delta + averages_all.get_item(class_)
