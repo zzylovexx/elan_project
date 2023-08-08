@@ -67,11 +67,16 @@ class KITTI_Dataset(data.Dataset):
 
     def update_cls_dims(self, cls, dim):
         if cls not in self.cls_dims.keys():
-            self.cls_dims[cls] = list()
-        self.cls_dims[cls].append(dim)
+            self.cls_dims[cls] = dict()
+            self.cls_dims[cls]['dim_sum'] = np.array(dim, dtype=np.float32)
+            self.cls_dims[cls]['count'] = 1
+        else:
+            self.cls_dims[cls]['dim_sum']+= np.array(dim, dtype=np.float32)
+            self.cls_dims[cls]['count'] += 1
     
     def get_cls_dim_avg(self, cls):
-        return np.mean(self.cls_dims[cls], axis=0)
+
+        return self.cls_dims[cls]['dim_sum'] / self.cls_dims[cls]['count']
     
     def get_targets(self, objects):
         targets = list()

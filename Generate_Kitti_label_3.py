@@ -29,7 +29,7 @@ def main():
             for j in range(1,len(elements)):
                 elements[j] = float(elements[j])
             truncated = elements[1]
-            occluded = elements[2]
+            occluded = int(elements[2])
             alpha = elements[3]
             left = int(round(elements[4]))
             top = int(round(elements[5]))
