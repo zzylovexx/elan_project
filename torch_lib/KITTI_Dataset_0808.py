@@ -21,16 +21,18 @@ def class2angle(cls, residual, bins):
     return angle
 
 class KITTI_Dataset(data.Dataset):
-    def __init__(self, cfg, process, split='train', camera_pose='left', ):
+    def __init__(self, cfg, process, camera_pose='left', split='train'):
         path = cfg['path']
         self.camera_pose = camera_pose.lower()
-        if self.camera_pose == 'left':
-            self.label_path = os.path.join(path, 'label_2')
-            self.img_path = os.path.join(path, 'image_2')
-        elif self.camera_pose == 'right':
-            self.label_path = os.path.join(path, 'label_3')
-            self.img_path = os.path.join(path, 'image_3')
-            
+        self.label2_path = os.path.join(path, 'label_2')
+        self.img2_path = os.path.join(path, 'image_2')
+        if split=='train':
+            self.label3_path = os.path.join(path, 'label_3')
+            self.img3_path = os.path.join(path, 'image_3')
+        elif split=='val':
+            self.label3_path = self.label2_path
+            self.img3_path = self.img2_path
+
         self.calib_path = os.path.join(path, 'calib') 
         self.extra_label_path = os.path.join(path, 'extra_label') #using generated extra label
         self.bins = cfg['bins']
@@ -40,30 +42,56 @@ class KITTI_Dataset(data.Dataset):
         self.split = os.path.join('Kitti/ImageSets', split + '.txt')
         self.ids = [x.strip() for x in open(self.split).readlines()]
         self.cls_dims = dict()
-        self.objects = self.get_objects(self.ids)
-        self.targets = self.get_targets(self.objects)
+        self.objects_L, self.objects_R, = self.get_objects(self.ids)
+        self.targets_L, self.targets_R, = self.get_targets(self.objects_L, self.objects_R)
         self.transform = process
     
     def __len__(self):
-        return len(self.objects)
+        return len(self.objects_L)
+    # TO BE FIXED
+    '''
+    def __getitem__(self, idx, camera_pose):
+        if camera_pose.lower() == 'left':
+            objects = self.objects_L
+            targets = self.targets_L
+        elif camera_pose.lower() == 'right':
+            objects = self.objects_R
+            targets = self.targets_R
 
+        crop = objects[idx].crop
+        label = targets[idx]
+        return self.transform(crop), label
+    '''
     def __getitem__(self, idx):
-        crop = self.objects[idx].crop
-        label = self.targets[idx]
+        if self.camera_pose == 'left':
+            objects = self.objects_L
+            targets = self.targets_L
+        elif self.camera_pose == 'right':
+            objects = self.objects_R
+            targets = self.targets_R
+
+        crop = objects[idx].crop
+        label = targets[idx]
         return self.transform(crop), label
 
     def get_objects(self, ids):
-        all_objects = list()
+        all_objects_L = list()
+        all_objects_R = list()
         for id_ in ids:
-            label_txt = os.path.join(self.label_path, f'{id_}.txt')
+            label2_txt = os.path.join(self.label2_path, f'{id_}.txt')
+            label3_txt = os.path.join(self.label3_path, f'{id_}.txt')
             cam_to_img = FrameCalibrationData(os.path.join(self.calib_path, f'{id_}.txt'))
-            img = cv2.cvtColor(cv2.imread(os.path.join(self.img_path, f'{id_}.png')), cv2.COLOR_BGR2RGB)
-            objects = [Object3d(line, img, cam_to_img, self.camera_pose) for line in open(label_txt).readlines()]
-            for obj in objects:
-                if obj.cls_type in self.cls_list and obj.level in self.diff_list:
-                    all_objects.append(obj)
-                    self.update_cls_dims(obj.cls_type, obj.dim)
-        return all_objects
+            img2 = cv2.cvtColor(cv2.imread(os.path.join(self.img2_path, f'{id_}.png')), cv2.COLOR_BGR2RGB)
+            img3 = cv2.cvtColor(cv2.imread(os.path.join(self.img3_path, f'{id_}.png')), cv2.COLOR_BGR2RGB)
+            objects_L = [Object3d(line, img2, cam_to_img, 'left') for line in open(label2_txt).readlines()]
+            objects_R = [Object3d(line, img3, cam_to_img, 'right') for line in open(label3_txt).readlines()]
+            # use left image obj-level as standard, or box-height results in differenet difficulty
+            for idx, obj_L in enumerate(objects_L):
+                if obj_L.cls_type in self.cls_list and obj_L.level in self.diff_list:
+                    all_objects_L.append(obj_L)
+                    all_objects_R.append(objects_R[idx])
+                    self.update_cls_dims(obj_L.cls_type, obj_L.dim)
+        return all_objects_L, all_objects_R
 
     def update_cls_dims(self, cls, dim):
         if cls not in self.cls_dims.keys():
@@ -75,24 +103,37 @@ class KITTI_Dataset(data.Dataset):
             self.cls_dims[cls]['count'] += 1
     
     def get_cls_dim_avg(self, cls):
-
         return self.cls_dims[cls]['dim_sum'] / self.cls_dims[cls]['count']
     
-    def get_targets(self, objects):
-        targets = list()
-        for obj in objects:
+    def get_targets(self, objects_L, objects_R):
+        targets_L = list()
+        targets_R = list()
+        for obj_L, obj_R in zip(objects_L, objects_R):
+            # left image
             obj_target = dict()
-            obj_target['Class'] = obj.cls_type
-            obj_target['Truncation'] = obj.trucation
-            obj_target['Box2D']: obj.box2d
-            obj_target['Alpha'] = obj.alpha
-            obj_target['Ry'] = obj.ry
-            obj_target['Dim_delta']= obj.dim - self.get_cls_dim_avg(obj.cls_type)
-            obj_target['Location']= obj.pos
-            obj_target['Heading_bin'], obj_target['Heading_res'] = angle2class(obj.alpha, self.bins)
-            obj_target['Theta_ray'] = obj.theta_ray
-            targets.append(obj_target)
-        return targets
+            obj_target['Class'] = obj_L.cls_type
+            obj_target['Truncation'] = obj_L.trucation
+            obj_target['Box2D']: obj_L.box2d
+            obj_target['Alpha'] = obj_L.alpha
+            obj_target['Ry'] = obj_L.ry
+            obj_target['Dim_delta']= obj_L.dim - self.get_cls_dim_avg(obj_L.cls_type)
+            obj_target['Location']= obj_L.pos
+            obj_target['Heading_bin'], obj_target['Heading_res'] = angle2class(obj_L.alpha, self.bins)
+            obj_target['Theta_ray'] = obj_L.theta_ray
+            targets_L.append(obj_target)
+            # right image
+            obj_target = dict()
+            obj_target['Class'] = obj_R.cls_type
+            obj_target['Truncation'] = obj_R.trucation
+            obj_target['Box2D']: obj_R.box2d
+            obj_target['Alpha'] = obj_R.alpha
+            obj_target['Ry'] = obj_R.ry
+            obj_target['Dim_delta']= obj_R.dim - self.get_cls_dim_avg(obj_R.cls_type)
+            obj_target['Location']= obj_R.pos
+            obj_target['Heading_bin'], obj_target['Heading_res'] = angle2class(obj_R.alpha, self.bins)
+            obj_target['Theta_ray'] = obj_R.theta_ray
+            targets_R.append(obj_target)
+        return targets_L, targets_R
 
 # modified from monodle
 class Object3d(object):
