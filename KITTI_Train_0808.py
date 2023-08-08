@@ -95,7 +95,10 @@ def main():
         print("< Train with GroupLoss >")
         group_loss_func = stdGroupLoss_heading_bin
     
-    total_num_batches = len(train_loader_L) 
+    total_num_batches = len(train_loader_L)
+    print('BATCH')
+    print(len(train_loader_L))
+    print(len(train_loader_R))
     passes = 0
     for epoch in range(1, epochs+1):
         curr_batch = 0
