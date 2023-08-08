@@ -10,10 +10,10 @@ import argparse
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--device", type=int, default=0, help='select cuda index')
+parser.add_argument("--device", '-D', type=int, default=0, help='select cuda index')
 # path setting
-parser.add_argument("--weights-path", required=True, default='weights/epoch_20.pkl', help='weighs path')
-parser.add_argument("--result-path", required=True, default='Result', help='path (folder name) of the generated pred-labels')
+parser.add_argument("--weights-path", '-W_PATH', required=True, default='weights/epoch_20.pkl', help='weighs path')
+parser.add_argument("--result-path", '-R_PATH', required=True, default='Result', help='path (folder name) of the generated pred-labels')
 
 def main():
 
@@ -137,6 +137,47 @@ def main():
         if i%500==0:
             print(i)
     #print('Done, take {} min {:.2f} sec'.format((time.time()-start)//60, (time.time()-start)%60)) #around 10min
+    #evaluation(result_root)
+
+def evaluation(result_root):
+    valset = [x.strip() for x in open('Kitti/ImageSets/val.txt').readlines()]
+    dim_GT = list()
+    dim_ELAN = list()
+    depth_GT = list()
+    depth_ELAN = list()
+    alpha_GT = list()
+    alpha_ELAN = list()
+
+    for id_ in valset:
+        gt_lines = [x.strip() for x in open(f'Kitti/training/{id_}.txt').readlines()]
+        gt_objects = [TrackingObject(line) for line in gt_lines if line.split()[0]=='Car']
+        for obj in gt_objects:
+            dim_GT.append(obj.dims[0])
+            depth_GT.append(obj.locs[0][2])
+            alpha_GT.append(obj.alphas[0])
+            
+        pred_lines = [x.strip() for x in open(f'{result_root}/label_2/{id_}.txt').readlines()]
+        pred_objects = [TrackingObject(line) for line in pred_lines if line.split()[0]=='Car']
+        for obj in pred_objects:
+            dim_ELAN.append(obj.dims[0])
+            depth_ELAN.append(obj.locs[0][2])
+            alpha_ELAN.append(obj.alphas[0])
+
+    dim_GT = np.array(dim_GT)
+    dim_ELAN = np.array(dim_ELAN)
+    depth_GT = np.array(depth_GT)
+    depth_ELAN = np.array(depth_ELAN)
+    alpha_GT = np.array(alpha_GT)
+    alpha_ELAN = np.array(alpha_ELAN)
+
+    depth_diff = depth_GT-depth_ELAN
+    alpha_diff = np.cos(alpha_GT - alpha_ELAN)
+    dim_diff = np.mean(abs(dim_GT-dim_ELAN), axis=0)
+    print(f'[Depth diff] abs_mean: {abs(depth_diff).mean():.4f}')
+    print(f'[Alpha diff] abs_mean: {1-alpha_diff.mean():.4f}')
+    print(f'[DIM diff] H:{dim_diff[0]:.4f}, W:{dim_diff[1]:.4f}, L:{dim_diff[2]:.4f}')
+    print('[Depth error]')
+    box_depth_error_calculation(depth_GT, depth_ELAN, 5)
 
 if __name__=='__main__':
     main()

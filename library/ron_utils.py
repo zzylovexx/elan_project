@@ -23,8 +23,9 @@ def get_box_center(d2_box):
     return [(d2_box[0][0]+d2_box[1][0])//2, (d2_box[0][1]+d2_box[1][1])//2]
 
 def get_box_size(d2_box):
-    width = max(d2_box[1][0]-d2_box[0][0], 1)
-    height = max(d2_box[1][1]-d2_box[0][1], 1)
+    d2_box = np.array(d2_box).flatten()
+    width = max(d2_box[2]-d2_box[0], 1)
+    height = max(d2_box[3]-d2_box[1], 1)
     return width, height
 
 def calc_offset(d2_box, d3_location, cam_to_img):
