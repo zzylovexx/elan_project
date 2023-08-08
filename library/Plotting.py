@@ -78,7 +78,7 @@ def plot_3d_pts(img, pts, center, calib_file=None, cam_to_img=None, relative=Fal
 
 
 
-def plot_3d_box(img, cam_to_img, ry, dimension, center):
+def plot_3d_box(img, cam_to_img, ry, dimension, center, thickness=3):
 
     # plot_3d_pts(img, [center], center, calib_file=calib_file, cam_to_img=cam_to_img)
 
@@ -102,31 +102,32 @@ def plot_3d_box(img, cam_to_img, ry, dimension, center):
     # center_3d=project_3d_pt(buttomcenter,cam_to_img)
     # cv2.circle(img,center_3d,1,(0,0,255),4)
     #TODO put into loop
-    cv2.line(img, (box_3d[0][0], box_3d[0][1]), (box_3d[2][0],box_3d[2][1]), cv_colors.GREEN.value, 1)
-    cv2.line(img, (box_3d[4][0], box_3d[4][1]), (box_3d[6][0],box_3d[6][1]), cv_colors.GREEN.value, 1)
-    cv2.line(img, (box_3d[0][0], box_3d[0][1]), (box_3d[4][0],box_3d[4][1]), cv_colors.GREEN.value, 1)
-    cv2.line(img, (box_3d[2][0], box_3d[2][1]), (box_3d[6][0],box_3d[6][1]), cv_colors.GREEN.value, 1)
+    cv2.line(img, (box_3d[0][0], box_3d[0][1]), (box_3d[2][0],box_3d[2][1]), cv_colors.GREEN.value, thickness)
+    cv2.line(img, (box_3d[4][0], box_3d[4][1]), (box_3d[6][0],box_3d[6][1]), cv_colors.GREEN.value, thickness)
+    cv2.line(img, (box_3d[0][0], box_3d[0][1]), (box_3d[4][0],box_3d[4][1]), cv_colors.GREEN.value, thickness)
+    cv2.line(img, (box_3d[2][0], box_3d[2][1]), (box_3d[6][0],box_3d[6][1]), cv_colors.GREEN.value, thickness)
 
-    cv2.line(img, (box_3d[1][0], box_3d[1][1]), (box_3d[3][0],box_3d[3][1]), cv_colors.GREEN.value, 1)
-    cv2.line(img, (box_3d[1][0], box_3d[1][1]), (box_3d[5][0],box_3d[5][1]), cv_colors.GREEN.value, 1)
-    cv2.line(img, (box_3d[7][0], box_3d[7][1]), (box_3d[3][0],box_3d[3][1]), cv_colors.GREEN.value, 1)
-    cv2.line(img, (box_3d[7][0], box_3d[7][1]), (box_3d[5][0],box_3d[5][1]), cv_colors.GREEN.value, 1)
+    cv2.line(img, (box_3d[1][0], box_3d[1][1]), (box_3d[3][0],box_3d[3][1]), cv_colors.GREEN.value, thickness)
+    cv2.line(img, (box_3d[1][0], box_3d[1][1]), (box_3d[5][0],box_3d[5][1]), cv_colors.GREEN.value, thickness)
+    cv2.line(img, (box_3d[7][0], box_3d[7][1]), (box_3d[3][0],box_3d[3][1]), cv_colors.GREEN.value, thickness)
+    cv2.line(img, (box_3d[7][0], box_3d[7][1]), (box_3d[5][0],box_3d[5][1]), cv_colors.GREEN.value, thickness)
 
     for i in range(0,7,2):
-        cv2.line(img, (box_3d[i][0], box_3d[i][1]), (box_3d[i+1][0],box_3d[i+1][1]), cv_colors.GREEN.value, 1)
+        cv2.line(img, (box_3d[i][0], box_3d[i][1]), (box_3d[i+1][0],box_3d[i+1][1]), cv_colors.GREEN.value, thickness)
 
     front_mark = [(box_3d[i][0], box_3d[i][1]) for i in range(4)]
 
-    cv2.line(img, front_mark[0], front_mark[3], cv_colors.BLUE.value, 1)
-    cv2.line(img, front_mark[1], front_mark[2], cv_colors.BLUE.value, 1)
+    cv2.line(img, front_mark[0], front_mark[3], cv_colors.BLUE.value, thickness//2)
+    cv2.line(img, front_mark[1], front_mark[2], cv_colors.BLUE.value, thickness//2)
 
-def plot_2d_box(img, box_2d,detectionid):
+def plot_2d_box(img, box_2d, thickness=3, detectionid=None):
     # create a square from the corners
     pt1, pt2, pt3, pt4 = create_2d_box(box_2d)
-    text=str(detectionid)
     # plot the 2d box
-    cv2.line(img, pt1, pt2, cv_colors.BLUE.value, 2)
-    cv2.line(img, pt2, pt3, cv_colors.BLUE.value, 2)
-    cv2.line(img, pt3, pt4, cv_colors.BLUE.value, 2)
-    cv2.line(img, pt4, pt1, cv_colors.BLUE.value, 2)
-    cv2.putText(img,text,(pt1),cv2.FONT_HERSHEY_SIMPLEX,0.5,(55,125,255),1,cv2.LINE_AA)
+    cv2.line(img, pt1, pt2, cv_colors.BLUE.value, thickness)
+    cv2.line(img, pt2, pt3, cv_colors.BLUE.value, thickness)
+    cv2.line(img, pt3, pt4, cv_colors.BLUE.value, thickness)
+    cv2.line(img, pt4, pt1, cv_colors.BLUE.value, thickness)
+    if detectionid!=None:
+        text=str(detectionid)
+        cv2.putText(img,text,(pt1),cv2.FONT_HERSHEY_SIMPLEX,0.5,(55,125,255),1,cv2.LINE_AA)
