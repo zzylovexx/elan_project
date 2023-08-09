@@ -21,9 +21,8 @@ def class2angle(cls, residual, bins):
     return angle
 
 class KITTI_Dataset(data.Dataset):
-    def __init__(self, cfg, process, camera_pose='left', split='train'):
+    def __init__(self, cfg, process, split='train'):
         path = cfg['path']
-        self.camera_pose = camera_pose.lower()
         self.label2_path = os.path.join(path, 'label_2')
         self.img2_path = os.path.join(path, 'image_2')
         if split=='train':
@@ -39,8 +38,9 @@ class KITTI_Dataset(data.Dataset):
         self.diff_list = cfg['diff_list']
         self.cls_list = cfg['class_list']
         self.cond = cfg['cond']
-        self.split = os.path.join('Kitti/ImageSets', split + '.txt')
-        self.ids = [x.strip() for x in open(self.split).readlines()]
+        self.split = split
+        split_dir = os.path.join('Kitti/ImageSets', split + '.txt')
+        self.ids = [x.strip() for x in open(split_dir).readlines()]
         self.cls_dims = dict()
         self.objects_L, self.objects_R, = self.get_objects(self.ids)
         self.targets_L, self.targets_R, = self.get_targets(self.objects_L, self.objects_R)
@@ -48,31 +48,14 @@ class KITTI_Dataset(data.Dataset):
     
     def __len__(self):
         return len(self.objects_L)
-    # TO BE FIXED
-    '''
-    def __getitem__(self, idx, camera_pose):
-        if camera_pose.lower() == 'left':
-            objects = self.objects_L
-            targets = self.targets_L
-        elif camera_pose.lower() == 'right':
-            objects = self.objects_R
-            targets = self.targets_R
 
-        crop = objects[idx].crop
-        label = targets[idx]
-        return self.transform(crop), label
-    '''
     def __getitem__(self, idx):
-        if self.camera_pose == 'left':
-            objects = self.objects_L
-            targets = self.targets_L
-        elif self.camera_pose == 'right':
-            objects = self.objects_R
-            targets = self.targets_R
-
-        crop = objects[idx].crop
-        label = targets[idx]
-        return self.transform(crop), label
+        # left_obj, left_label, right_obj, right_label
+        if self.split=='train':
+            return self.transform(self.objects_L[idx].crop), self.targets_L[idx],  \
+                   self.transform(self.objects_R[idx].crop), self.targets_R[idx]
+        else:
+            return self.transform(self.objects_L[idx].crop), self.targets_L[idx]
 
     def get_objects(self, ids):
         all_objects_L = list()
@@ -83,14 +66,16 @@ class KITTI_Dataset(data.Dataset):
             cam_to_img = FrameCalibrationData(os.path.join(self.calib_path, f'{id_}.txt'))
             img2 = cv2.cvtColor(cv2.imread(os.path.join(self.img2_path, f'{id_}.png')), cv2.COLOR_BGR2RGB)
             img3 = cv2.cvtColor(cv2.imread(os.path.join(self.img3_path, f'{id_}.png')), cv2.COLOR_BGR2RGB)
-            objects_L = [Object3d(line, img2, cam_to_img, 'left') for line in open(label2_txt).readlines()]
-            objects_R = [Object3d(line, img3, cam_to_img, 'right') for line in open(label3_txt).readlines()]
+            objects_L = [Object3d(line) for line in open(label2_txt).readlines()]
+            objects_R = [Object3d(line) for line in open(label3_txt).readlines()]
             # use left image obj-level as standard, or box-height results in differenet difficulty
-            for idx, obj_L in enumerate(objects_L):
+            for obj_L, obj_R in zip(objects_L, objects_R):
                 if obj_L.cls_type in self.cls_list and obj_L.level in self.diff_list:
+                    obj_L.set_crop(img2, cam_to_img, 'left')
                     all_objects_L.append(obj_L)
-                    all_objects_R.append(objects_R[idx])
-                    self.update_cls_dims(obj_L.cls_type, obj_L.dim)
+                    obj_R.set_crop(img3, cam_to_img, 'right')
+                    all_objects_R.append(obj_R)
+                    self.update_cls_dims(obj_L.cls_type, obj_L.dim) # for calcualte dim avg
         return all_objects_L, all_objects_R
 
     def update_cls_dims(self, cls, dim):
@@ -113,7 +98,7 @@ class KITTI_Dataset(data.Dataset):
             obj_target = dict()
             obj_target['Class'] = obj_L.cls_type
             obj_target['Truncation'] = obj_L.trucation
-            obj_target['box_2d']: obj_L.box_2d
+            obj_target['Box2D']: obj_L.box_2d
             obj_target['Alpha'] = obj_L.alpha
             obj_target['Ry'] = obj_L.ry
             obj_target['Dim_delta']= obj_L.dim - self.get_cls_dim_avg(obj_L.cls_type)
@@ -125,7 +110,7 @@ class KITTI_Dataset(data.Dataset):
             obj_target = dict()
             obj_target['Class'] = obj_R.cls_type
             obj_target['Truncation'] = obj_R.trucation
-            obj_target['box_2d']: obj_R.box_2d
+            obj_target['Box2D']: obj_R.box_2d
             obj_target['Alpha'] = obj_R.alpha
             obj_target['Ry'] = obj_R.ry
             obj_target['Dim_delta']= obj_R.dim - self.get_cls_dim_avg(obj_R.cls_type)
@@ -137,7 +122,7 @@ class KITTI_Dataset(data.Dataset):
 
 # modified from monodle
 class Object3d(object):
-    def __init__(self, line, img, calib, camera_pose):
+    def __init__(self, line):
         label = line.strip().split(' ')
         self.src = line
         self.cls_type = label[0].lower()
@@ -156,22 +141,32 @@ class Object3d(object):
         self.score = float(label[15]) if label.__len__() == 16 else -1.0
         self.level_str = None
         self.level = self.get_obj_level()
+        self.crop = None
+        self.calib = None
+        self.camera_pose = None
+        self.theta_ray = None
+    
+    def set_crop(self, img, calib, camera_pose):
         self.crop = img[self.box_2d[1]:self.box_2d[3]+1, self.box_2d[0]:self.box_2d[2]+1]
         self.calib = calib
         self.camera_pose = camera_pose.lower()
         self.theta_ray = self.calc_theta_ray(img.shape[1], self.box_2d, calib, camera_pose)
     
     def calc_theta_ray(self, width, box_2d, cam_to_img, camera_pose):#透過跟2d bounding box 中心算出射線角度
-        if camera_pose == 'left':
-            fovx = 2 * np.arctan(width / (2 * cam_to_img.p2[0][0]))
-        elif camera_pose == 'right':
-            fovx = 2 * np.arctan(width / (2 * cam_to_img.p3[0][0]))
-        x_center = (box_2d[0] + box_2d[2]) // 2
-        dx = x_center - (width // 2)
-        mult = 1 if dx >=0 else -1
-        dx = abs(dx)
-        angle = mult * np.arctan( (2*dx*np.tan(fovx/2)) / width )
-        return angle_correction(angle)
+        if self.camera_pose == None:
+            print('Please set_crop(img, calib, camera) first')
+            return -1
+        else:
+            if camera_pose == 'left':
+                fovx = 2 * np.arctan(width / (2 * cam_to_img.p2[0][0]))
+            elif camera_pose == 'right':
+                fovx = 2 * np.arctan(width / (2 * cam_to_img.p3[0][0]))
+            x_center = (box_2d[0] + box_2d[2]) // 2
+            dx = x_center - (width // 2)
+            mult = 1 if dx >=0 else -1
+            dx = abs(dx)
+            angle = mult * np.arctan( (2*dx*np.tan(fovx/2)) / width )
+            return angle_correction(angle)
                                 
     def get_obj_level(self):
         height = float(self.box_2d[3]) - float(self.box_2d[1]) + 1
@@ -212,9 +207,28 @@ class Object3d(object):
         return corners3d
 
     def to_str(self):
-        print_str = '%s %.3f %.3f %.3f box_2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f' \
+        print_str = '%s %.3f %.3f %.3f box2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f' \
                      % (self.cls_type, self.trucation, self.occlusion, self.alpha, self.box_2d, self.h, self.w, self.l,
                         self.pos, self.ry)
+        return print_str
+    
+    def to_kitti_format_label(self):
+        left, top, right, btm = self.box_2d
+        H, W, L = self.h, self.w, self.l
+        X, Y, Z = self.pos
+        print_str = '%s %.1f %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f' \
+                     % (self.cls_type, self.trucation, self.occlusion, self.alpha, left, top, right, btm,
+                        W, H, L, X, Y, Z, self.ry)
+        return print_str
+    
+    def REG_result_to_kitti_format_label(self, reg_alpha, reg_dim, reg_pos):
+        left, top, right, btm = self.box_2d
+        H, W, L = reg_dim
+        X, Y, Z = reg_pos
+        reg_ry = self.ry - self.alpha + reg_alpha
+        print_str = '%s %.1f %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f' \
+                     % (self.cls_type, self.trucation, self.occlusion, reg_alpha, left, top, right, btm,
+                        W, H, L, X, Y, Z, reg_ry)
         return print_str
     
 class FrameCalibrationData:

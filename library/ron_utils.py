@@ -351,12 +351,14 @@ def box_depth_error_calculation(depth_labels, depth_Calcs, out_range=10):
     # after 60 m
     class_GT_depth = class_GT[class_GT >= 60.]
     print(f'\t[depth {depth+10}+] num:', class_GT_depth.shape[0], end='')
-    class_cal_depth = class_cal[class_GT >= 60.]
-    cal_delta = abs(class_GT_depth - class_cal_depth)
-    #cal_delta, _, out_indexes = filter_out_of_range(cal_delta, out_range) # remove prediction out of 10
-    print(f'  abs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}', end='')
-    print(f'  max_delta :{cal_delta.max():.3f}m')
-    
+    if class_GT_depth.shape[0] != 0:
+        class_cal_depth = class_cal[class_GT >= 60.]
+        cal_delta = abs(class_GT_depth - class_cal_depth)
+        #cal_delta, _, out_indexes = filter_out_of_range(cal_delta, out_range) # remove prediction out of 10
+        print(f'  abs_delta mean:{cal_delta.mean():.3f}m, Out of {out_range}m: {cal_delta[cal_delta>=out_range].shape[0]}', end='')
+        print(f'  max_delta :{cal_delta.max():.3f}m')
+    else:
+        print()
     total = abs(class_GT-class_cal)
     print(f'[Total] mean:{total.mean():.3f}, std:{total.std():.3f}')
 

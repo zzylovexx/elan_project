@@ -36,23 +36,27 @@ parser.add_argument("--cond", "-C", type=int, help='if True, 4-dim with theta_ra
 
 def main():
     cfg = {'path':'Kitti/training',
-            'class_list':['car'], 'diff_list': [1,2], #0:DontCare, 1:Easy, 2:Moderate, 3:Hard, 4:Unknown
-            'bins': 4, 'cond':False}
+            'class_list':['car'], 'diff_list': [], #0:DontCare, 1:Easy, 2:Moderate, 3:Hard, 4:Unknown
+            'bins': 0, 'cond':False}
     FLAGS = parser.parse_args()
     keep_same_seeds(FLAGS.seed)
+
+
     is_group = FLAGS.group
     is_cond = FLAGS.cond
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     type = FLAGS.type
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
-    
     epochs = FLAGS.epoch
     batch_size = 16 #64 worse than 8
     alpha = 0.6
     W_consist = 0.3
     W_ry = 0.1
     # make weights folder
+    cfg['bins'] = bin_num
+    cfg['cond'] = is_cond
+    ##
     weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
     os.makedirs(weights_folder, exist_ok=True)
     save_path, log_path, train_config = name_by_parameters(FLAGS)
@@ -249,6 +253,7 @@ def main():
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': opt_SGD.state_dict(),
                     'loss': loss,
+                    'cfg': cfg,
                     'bin': FLAGS.bin, # for evaluate
                     'cond': FLAGS.cond, # for evaluate
                     'W_consist': W_consist,
