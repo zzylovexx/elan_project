@@ -26,9 +26,9 @@ def constraint_to_color(constraint_idx):
 
 # from the 2 corners, return the 4 corners of a box in CCW order
 # coulda just used cv2.rectangle haha
-def create_2d_box(box_2d):
-    corner1_2d = box_2d[0]
-    corner2_2d = box_2d[1]
+def create_2d_box(box2d):
+    corner1_2d = box2d[0]
+    corner2_2d = box2d[1]
 
     pt1 = corner1_2d
     pt2 = (corner1_2d[0], corner2_2d[1])
@@ -120,9 +120,9 @@ def plot_3d_box(img, cam_to_img, ry, dimension, center, thickness=3):
     cv2.line(img, front_mark[0], front_mark[3], cv_colors.BLUE.value, thickness//2)
     cv2.line(img, front_mark[1], front_mark[2], cv_colors.BLUE.value, thickness//2)
 
-def plot_2d_box(img, box_2d, thickness=3, detectionid=None):
+def plot_2d_box(img, box2d, thickness=3, detectionid=None):
     # create a square from the corners
-    pt1, pt2, pt3, pt4 = create_2d_box(box_2d)
+    pt1, pt2, pt3, pt4 = create_2d_box(box2d)
     # plot the 2d box
     cv2.line(img, pt1, pt2, cv_colors.BLUE.value, thickness)
     cv2.line(img, pt2, pt3, cv_colors.BLUE.value, thickness)

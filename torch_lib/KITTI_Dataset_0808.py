@@ -147,17 +147,17 @@ class Object3d(object):
         self.theta_ray = None
     
     def set_crop(self, img, calib, camera_pose):
-        self.crop = img[self.box_2d[1]:self.box_2d[3]+1, self.box_2d[0]:self.box_2d[2]+1]
+        self.crop = img[self.box2d[1]:self.box2d[3]+1, self.box2d[0]:self.box2d[2]+1]
         self.calib = calib
         self.camera_pose = camera_pose.lower()
         self.theta_ray = self.calc_theta_ray(img.shape[1], self.box2d, calib, camera_pose)
     
-    def calc_theta_ray(self, width, box_2d, cam_to_img, camera_pose):#透過跟2d bounding box 中心算出射線角度
+    def calc_theta_ray(self, width, box2d, cam_to_img, camera_pose):#透過跟2d bounding box 中心算出射線角度
         if camera_pose == 'left':
             fovx = 2 * np.arctan(width / (2 * cam_to_img.p2[0][0]))
         elif camera_pose == 'right':
             fovx = 2 * np.arctan(width / (2 * cam_to_img.p3[0][0]))
-        x_center = (box_2d[0] + box_2d[2]) // 2
+        x_center = (box2d[0] + box2d[2]) // 2
         dx = x_center - (width // 2)
         mult = 1 if dx >=0 else -1
         dx = abs(dx)
@@ -204,12 +204,12 @@ class Object3d(object):
 
     def to_str(self):
 print_str = '%s %.3f %.3f %.3f box2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f' \
-                     % (self.cls_type, self.trucation, self.occlusion, self.alpha, self.box_2d, self.h, self.w, self.l,
+                     % (self.cls_type, self.trucation, self.occlusion, self.alpha, self.box2d, self.h, self.w, self.l,
                         self.pos, self.ry)
         return print_str
 
     def to_kitti_format_label(self):
-        left, top, right, btm = self.box_2d
+        left, top, right, btm = self.box2d
         H, W, L = self.h, self.w, self.l
         X, Y, Z = self.pos
         print_str = '%s %.1f %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f' \
@@ -218,7 +218,7 @@ print_str = '%s %.3f %.3f %.3f box2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f'
         return print_str
     
     def REG_result_to_kitti_format_label(self, reg_alpha, reg_dim, reg_pos):
-        left, top, right, btm = self.box_2d
+        left, top, right, btm = self.box2d
         H, W, L = reg_dim
         X, Y, Z = reg_pos
         reg_ry = self.ry - self.alpha + reg_alpha

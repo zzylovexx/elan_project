@@ -49,7 +49,7 @@ class yolo_kitti():
         self.model.eval()
 
     def detect(self,img_path):
-        box_2d=[]
+        box2d=[]
         confidences=[]
         detected_class=[]
         detections=[]
@@ -88,7 +88,7 @@ class yolo_kitti():
                 # print(classes[int(pred_labels)])
                 top_left=(int((x1*1242/416).cpu().numpy().item()),int((y1*1242/416-433).cpu().numpy().item()))
                 buttom_right=(int((x2*1242/416).cpu().numpy().item()),int((y2*1242/416-433).cpu().numpy().item()))
-                #self.box_2d.append((top_left,buttom_right))
+                #self.box2d.append((top_left,buttom_right))
                 #self.detected_class.append(classes[int(pred_labels)])
                 confidences.append(cls_conf.cpu().numpy().item())
                 class_=classes[int(pred_labels)]
@@ -96,6 +96,6 @@ class yolo_kitti():
         return detections,confidences
 
 class Detection():
-    def __init__(self,box_2d,class_):
-        self.box_2d=box_2d
+    def __init__(self,box2d,class_):
+        self.box2d=box2d
         self.detected_class=class_

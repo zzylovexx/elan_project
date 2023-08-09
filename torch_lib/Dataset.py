@@ -85,7 +85,7 @@ class Dataset(data.Dataset):
 
         label = self.labels[id][str(line_num)]
         # P doesn't matter here
-        obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label)
+        obj = DetectedObject(self.curr_img, label['Class'], label['Box2d'], self.proj_matrix, label=label)
 
         return obj.img, label
 
@@ -144,7 +144,7 @@ class Dataset(data.Dataset):
         Ry = line[14]
         top_left = (int(round(line[4])), int(round(line[5])))
         bottom_right = (int(round(line[6])), int(round(line[7])))
-        Box_2D = [top_left, bottom_right]
+        box2d = [top_left, bottom_right]
 
         Dimension = np.array([line[8], line[9], line[10]], dtype=np.double) # height, width, length
         # modify for the average
@@ -172,7 +172,7 @@ class Dataset(data.Dataset):
             Group = line[16] #line[-1]
             label = {
                     'Class': Class,
-                    'Box_2D': Box_2D,
+                    'Box2d': box2d,
                     'Dimensions': Dimension,
                     'Alpha': Alpha,
                     'Orientation': Orientation,
@@ -183,7 +183,7 @@ class Dataset(data.Dataset):
         else:
             label = {
                     'Class': Class,
-                    'Box_2D': Box_2D,
+                    'Box2d': box2d,
                     'Dimensions': Dimension,
                     'Alpha': Alpha,
                     'Orientation': Orientation,
@@ -209,7 +209,7 @@ class Dataset(data.Dataset):
                 Ry = line[14]
                 top_left = (int(round(line[4])), int(round(line[5])))
                 bottom_right = (int(round(line[6])), int(round(line[7])))
-                Box_2D = [top_left, bottom_right]
+                box2d = [top_left, bottom_right]
 
                 Dimension = [line[8], line[9], line[10]] # height, width, length
                 Location = [line[11], line[12], line[13]] # x, y, z
@@ -217,7 +217,7 @@ class Dataset(data.Dataset):
 
                 buf.append({
                         'Class': Class,
-                        'Box_2D': Box_2D,
+                        'Box2d': box2d,
                         'Dimensions': Dimension,
                         'Location': Location,
                         'Alpha': Alpha,
@@ -247,9 +247,9 @@ class Dataset(data.Dataset):
             labels = self.parse_label(label_path)
             objects = []
             for label in labels:
-                box_2d = label['Box_2D']
+                box2d = label['Box2d']
                 detection_class = label['Class']
-                objects.append(DetectedObject(img, detection_class, box_2d, proj_matrix, label=label))
+                objects.append(DetectedObject(img, detection_class, box2d, proj_matrix, label=label))
 
             data[id]['Objects'] = objects
 
@@ -262,7 +262,7 @@ the angle to that image, and (optionally) the label for the object. The idea
 is to keep this abstract enough so it can be used in combination with YOLO
 """
 class DetectedObject:
-    def __init__(self, img, detection_class, box_2d, proj_matrix, label=None):
+    def __init__(self, img, detection_class, box2d, proj_matrix, label=None):
 
         if isinstance(proj_matrix, str): # filename
             proj_matrix = get_P(proj_matrix)
@@ -270,15 +270,15 @@ class DetectedObject:
 
         self.proj_matrix = proj_matrix
         #print(self.proj_matrix)
-        self.theta_ray = self.calc_theta_ray(img, box_2d, proj_matrix)
-        self.img = self.format_img(img, box_2d)
+        self.theta_ray = self.calc_theta_ray(img, box2d, proj_matrix)
+        self.img = self.format_img(img, box2d)
         self.label = label
         self.detection_class = detection_class
 
-    def calc_theta_ray(self, img, box_2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
+    def calc_theta_ray(self, img, box2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
         width = img.shape[1]
         fovx = 2 * np.arctan(width / (2 * proj_matrix[0][0]))
-        center = (box_2d[1][0] + box_2d[0][0]) / 2
+        center = (box2d[1][0] + box2d[0][0]) / 2
         dx = center - (width / 2)
 
         mult = 1
@@ -290,7 +290,7 @@ class DetectedObject:
 
         return angle
 
-    def format_img(self, img, box_2d):
+    def format_img(self, img, box2d):
 
         # Should this happen? or does normalize take care of it. YOLO doesnt like
         # img=img.astype(np.float) / 255
@@ -305,8 +305,8 @@ class DetectedObject:
         ])
         
         # crop image
-        pt1 = box_2d[0]
-        pt2 = box_2d[1]
+        pt1 = box2d[0]
+        pt2 = box2d[1]
         crop = img[pt1[1]:pt2[1]+1, pt1[0]:pt2[0]+1]
         crop = cv2.resize(src = crop, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
 

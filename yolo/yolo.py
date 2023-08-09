@@ -81,13 +81,13 @@ class cv_Yolo:
                 top_left = (boxes[i][0], boxes[i][1])
                 bottom_right = (top_left[0] + boxes[i][2], top_left[1] + boxes[i][3])
                 #print("tep_left:(%d,%d)"%(boxes[i][0],boxes[i][1]),"buttom_right:(%d,%d)"%((top_left[0] + boxes[i][2]),(top_left[1] + boxes[i][3])))
-                box_2d = [top_left, bottom_right]
+                box2d = [top_left, bottom_right]
                 class_ = self.get_class(class_ids[i])
                 if class_ == "person":
                     class_ = "pedestrian"
                 confidences_array.append(confidences[i])
 
-                detections.append(Detection(box_2d, class_))
+                detections.append(Detection(box2d, class_))
 
         return detections,confidences_array
 
@@ -97,6 +97,6 @@ class cv_Yolo:
 
 
 class Detection:
-    def __init__(self, box_2d, class_):
-        self.box_2d = box_2d
+    def __init__(self, box2d, class_):
+        self.box2d = box2d
         self.detected_class = class_

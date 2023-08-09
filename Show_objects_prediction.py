@@ -24,14 +24,14 @@ parser.add_argument('--weight-dir', default='weights', help='path to the Kiiti w
 parser.add_argument('--weights', required=False, help='The name of weights.pkl')
 parser.add_argument('--data-dir', default='Kitti/training', help='path to data folder')
 
-def plot_regressed_3d_bbox(img, truth_img, cam_to_img, box_2d, dimensions, alpha, theta_ray):
+def plot_regressed_3d_bbox(img, truth_img, cam_to_img, box2d, dimensions, alpha, theta_ray):
 
     # the math! returns X, the corners used for constraint
-    location, X = calc_location(dimensions, cam_to_img, box_2d, alpha, theta_ray)
+    location, X = calc_location(dimensions, cam_to_img, box2d, alpha, theta_ray)
 
     orient = alpha + theta_ray
 
-    plot_2d_box(truth_img, box_2d)
+    plot_2d_box(truth_img, box2d)
     plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
 
     return location, orient
@@ -100,7 +100,7 @@ def main():
             alpha += dataset.angle_bins[argmax]
             alpha -= np.pi
 
-            location, rotation_y = plot_regressed_3d_bbox(img, truth_img, cam_to_img, label['Box_2D'], dim, alpha, theta_ray)
+            location, rotation_y = plot_regressed_3d_bbox(img, truth_img, cam_to_img, label['Box2d'], dim, alpha, theta_ray)
             rys.append(f'{rotation_y:.2f}')
 
         '''

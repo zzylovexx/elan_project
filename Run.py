@@ -53,15 +53,15 @@ parser.add_argument("--hide-debug", action="store_true",
                     help="Supress the printing of each 3d location")
 
 
-def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray,detectionid=None, img_2d=None):
+def plot_regressed_3d_bbox(img, cam_to_img, box2d, dimensions, alpha, theta_ray,detectionid=None, img_2d=None):
 
     # the math! returns X, the corners used for constraint
-    location, X = calc_location(dimensions, cam_to_img, box_2d, alpha, theta_ray)#透過數學找到xyz（location)
+    location, X = calc_location(dimensions, cam_to_img, box2d, alpha, theta_ray)#透過數學找到xyz（location)
 
     orient = alpha + theta_ray
     # print('orient:',orient)
     if img_2d is not None:
-        plot_2d_box(img_2d, box_2d,detectionid)
+        plot_2d_box(img_2d, box2d,detectionid)
 
     plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
 
@@ -155,14 +155,14 @@ def main():
             # this is throwing when the 2d bbox is invalid
             # TODO: better check
             try:
-                detectedObject = DetectedObject(img, detection.detected_class, detection.box_2d, calib_file)
+                detectedObject = DetectedObject(img, detection.detected_class, detection.box2d, calib_file)
             except:
                 continue
 
             theta_ray = detectedObject.theta_ray
             input_img = detectedObject.img
             proj_matrix = detectedObject.proj_matrix
-            box_2d = detection.box_2d
+            box2d = detection.box2d
            
             detected_class = detection.detected_class
             #print('detectionclass:', detection.detected_class)
@@ -193,14 +193,14 @@ def main():
                 alpha-=(2*np.pi)
            
             if FLAGS.show_yolo:
-                location,_ = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray,detectionid, truth_img)
+                location,_ = plot_regressed_3d_bbox(img, proj_matrix, box2d, dim, alpha, theta_ray,detectionid, truth_img)
                 #this location means object center ,but in kitti lable it label th buttom center of objet ,so the y location need add 1/2 height
             else:
-                location,rotation_y = plot_regressed_3d_bbox(img, proj_matrix, box_2d, dim, alpha, theta_ray,detectionid)
+                location,rotation_y = plot_regressed_3d_bbox(img, proj_matrix, box2d, dim, alpha, theta_ray,detectionid)
             location_kitti=location
             location_kitti[1]=location_kitti[1]+dim[0]*0.5
             
-            lines+=f"{detection.detected_class} 0.0 0 {alpha:.2f} {box_2d[0][0]} {box_2d[0][1]} {box_2d[1][0]} {box_2d[1][1]} {dim[0]:.2f} {dim[1]:.2f} {dim[2]:.2f} {location_kitti[0]:.2f} {location_kitti[1]:.2f} {location_kitti[2]:.2f} {rotation_y:.2f} {confidences[detectionid]:.2f}\n"
+            lines+=f"{detection.detected_class} 0.0 0 {alpha:.2f} {box2d[0][0]} {box2d[0][1]} {box2d[1][0]} {box2d[1][1]} {dim[0]:.2f} {dim[1]:.2f} {dim[2]:.2f} {location_kitti[0]:.2f} {location_kitti[1]:.2f} {location_kitti[2]:.2f} {rotation_y:.2f} {confidences[detectionid]:.2f}\n"
              
             if not FLAGS.hide_debug:
                 print('Estimated pose : %s'%location)

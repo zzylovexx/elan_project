@@ -85,15 +85,15 @@ def main():
                 reg_alpha = angle_correction(REG_alphas[i].detach().item())
                 avg_dim = np.array(dataset_train.get_cls_dim_avg(obj.cls_type))
                 reg_dim = avg_dim + dim[i].cpu().detach().numpy()
-                reg_pos, _ = calc_location(reg_dim, cam_to_img.p2, obj.box_2d.reshape((2,2)), reg_alpha, obj.theta_ray)
+                reg_pos, _ = calc_location(reg_dim, cam_to_img.p2, obj.box2d.reshape((2,2)), reg_alpha, obj.theta_ray)
                 reg_pos[1] += reg_dim[0]/2 #reg_pos is 3d center, + H/2 to compare with gt label
                 #gt_label = obj.to_kitti_format_label()
                 reg_labels += obj.REG_result_to_kitti_format_label(reg_alpha, reg_dim, reg_pos) + '\n'
                 #print(gt_label)
                 #print(reg_label)
-                #gt_calc_depth = calc_depth_with_alpha_theta(img2.shape[1], obj.box_2d, cam_to_img.p2, obj.w, obj.l, obj.alpha)
-                #reg_calc_depth = calc_depth_with_alpha_theta(img2.shape[1], obj.box_2d, cam_to_img.p2, reg_dim[1], reg_dim[2], reg_alpha)
-                #depth_calc = calc_depth_with_alpha_theta(img_W, box_2d, cam_to_img, obj_W, obj_L, alpha, trun)
+                #gt_calc_depth = calc_depth_with_alpha_theta(img2.shape[1], obj.box2d, cam_to_img.p2, obj.w, obj.l, obj.alpha)
+                #reg_calc_depth = calc_depth_with_alpha_theta(img2.shape[1], obj.box2d, cam_to_img.p2, reg_dim[1], reg_dim[2], reg_alpha)
+                #depth_calc = calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun)
                 #print(reg_calc_depth, gt_calc_depth)
         with open(os.path.join(result_root, f'{id_}.txt'), 'w') as f:
             f.writelines(reg_labels)

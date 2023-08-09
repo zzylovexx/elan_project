@@ -21,14 +21,14 @@ import numpy as np
 # to run car by car
 single_car = False
 
-def plot_regressed_3d_bbox(img, truth_img, cam_to_img, box_2d, dimensions, alpha, theta_ray):
+def plot_regressed_3d_bbox(img, truth_img, cam_to_img, box2d, dimensions, alpha, theta_ray):
 
     # the math! returns X, the corners used for constraint
-    location, X = calc_location(dimensions, cam_to_img, box_2d, alpha, theta_ray)
+    location, X = calc_location(dimensions, cam_to_img, box2d, alpha, theta_ray)
 
     orient = alpha + theta_ray
 
-    plot_2d_box(truth_img, box_2d,detectionid=None)
+    plot_2d_box(truth_img, box2d,detectionid=None)
     plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
 
     return location
@@ -89,7 +89,7 @@ def main():
             alpha += dataset.angle_bins[argmax]
             alpha -= np.pi
 
-            location = plot_regressed_3d_bbox(img, truth_img, cam_to_img, label['Box_2D'], dim, alpha, theta_ray)
+            location = plot_regressed_3d_bbox(img, truth_img, cam_to_img, label['Box2d'], dim, alpha, theta_ray)
 
             print('Estimated pose: %s'%location)
             print('Truth pose: %s'%label['Location'])

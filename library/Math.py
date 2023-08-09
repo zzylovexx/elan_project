@@ -50,18 +50,18 @@ def create_corners(dimension, location=None, R=None):
     return final_corners
 
 # this is based on the paper. Math!
-# calib is a 3x4 matrix, box_2d is [(xmin, ymin), (xmax, ymax)]
+# calib is a 3x4 matrix, box2d is [(xmin, ymin), (xmax, ymax)]
 # Math help: http://ywpkwon.github.io/pdf/bbox3d-study.pdf
-def calc_location(dimension, proj_matrix, box_2d, alpha, theta_ray):
+def calc_location(dimension, proj_matrix, box2d, alpha, theta_ray):
     #global orientation
     orient = alpha + theta_ray
     R = rotation_matrix(orient)
 
     # format 2d corners
-    xmin = box_2d[0][0]
-    ymin = box_2d[0][1]
-    xmax = box_2d[1][0]
-    ymax = box_2d[1][1]
+    xmin = box2d[0][0]
+    ymin = box2d[0][1]
+    xmax = box2d[1][0]
+    ymax = box2d[1][1]
 
     # left top right bottom
     box_corners = [xmin, ymin, xmax, ymax]

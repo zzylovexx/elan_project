@@ -80,7 +80,7 @@ class Dataset(data.Dataset):
             self.curr_img = cv2.imread(self.top_img_path + '%s.png'%id)
 
         label = self.labels[id][str(line_num)]
-        obj = DetectedObject(self.curr_img, label['Class'], label['Box_2D'], self.proj_matrix, label=label)
+        obj = DetectedObject(self.curr_img, label['Class'], label['Box2d'], self.proj_matrix, label=label)
         label['Depth_bias'] = obj.get_depth_bias()
         if self.condition:
             #cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
@@ -150,7 +150,7 @@ class Dataset(data.Dataset):
         Ry = line[14]
         top_left = (int(round(line[4])), int(round(line[5])))
         bottom_right = (int(round(line[6])), int(round(line[7])))
-        Box_2D = [top_left, bottom_right]
+        box2d = [top_left, bottom_right]
 
         Dimension = np.array([line[8], line[9], line[10]], dtype=np.double) # height, width, length
         # 0705 added L / (Height * Width) ratio
@@ -185,7 +185,7 @@ class Dataset(data.Dataset):
         label = {
                 'Class': Class,
                 'Truncate': Truncate,
-                'Box_2D': Box_2D,
+                'Box2d': box2d,
                 'Dimensions': Dimension,
                 'Dim_delta': Dim_delta,
                 'Dim_delta2': Dim_delta2,
@@ -219,7 +219,7 @@ class Dataset(data.Dataset):
                 Ry = line[14]
                 top_left = (int(round(line[4])), int(round(line[5])))
                 bottom_right = (int(round(line[6])), int(round(line[7])))
-                Box_2D = [top_left, bottom_right]
+                box2d = [top_left, bottom_right]
 
                 Dimension = [line[8], line[9], line[10]] # height, width, length
                 Location = [line[11], line[12], line[13]] # x, y, z
@@ -228,7 +228,7 @@ class Dataset(data.Dataset):
                 buf.append({
                         'Class': Class,
                         'Truncate': Truncate,
-                        'Box_2D': Box_2D,
+                        'Box2d': box2d,
                         'Dimensions': Dimension,
                         'Location': Location,
                         'Alpha': Alpha,
@@ -258,9 +258,9 @@ class Dataset(data.Dataset):
             labels = self.parse_label(label_path)
             objects = []
             for label in labels:
-                box_2d = label['Box_2D']
+                box2d = label['Box2d']
                 detection_class = label['Class']
-                objects.append(DetectedObject(img, detection_class, box_2d, proj_matrix, label=label))
+                objects.append(DetectedObject(img, detection_class, box2d, proj_matrix, label=label))
 
             data[id]['Objects'] = objects
 
@@ -272,7 +272,7 @@ the angle to that image, and (optionally) the label for the object. The idea
 is to keep this abstract enough so it can be used in combination with YOLO
 """
 class DetectedObject:
-    def __init__(self, img, detection_class, box_2d, proj_matrix, label=None):
+    def __init__(self, img, detection_class, box2d, proj_matrix, label=None):
 
         if isinstance(proj_matrix, str): # filename
             proj_matrix = get_P(proj_matrix)
@@ -280,21 +280,21 @@ class DetectedObject:
 
         self.img_W = img.shape[1]
         self.proj_matrix = proj_matrix
-        self.theta_ray = self.calc_theta_ray(img, box_2d, proj_matrix)
-        self.img = self.format_img(img, box_2d)
-        self.box_2d = box_2d
+        self.theta_ray = self.calc_theta_ray(img, box2d, proj_matrix)
+        self.img = self.format_img(img, box2d)
+        self.box2d = box2d
         self.label = label
         self.detection_class = detection_class
-        self.boxH_ratio = get_box_size(box_2d)[1] / 224.
+        self.boxH_ratio = get_box_size(box2d)[1] / 224.
         
         self.averages = ClassAverages([],'class_averages.txt')
         #print(self.averages.dimension_map)
         
 
-    def calc_theta_ray(self, img, box_2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
+    def calc_theta_ray(self, img, box2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
         width = img.shape[1]
         fovx = 2 * np.arctan(width / (2 * proj_matrix[0][0]))
-        center = (box_2d[1][0] + box_2d[0][0]) / 2
+        center = (box2d[1][0] + box2d[0][0]) / 2
         dx = center - (width / 2)
 
         mult = 1
@@ -306,7 +306,7 @@ class DetectedObject:
 
         return angle
 
-    def format_img(self, img, box_2d):
+    def format_img(self, img, box2d):
 
         # Should this happen? or does normalize take care of it. YOLO doesnt like
         # img=img.astype(np.float) / 255
@@ -321,8 +321,8 @@ class DetectedObject:
         ])
         
         # crop image
-        pt1 = box_2d[0]
-        pt2 = box_2d[1]
+        pt1 = box2d[0]
+        pt2 = box2d[1]
         crop = img[pt1[1]:pt2[1]+1, pt1[0]:pt2[0]+1]
         crop = cv2.resize(src = crop, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
 
@@ -332,24 +332,24 @@ class DetectedObject:
         return batch
     
     #offset ratio -1~1
-    def calc_offset_ratio(self, box_2d, d3_location, cam_to_img):
-        return calc_center_offset_ratio(box_2d, d3_location, cam_to_img)
+    def calc_offset_ratio(self, box2d, d3_location, cam_to_img):
+        return calc_center_offset_ratio(box2d, d3_location, cam_to_img)
     
     def get_depth_bias(self):
         if self.label != None:
-            return self.calc_depth_bias(self.img_W, self.box_2d, self.proj_matrix, self.label)
+            return self.calc_depth_bias(self.img_W, self.box2d, self.proj_matrix, self.label)
         else:
             RuntimeError('No label')
 
-    #img.shape[1], box_2d, proj_matrix, label
-    def calc_depth_bias(self, img_W, box_2d, cam_to_img, label):
+    #img.shape[1], box2d, proj_matrix, label
+    def calc_depth_bias(self, img_W, box2d, cam_to_img, label):
         obj_W = self.averages.get_item(self.detection_class)[1] + label['Dimensions'][1]
         obj_L = self.averages.get_item(self.detection_class)[2] + label['Dimensions'][2]
         alpha = label['Alpha']
         trun = label['Truncate'] 
         depth_GT = label['Location'][2]
-        depth_calc = calc_depth_with_alpha_theta(img_W, box_2d, cam_to_img, obj_W, obj_L, alpha, trun)
-        #print(img_W, box_2d, cam_to_img, obj_W, obj_L, alpha, trun)
+        depth_calc = calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun)
+        #print(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun)
         #print('GT',depth_GT)
         #print('calc',depth_calc)
         return depth_GT - depth_calc

@@ -38,7 +38,7 @@ def main():
             dim = [elements[8], elements[9], elements[10]]
             loc = [elements[11], elements[12], elements[13]]
             ry = elements[14]
-            # calc box_2d of image_3
+            # calc box2d of image_3
             X = list()
             Y = list()
             R = rotation_matrix(ry)

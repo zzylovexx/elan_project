@@ -55,7 +55,7 @@ def main():
         CLASSes = list()
         TRUNCATEDs = list()
         OCCLUDEDs = list()
-        box_2ds = list()
+        box2ds = list()
         CROPs_tensor = list()
         Alphas = list()
         THETAs = list()
@@ -77,7 +77,7 @@ def main():
                 top_left = (int(round(elements[4])), int(round(elements[5])))
                 btm_right = (int(round(elements[6])), int(round(elements[7])))
                 box = [top_left, btm_right]
-                box_2ds.append(box)
+                box2ds.append(box)
                 #cv2 is(H,W,3)
                 crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1] 
                 crop = process(crop)
@@ -109,15 +109,15 @@ def main():
         #write pred_label.txt 
         with open(labels[i].replace(label_root, pred_label_root),'w') as new_f:
             pred_labels = ''
-            for class_, truncated, occluded, delta, alpha, theta, box_2d in zip(CLASSes, TRUNCATEDs, OCCLUDEDs, delta_DIMs, Alphas, THETAs, box_2ds):
+            for class_, truncated, occluded, delta, alpha, theta, box2d in zip(CLASSes, TRUNCATEDs, OCCLUDEDs, delta_DIMs, Alphas, THETAs, box2ds):
                 delta = delta.cpu().data.numpy() #torch->numpy
                 alpha = alpha.cpu().data.numpy() #torch->numpy
                 dim = delta + averages_all.get_item(class_)
                 rotation_y = alpha + theta
-                loc, _ = calc_location(dim, cam_to_img, box_2d, alpha, theta)
+                loc, _ = calc_location(dim, cam_to_img, box2d, alpha, theta)
 
                 pred_labels += '{CLASS} {T:.1f} {O} {A:.2f} {left} {top} {right} {btm} {H:.2f} {W:.2f} {L:.2f} {X:.2f} {Y:.2f} {Z:.2f} {Ry:.2f}\n'.format(
-                    CLASS=class_, T=truncated, O=occluded, A=alpha, left=box_2d[0][0], top=box_2d[0][1], right=box_2d[1][0], btm=box_2d[1][1],
+                    CLASS=class_, T=truncated, O=occluded, A=alpha, left=box2d[0][0], top=box2d[0][1], right=box2d[1][0], btm=box2d[1][1],
                     H=dim[0], W=dim[1], L=dim[2], X=loc[0], Y=loc[1], Z=loc[2], Ry=rotation_y)
             #print(pred_labels)
             new_f.writelines(pred_labels)

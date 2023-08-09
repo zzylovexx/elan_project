@@ -14,14 +14,14 @@ parser.add_argument("--device", type=int, default=0, help='select cuda index')
 parser.add_argument("--weights-path", "-W_PATH", required=True, help='weights path, ie. weights/epoch_20.pkl')
 parser.add_argument("--result-path", "-R_PATH", required=True, help='path (folder name) of the generated pred-labels')
 
-def plot_regressed_3d_bbox(img, cam_to_img, box_2d, dimensions, alpha, theta_ray, detectionid):
+def plot_regressed_3d_bbox(img, cam_to_img, box2d, dimensions, alpha, theta_ray, detectionid):
 
     # the math! returns X, the corners used for constraint
-    location, X = calc_location(dimensions, cam_to_img, box_2d, alpha, theta_ray)
+    location, X = calc_location(dimensions, cam_to_img, box2d, alpha, theta_ray)
 
     orient = alpha + theta_ray
 
-    #plot_2d_box(img, box_2d, detectionid)
+    #plot_2d_box(img, box2d, detectionid)
     plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
 
     return location, orient
@@ -83,7 +83,7 @@ def main():
                 
             top_left = (int(round(elements[4])), int(round(elements[5])))
             btm_right = (int(round(elements[6])), int(round(elements[7])))
-            box_2d = (top_left, btm_right)
+            box2d = (top_left, btm_right)
             dim_gt = [elements[8], elements[9], elements[10]] # height, width, length
             crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1] 
             crop = process(crop)
@@ -104,10 +104,10 @@ def main():
             dim_Elan = delta_DIMs.cpu().data.numpy()[0, :]
             dim_Elan += ELAN_averages.get_item(class_)
 
-            loc, ry = plot_regressed_3d_bbox(img, cam_to_img, box_2d, dim_Elan, alpha_Elan, theta_ray, idx)
+            loc, ry = plot_regressed_3d_bbox(img, cam_to_img, box2d, dim_Elan, alpha_Elan, theta_ray, idx)
 
             label_ELAN += '{CLASS} {T:.1f} {O} {A:.2f} {left} {top} {right} {btm} {H:.2f} {W:.2f} {L:.2f} {X:.2f} {Y:.2f} {Z:.2f} {Ry:.2f}\n'.format(
-                            CLASS=class_, T=truncate, O=occluded, A=alpha_Elan, left=box_2d[0][0], top=box_2d[0][1], right=box_2d[1][0], btm=box_2d[1][1],
+                            CLASS=class_, T=truncate, O=occluded, A=alpha_Elan, left=box2d[0][0], top=box2d[0][1], right=box2d[1][0], btm=box2d[1][1],
                             H=dim_Elan[0], W=dim_Elan[1], L=dim_Elan[2], X=loc[0], Y=loc[1], Z=loc[2], Ry=ry)
         
         with open(renew_labels[i].replace(label_root, result_root + '/label_2'), 'w') as ELAN_f:
