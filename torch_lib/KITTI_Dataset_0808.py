@@ -203,9 +203,9 @@ class Object3d(object):
         return corners3d
 
     def to_str(self):
-print_str = '%s %.3f %.3f %.3f box2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f' \
-                     % (self.cls_type, self.trucation, self.occlusion, self.alpha, self.box2d, self.h, self.w, self.l,
-                        self.pos, self.ry)
+        print_str = '%s %.3f %.3f %.3f box2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f' \
+                            % (self.cls_type, self.trucation, self.occlusion, self.alpha, self.box2d, self.h, self.w, self.l,
+                                self.pos, self.ry)
         return print_str
 
     def to_kitti_format_label(self):
@@ -226,7 +226,8 @@ print_str = '%s %.3f %.3f %.3f box2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f'
                      % (self.cls_type, self.trucation, self.occlusion, reg_alpha, left, top, right, btm,
                         W, H, L, X, Y, Z, reg_ry)
         return print_str
-    
+
+#https://github.com/HKUST-Aerial-Robotics/Stereo-RCNN/blob/63c6ab98b7a5e36c7bcfdec4529804fc940ee900/lib/model/utils/kitti_utils.py#L97C5-L97C25
 class FrameCalibrationData:
     '''Frame Calibration Holder
         p0-p3      Camera P matrix. Contains extrinsic 3x4    

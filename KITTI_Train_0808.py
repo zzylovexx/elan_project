@@ -40,8 +40,6 @@ def main():
             'bins': 0, 'cond':False}
     FLAGS = parser.parse_args()
     keep_same_seeds(FLAGS.seed)
-
-
     is_group = FLAGS.group
     is_cond = FLAGS.cond
     bin_num = FLAGS.bin
@@ -63,8 +61,6 @@ def main():
     print(f'SAVE PATH:{save_path}, LOG PATH:{log_path}, config:{train_config}')
     os.makedirs(log_path, exist_ok=True)
     writer = SummaryWriter(log_path)
-    
-
     # model
     print("Loading all detected objects in dataset...")
     print('Kitti dataset')
@@ -90,16 +86,15 @@ def main():
     opt_SGD = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
     # milestones:調整lr的epoch數，gamma:decay factor (https://hackmd.io/@Hong-Jia/H1hmbNr1d)
     #scheduler = torch.optim.lr_scheduler.MultiStepLR(opt_SGD, milestones=[i for i in range(10, epochs, 20)], gamma=0.5)
-
     #dim_loss_func = nn.MSELoss().to(device) #org function
-    
     if is_group:
         print("< Train with GroupLoss >")
         group_loss_func = stdGroupLoss_heading_bin
     
     total_num_batches = len(train_loader)
     passes = 0
-    for epoch in range(1, epochs+1):
+    print('total_num_batches', total_num_batches)
+    for epoch in range(0):#(1, epochs+1):
         curr_batch = 0
         
         for batch_L, labels_L, batch_R, labels_R in train_loader:
@@ -108,7 +103,7 @@ def main():
             gt_bin = labels_L['Heading_bin'].long().to(device)#這個角度在哪個class上
             gt_dim = labels_L['Dim_delta'].float().to(device)
             gt_theta_ray_L = labels_L['Theta_ray'].float().to(device)
-            gt_theta_ray_R = labels_L['Theta_ray'].float().to(device)
+            gt_theta_ray_R = labels_R['Theta_ray'].float().to(device)
 
             batch_L=batch_L.float().to(device)
             batch_R=batch_R.float().to(device)
@@ -116,6 +111,7 @@ def main():
             [residual_L, bin_L, dim_L] = model(batch_L)
 
             bin_loss = F.cross_entropy(bin_L, gt_bin,reduction='mean').to(device)
+            print(bin_loss.item())
             residual_loss, _ = compute_residual_loss(residual_L, gt_bin, gt_residual, device)
             
             # calc GT_alpha,return list type

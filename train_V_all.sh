@@ -35,6 +35,8 @@ then
     R_PATH=$R_PATH"DA"
 fi
 
+#W_PATH H-parameters generate in .py
+#add to PKL and R_PATH
 PKL=$W_PATH"_B$BIN""_N$NORMAL"
 R_PATH=$R_PATH"_B$BIN""_N$NORMAL"
 if [ $GROUP = $ONE ]

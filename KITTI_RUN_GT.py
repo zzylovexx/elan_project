@@ -2,7 +2,7 @@ from torchvision.models import vgg
 from torch_lib.Model_heading_bin import *
 from torchvision import transforms
 from torch_lib.KITTI_Dataset_0808 import *
-from torch_lib.KITTI_EVAL import ron_evaluation
+from KITTI_EVAL import ron_evaluation
 from library.ron_utils import *
 import os, cv2, time, sys
 import argparse
