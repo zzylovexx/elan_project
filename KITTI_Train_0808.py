@@ -71,15 +71,13 @@ def main():
     process = transforms.Compose([transforms.ToTensor(), 
                                 transforms.Resize([224,224], transforms.InterpolationMode.BICUBIC), 
                                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
-    dataset_L = KITTI_Dataset(cfg, process, split='train', camera_pose='left')
-    dataset_R = KITTI_Dataset(cfg, process, split='train', camera_pose='right')
-    dataset_valid = KITTI_Dataset(cfg, process, split='val', camera_pose='left')
+    dataset_train = KITTI_Dataset(cfg, process, split='train')
+    dataset_valid = KITTI_Dataset(cfg, process, split='val')
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}
 
-    train_loader_L = data.DataLoader(dataset_L, **params)
-    train_loader_R = data.DataLoader(dataset_R, **params)
+    train_loader = data.DataLoader(dataset_train, **params)
     valid_loader = data.DataLoader(dataset_valid, **params)
 
     my_vgg = vgg.vgg19_bn(weights='DEFAULT')
@@ -99,15 +97,12 @@ def main():
         print("< Train with GroupLoss >")
         group_loss_func = stdGroupLoss_heading_bin
     
-    total_num_batches = len(train_loader_L)
-    print('BATCH')
-    print(len(train_loader_L))
-    print(len(train_loader_R))
+    total_num_batches = len(train_loader)
     passes = 0
     for epoch in range(1, epochs+1):
         curr_batch = 0
         
-        for (batch_L, labels_L), (batch_R, labels_R) in zip(train_loader_L, train_loader_R):
+        for batch_L, labels_L, batch_R, labels_R in train_loader:
 
             gt_residual = labels_L['Heading_res'].float().to(device)
             gt_bin = labels_L['Heading_bin'].long().to(device)#這個角度在哪個class上
