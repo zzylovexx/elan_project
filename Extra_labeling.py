@@ -26,9 +26,6 @@ def main():
         [ 0.000000e+00, 0.000000e+00, 1.000000e+00,0]])
         os.makedirs('Elan_3d_box/extra_label', exist_ok=True)
     
-    
-    
-
     #alpha_diff_txt = list()
     #ry_diff_txt = list()
     print('Start labeling')

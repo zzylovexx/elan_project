@@ -5,7 +5,7 @@ import os
 import numpy as np
 from library.Math import create_corners, rotation_matrix
 from library.Plotting import project_3d_pt, plot_3d_box
-from torch_lib.KITTI_Dataset_0808 import FrameCalibrationData
+from torch_lib.KITTI_Dataset import FrameCalibrationData
 
 def main():
     calib = sorted(glob.glob('Kitti/training/calib/*.txt'))

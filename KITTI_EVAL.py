@@ -1,6 +1,6 @@
 import os, torch
-from torch_lib.KITTI_Dataset_0808 import *
-from library.ron_utils import box_depth_error_calculation
+from torch_lib.KITTI_Dataset import *
+from library.ron_utils import box_depth_error_calculation, calc_depth_with_alpha_theta
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -34,6 +34,7 @@ def ron_evaluation(val_ids, diff_list, cls_list, result_root, gt_root='Kitti/tra
                 REG_dim.append(obj.dim)
                 REG_depth.append(obj.pos[2])
                 REG_alpha.append(obj.alpha)
+                #reg_calc_depth = calc_depth_with_alpha_theta(img2.shape[1], obj.box2d, cam_to_img.p2, reg_dim[1], reg_dim[2], reg_alpha)
         
     GT_dim = np.array(GT_dim)
     GT_depth = np.array(GT_depth)

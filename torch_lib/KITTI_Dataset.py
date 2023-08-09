@@ -1,339 +1,316 @@
-import cv2
-import numpy as np
-import os
-import random
-import math
-
-import torch
-from torchvision import transforms
+import os, cv2, csv
 from torch.utils import data
+import numpy as np
+from library.ron_utils import angle_correction
 
-from library.File import *
-from library.Plotting import *
-from library.ron_utils import *
-
-from .ClassAverages import ClassAverages
-
-
-'''
-orient 分類與loss使用monodle 之類似型式
-使用上需要確認model ouput dim
-目前配合train_cond.py以及run.py
-
-'''
-def angle2class(angle, num_heading_bin):
+def angle2class(angle, bins):
     ''' Convert continuous angle to discrete class and residual. '''
     angle = angle % (2 * np.pi)
     assert (angle >= 0 and angle <= 2 * np.pi)
-    angle_per_class = 2 * np.pi / float(num_heading_bin) #degree:30 radius:0.523
+    angle_per_class = 2 * np.pi / float(bins)
     shifted_angle = (angle + angle_per_class / 2) % (2 * np.pi)
     class_id = int(shifted_angle / angle_per_class)
-    residual_angle = shifted_angle - (class_id * angle_per_class + angle_per_class / 2) #residual 有正有負
-
+    residual_angle = shifted_angle - (class_id * angle_per_class + angle_per_class / 2)
     return class_id, residual_angle
 
-class Dataset(data.Dataset):
-    def __init__(self, path, split='train', camera='left', num_heading_bin=4, condition=False):
-        
-        
-        if camera.lower()=='left':
-            self.top_label_path = path + '/label_2/'
-            self.top_img_path = path + "/image_2/"
-        elif camera.lower()=='right':
-            self.top_label_path = path + '/label_3/'
-            self.top_img_path = path + "/image_3/"
-        self.top_calib_path = path + "/calib/"
-        #self.extra_label_path = path + '/extra_label/' #using generated extra label
-        self.num_heading_bin = num_heading_bin
-        self.condition = condition
-        split_dir = os.path.join(path, 'ImageSets', split + '.txt')
+def class2angle(cls, residual, bins):
+    ''' Inverse function to angle2class. '''
+    angle_per_class = 2 * np.pi / float(bins)
+    angle_center = cls * angle_per_class
+    angle = angle_center + residual
+    return angle
+
+class KITTI_Dataset(data.Dataset):
+    def __init__(self, cfg, process, split='train'):
+        path = cfg['path']
+        self.label2_path = os.path.join(path, 'label_2')
+        self.img2_path = os.path.join(path, 'image_2')
+        if split=='train':
+            self.label3_path = os.path.join(path, 'label_3')
+            self.img3_path = os.path.join(path, 'image_3')
+        elif split=='val':
+            self.label3_path = self.label2_path
+            self.img3_path = self.img2_path
+
+        self.calib_path = os.path.join(path, 'calib') 
+        self.extra_label_path = os.path.join(path, 'extra_label') #using generated extra label
+        self.bins = cfg['bins']
+        self.diff_list = cfg['diff_list']
+        self.cls_list = cfg['class_list']
+        self.cond = cfg['cond']
+        self.split = split
+        split_dir = os.path.join('Kitti/ImageSets', split + '.txt')
         self.ids = [x.strip() for x in open(split_dir).readlines()]
-
-        # TODO: which camera cal to use, per frame or global one?
-        self.proj_matrix = get_P(os.path.abspath(os.path.dirname(os.path.dirname(__file__)) + '/camera_cal/calib_cam_to_cam.txt'))
-
-        # hold average dimensions
-        class_list = ['Car', 'Van', 'Truck', 'Pedestrian','Person_sitting', 'Cyclist', 'Tram', 'Misc']
-        self.averages = ClassAverages(class_list)
-
-        self.object_list = self.get_objects(self.ids)
-
-        
-        self.labels = {}
-        last_id = ""
-        for obj in self.object_list:
-            id = obj[0]
-            line_num = obj[1]
-            label = self.get_label(id, line_num)
-            if id != last_id:
-                self.labels[id] = {}
-                last_id = id
-
-            self.labels[id][str(line_num)] = label
-
-        # hold one image at a time
-        self.curr_id = ""
-        self.curr_img = None
-
-    def __getitem__(self, index):
-        id = self.object_list[index][0]
-        line_num = self.object_list[index][1]
-
-        if id != self.curr_id:
-            self.curr_id = id
-            self.curr_img = cv2.imread(self.top_img_path + '%s.png'%id)
-
-        label = self.labels[id][str(line_num)]
-        obj = DetectedObject(self.curr_img, label['Class'], label['Box2d'], self.proj_matrix, label=label)
-        #label['Depth_bias'] = obj.get_depth_bias()
-        label['Theta_ray'] = obj.theta_ray
-        if self.condition:
-            #cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
-            #cond = torch.tensor(obj.boxH_ratio).expand(1, obj.img.shape[1], obj.img.shape[2]) #box height ratio         
-            cond = torch.tensor(obj.Y_axis_ratio).expand(1, obj.img.shape[1], obj.img.shape[2]) #Y coord ratio, 0706 added
-            img_cond = torch.concat((obj.img, cond), dim=0)
-            return img_cond, label
-        
-        return obj.img, label
-
+        self.cls_dims = dict()
+        self.objects_L, self.objects_R, = self.get_objects(self.ids)
+        self.targets_L, self.targets_R, = self.get_targets(self.objects_L, self.objects_R)
+        self.transform = process
+    
     def __len__(self):
-        return len(self.object_list)
+        return len(self.objects_L)
+
+    def __getitem__(self, idx):
+        # left_obj, left_label, right_obj, right_label
+        if self.split=='train':
+            return self.transform(self.objects_L[idx].crop), self.targets_L[idx],  \
+                   self.transform(self.objects_R[idx].crop), self.targets_R[idx]
+        else:
+            return self.transform(self.objects_L[idx].crop), self.targets_L[idx]
 
     def get_objects(self, ids):
-        objects = []
-        for id in ids:
-            with open(self.top_label_path + '%s.txt'%id) as file:
-                for line_num,line in enumerate(file):
-                    line = line[:-1].split(' ')
-                    obj_class = line[0]
-                    if obj_class == "DontCare":
-                        continue
+        all_objects_L = list()
+        all_objects_R = list()
+        for id_ in ids:
+            label2_txt = os.path.join(self.label2_path, f'{id_}.txt')
+            label3_txt = os.path.join(self.label3_path, f'{id_}.txt')
+            cam_to_img = FrameCalibrationData(os.path.join(self.calib_path, f'{id_}.txt'))
+            img2 = cv2.cvtColor(cv2.imread(os.path.join(self.img2_path, f'{id_}.png')), cv2.COLOR_BGR2RGB)
+            img3 = cv2.cvtColor(cv2.imread(os.path.join(self.img3_path, f'{id_}.png')), cv2.COLOR_BGR2RGB)
+            objects_L = [Object3d(line) for line in open(label2_txt).readlines()]
+            objects_R = [Object3d(line) for line in open(label3_txt).readlines()]
+            # use left image obj-level as standard, or box-height results in differenet difficulty
+            for obj_L, obj_R in zip(objects_L, objects_R):
+                if obj_L.cls_type in self.cls_list and obj_L.level in self.diff_list:
+                    obj_L.set_crop(img2, cam_to_img, 'left')
+                    all_objects_L.append(obj_L)
+                    obj_R.set_crop(img3, cam_to_img, 'right')
+                    all_objects_R.append(obj_R)
+                    self.update_cls_dims(obj_L.cls_type, obj_L.dim) # for calcualte dim avg
+        return all_objects_L, all_objects_R
 
-                    dimension = np.array([float(line[8]), float(line[9]), float(line[10])], dtype=np.double)
-                    self.averages.add_item(obj_class, dimension)
-
-                    objects.append((id, line_num))
-
-
-        self.averages.dump_to_file()
-        return objects
-
-
-    def get_label(self, id, line_num):
-        lines = open(self.top_label_path + '%s.txt'%id).read().splitlines()
-        label = self.format_label(lines[line_num], id)
-        '''
-        extra_labels = get_extra_labels(self.extra_label_path + '%s.txt'%id)
-        label['Group'] = extra_labels[line_num]['Group_Ry']
-        label['Theta'] = extra_labels[line_num]['Theta_ray']
-        label['boxH_ratio'] = extra_labels[line_num]['Box_H'] / 224.0
-        '''
-        return label
-
-    def get_bin(self, angle):
-
-        bin_idxs = []
-
-        def is_between(min, max, angle):
-            max = (max - min) if (max - min) > 0 else (max - min) + 2*np.pi
-            angle = (angle - min) if (angle - min) > 0 else (angle - min) + 2*np.pi
-            return angle < max
-
-        for bin_idx, bin_range in enumerate(self.bin_ranges):
-            if is_between(bin_range[0], bin_range[1], angle):
-                bin_idxs.append(bin_idx)
-
-        return bin_idxs
-
-    def format_label(self, line, id):
-        line = line.split(' ')
-
-        Class = line[0]
-
-        for i in range(1, len(line)):
-            line[i] = float(line[i])
-
-        Truncate = line[1] # truncate ratio
-        Alpha = line[3] # what we will be regressing
-        Ry = line[14]
-        top_left = (int(round(line[4])), int(round(line[5])))
-        bottom_right = (int(round(line[6])), int(round(line[7])))
-        box2d = [top_left, bottom_right]
-
-        Dimension = np.array([line[8], line[9], line[10]], dtype=np.double) # height, width, length
-        # modify for the average
-        Dimension -= self.averages.get_item(Class)
-
-        Location = [line[11], line[12], line[13]] # x, y, z
-        Location[1] -= Dimension[0] / 2 # bring the KITTI center up to the middle of the object
-
-        heading_class,heading_residual=angle2class(Alpha, self.num_heading_bin)
-        #theta用算的 因為label_3的ry和alpha和label_2的相同
-
-        label = {
-                'Class': Class,
-                'Truncate': Truncate,
-                'Box2d': box2d,
-                'Dimensions': Dimension,
-                'Alpha': Alpha,
-                'Location': Location,
-                'heading_residual': heading_residual,
-                'heading_class': heading_class,
-                'Ry': Ry
-                }
-        return label
-
-    # will be deprc soon
-    def parse_label(self, label_path):
-        buf = []
-        with open(label_path, 'r') as f:
-            for line in f:
-                line = line[:-1].split(' ')
-
-                Class = line[0]
-                if Class == "DontCare":
-                    continue
-
-                for i in range(1, len(line)):
-                    line[i] = float(line[i])
-
-                Truncate = line[1] # truncate ratio
-                Alpha = line[3] # what we will be regressing
-                Ry = line[14]
-                top_left = (int(round(line[4])), int(round(line[5])))
-                bottom_right = (int(round(line[6])), int(round(line[7])))
-                box2d = [top_left, bottom_right]
-
-                Dimension = [line[8], line[9], line[10]] # height, width, length
-                Location = [line[11], line[12], line[13]] # x, y, z
-                Location[1] -= Dimension[0] / 2 # bring the KITTI center up to the middle of the object
-
-                buf.append({
-                        'Class': Class,
-                        'Truncate': Truncate,
-                        'Box2d': box2d,
-                        'Dimensions': Dimension,
-                        'Location': Location,
-                        'Alpha': Alpha,
-                        'Ry': Ry
-                    })
-        return buf
-
-    # will be deprc soon
-    def all_objects(self):
-        data = {}
-        for id in self.ids:
-            data[id] = {}
-            img_path = self.top_img_path + '%s.png'%id
-            img = cv2.imread(img_path)
-            data[id]['Image'] = img
-
-            # using p per frame
-            calib_path = self.top_calib_path + '%s.txt'%id
-            proj_matrix = get_calibration_cam_to_image(calib_path)
-
-            # using P_rect from global calib file
-            #proj_matrix = self.proj_matrix (command out 0406 for drawing correct 3d box
-
-            data[id]['Calib'] = proj_matrix
-
-            label_path = self.top_label_path + '%s.txt'%id
-            labels = self.parse_label(label_path)
-            objects = []
-            for label in labels:
-                box2d = label['Box2d']
-                detection_class = label['Class']
-                objects.append(DetectedObject(img, detection_class, box2d, proj_matrix, label=label))
-
-            data[id]['Objects'] = objects
-
-        return data
-
-"""
-What is *sorta* the input to the neural net. Will hold the cropped image and
-the angle to that image, and (optionally) the label for the object. The idea
-is to keep this abstract enough so it can be used in combination with YOLO
-"""
-class DetectedObject:
-    def __init__(self, img, detection_class, box2d, proj_matrix, label=None):
-
-        if isinstance(proj_matrix, str): # filename
-            proj_matrix = get_P(proj_matrix)
-            # proj_matrix = get_calibration_cam_to_image(proj_matrix)
-
-        self.img_W = img.shape[1]
-        self.proj_matrix = proj_matrix
-        self.theta_ray = self.calc_theta_ray(img, box2d, proj_matrix)
-        self.img = self.format_img(img, box2d)
-        self.box2d = box2d
-        self.label = label
-        self.detection_class = detection_class
-        self.boxH_ratio = get_box_size(box2d)[1] / 224.
-        self.Y_axis_ratio = get_box_center(box2d)[1] / img.shape[0]
-        
-        self.averages = ClassAverages([],'class_averages.txt')
-        #print(self.averages.dimension_map)
-        
-
-    def calc_theta_ray(self, img, box2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
-        width = img.shape[1]
-        fovx = 2 * np.arctan(width / (2 * proj_matrix[0][0]))
-        center = (box2d[1][0] + box2d[0][0]) / 2
-        dx = center - (width / 2)
-
-        mult = 1
-        if dx < 0:
-            mult = -1
-        dx = abs(dx)
-        angle = np.arctan( (2*dx*np.tan(fovx/2)) / width )
-        angle = angle * mult
-
-        return angle
-
-    def format_img(self, img, box2d):
-
-        # Should this happen? or does normalize take care of it. YOLO doesnt like
-        # img=img.astype(np.float) / 255
-
-        # torch transforms
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                                 std=[0.229, 0.224, 0.225])
-        process = transforms.Compose ([
-            transforms.ToTensor(),
-            #transforms.Grayscale(num_output_channels=3), #make it to gray scale
-            normalize
-        ])
-        
-        # crop image
-        pt1 = box2d[0]
-        pt2 = box2d[1]
-        crop = img[pt1[1]:pt2[1]+1, pt1[0]:pt2[0]+1]
-        crop = cv2.resize(src = crop, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
-
-        # recolor, reformat
-        batch = process(crop)
-
-        return batch
-    
-    #offset ratio -1~1
-    def calc_offset_ratio(self, box2d, d3_location, cam_to_img):
-        return calc_center_offset_ratio(box2d, d3_location, cam_to_img)
-    
-    def get_depth_bias(self):
-        if self.label != None:
-            return self.calc_depth_bias(self.img_W, self.box2d, self.proj_matrix, self.label)
+    def update_cls_dims(self, cls, dim):
+        if cls not in self.cls_dims.keys():
+            self.cls_dims[cls] = dict()
+            self.cls_dims[cls]['dim_sum'] = np.array(dim, dtype=np.float32)
+            self.cls_dims[cls]['count'] = 1
         else:
-            RuntimeError('No label')
+            self.cls_dims[cls]['dim_sum']+= np.array(dim, dtype=np.float32)
+            self.cls_dims[cls]['count'] += 1
+    
+    def get_cls_dim_avg(self, cls):
+        return self.cls_dims[cls]['dim_sum'] / self.cls_dims[cls]['count']
+    
+    def get_targets(self, objects_L, objects_R):
+        targets_L = list()
+        targets_R = list()
+        for obj_L, obj_R in zip(objects_L, objects_R):
+            # left image
+            obj_target = dict()
+            obj_target['Class'] = obj_L.cls_type
+            obj_target['Truncation'] = obj_L.trucation
+            obj_target['Box2d']: obj_L.box2d
+            obj_target['Alpha'] = obj_L.alpha
+            obj_target['Ry'] = obj_L.ry
+            obj_target['Dim_delta']= obj_L.dim - self.get_cls_dim_avg(obj_L.cls_type)
+            obj_target['Location']= obj_L.pos
+            obj_target['Heading_bin'], obj_target['Heading_res'] = angle2class(obj_L.alpha, self.bins)
+            obj_target['Theta_ray'] = obj_L.theta_ray
+            targets_L.append(obj_target)
+            # right image
+            obj_target = dict()
+            obj_target['Class'] = obj_R.cls_type
+            obj_target['Truncation'] = obj_R.trucation
+            obj_target['Box2d']: obj_R.box2d
+            obj_target['Alpha'] = obj_R.alpha
+            obj_target['Ry'] = obj_R.ry
+            obj_target['Dim_delta']= obj_R.dim - self.get_cls_dim_avg(obj_R.cls_type)
+            obj_target['Location']= obj_R.pos
+            obj_target['Heading_bin'], obj_target['Heading_res'] = angle2class(obj_R.alpha, self.bins)
+            obj_target['Theta_ray'] = obj_R.theta_ray
+            targets_R.append(obj_target)
+        return targets_L, targets_R
 
-    #img.shape[1], box2d, proj_matrix, label
-    def calc_depth_bias(self, img_W, box2d, cam_to_img, label):
-        obj_W = self.averages.get_item(self.detection_class)[1] + label['Dimensions'][1]
-        obj_L = self.averages.get_item(self.detection_class)[2] + label['Dimensions'][2]
-        alpha = label['Alpha']
-        trun = label['Truncate'] 
-        depth_GT = label['Location'][2]
-        depth_calc = calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun)
-        #print(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun)
-        #print('GT',depth_GT)
-        #print('calc',depth_calc)
-        return depth_GT - depth_calc
+# modified from monodle
+class Object3d(object):
+    def __init__(self, line):
+        label = line.strip().split(' ')
+        self.src = line
+        self.cls_type = label[0].lower()
+        self.trucation = float(label[1])
+        self.occlusion = float(label[2])  # 0:fully visible 1:partly occluded 2:largely occluded 3:unknown
+        self.alpha = float(label[3])
+        # str->float->np.int32
+        self.box2d = np.array((float(label[4]), float(label[5]), float(label[6]), float(label[7])), dtype=np.int32)
+        self.h = float(label[8])
+        self.w = float(label[9])
+        self.l = float(label[10])
+        self.dim = np.array([self.h, self.w, self.l], dtype=np.float32)
+        self.pos = np.array((float(label[11]), float(label[12]), float(label[13])), dtype=np.float32)
+        #self.dis_to_cam = np.linalg.norm(self.pos)
+        self.ry = float(label[14])
+        #self.score = float(label[15]) if label.__len__() == 16 else -1.0
+        self.level_str = None
+        self.level = self.get_obj_level()
+        self.crop = None
+        self.calib = None
+        self.camera_pose = None
+        self.theta_ray = None
+    
+    def set_crop(self, img, calib, camera_pose):
+        self.crop = img[self.box2d[1]:self.box2d[3]+1, self.box2d[0]:self.box2d[2]+1]
+        self.calib = calib
+        self.camera_pose = camera_pose.lower()
+        self.theta_ray = self.calc_theta_ray(img.shape[1], self.box2d, calib, camera_pose)
+    
+    def calc_theta_ray(self, width, box2d, cam_to_img, camera_pose):#透過跟2d bounding box 中心算出射線角度
+        if camera_pose == 'left':
+            fovx = 2 * np.arctan(width / (2 * cam_to_img.p2[0][0]))
+        elif camera_pose == 'right':
+            fovx = 2 * np.arctan(width / (2 * cam_to_img.p3[0][0]))
+        x_center = (box2d[0] + box2d[2]) // 2
+        dx = x_center - (width // 2)
+        mult = 1 if dx >=0 else -1
+        dx = abs(dx)
+        angle = mult * np.arctan( (2*dx*np.tan(fovx/2)) / width )
+        return angle_correction(angle)
+                                
+    def get_obj_level(self):
+        height = float(self.box2d[3]) - float(self.box2d[1]) + 1
+
+        if self.trucation == -1:
+            self.level_str = 'DontCare'
+            return 0
+
+        if height >= 40 and self.trucation <= 0.15 and self.occlusion <= 0:
+            self.level_str = 'Easy'
+            return 1  # Easy
+        elif height >= 25 and self.trucation <= 0.3 and self.occlusion <= 1:
+            self.level_str = 'Moderate'
+            return 2  # Moderate
+        elif height >= 25 and self.trucation <= 0.5 and self.occlusion <= 2:
+            self.level_str = 'Hard'
+            return 3  # Hard
+        else:
+            self.level_str = 'UnKnown'
+            return 4
+
+    def generate_corners3d(self):
+        """
+        generate corners3d representation for this object
+        :return corners_3d: (8, 3) corners of box3d in camera coord
+        """
+        l, h, w = self.l, self.h, self.w
+        x_corners = [l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2]
+        y_corners = [0, 0, 0, 0, -h, -h, -h, -h]
+        z_corners = [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2]
+
+        R = np.array([[np.cos(self.ry), 0, np.sin(self.ry)],
+                      [0, 1, 0],
+                      [-np.sin(self.ry), 0, np.cos(self.ry)]])
+        corners3d = np.vstack([x_corners, y_corners, z_corners])  # (3, 8)
+        corners3d = np.dot(R, corners3d).T
+        corners3d = corners3d + self.pos
+        return corners3d
+
+    def to_str(self):
+        print_str = '%s %.3f %.3f %.3f box2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f' \
+                            % (self.cls_type, self.trucation, self.occlusion, self.alpha, self.box2d, self.h, self.w, self.l,
+                                self.pos, self.ry)
+        return print_str
+
+    def to_kitti_format_label(self):
+        left, top, right, btm = self.box2d
+        H, W, L = self.h, self.w, self.l
+        X, Y, Z = self.pos
+        print_str = '%s %.1f %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f' \
+                     % (self.cls_type, self.trucation, self.occlusion, self.alpha, left, top, right, btm,
+                        W, H, L, X, Y, Z, self.ry)
+        return print_str
+    
+    def REG_result_to_kitti_format_label(self, reg_alpha, reg_dim, reg_pos):
+        left, top, right, btm = self.box2d
+        H, W, L = reg_dim
+        X, Y, Z = reg_pos
+        reg_ry = self.ry - self.alpha + reg_alpha
+        print_str = '%s %.1f %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f' \
+                     % (self.cls_type, self.trucation, self.occlusion, reg_alpha, left, top, right, btm,
+                        W, H, L, X, Y, Z, reg_ry)
+        return print_str
+
+#https://github.com/HKUST-Aerial-Robotics/Stereo-RCNN/blob/63c6ab98b7a5e36c7bcfdec4529804fc940ee900/lib/model/utils/kitti_utils.py#L97C5-L97C25
+class FrameCalibrationData:
+    '''Frame Calibration Holder
+        p0-p3      Camera P matrix. Contains extrinsic 3x4    
+                   and intrinsic parameters.
+        r0_rect    Rectification matrix, required to transform points 3x3    
+                   from velodyne to camera coordinate frame.
+        tr_velodyne_to_cam0     Used to transform from velodyne to cam 3x4    
+                                coordinate frame according to:
+                                Point_Camera = P_cam * R0_rect *
+                                                Tr_velo_to_cam *
+                                                Point_Velodyne.
+    '''
+
+    def __init__(self, calib_path):
+        self.calib_path = calib_path
+        self.p0 = []
+        self.p1 = []
+        self.p2 = []
+        self.p3 = []
+        self.p2_2 = []
+        self.p2_3 = []
+        self.r0_rect = []
+        self.t_cam2_cam0 = []
+        self.tr_velodyne_to_cam0 = []
+        self.set_info(calib_path)
+        
+    def set_info(self, calib_path):
+        ''' 
+        Reads in Calibration file from Kitti Dataset.
+        
+        Inputs:
+        CALIB_PATH : Str PATH of the calibration file.
+        
+        Returns:
+        frame_calibration_info : FrameCalibrationData
+                                Contains a frame's full calibration data.
+        ^ z        ^ z                                      ^ z         ^ z
+        | cam2     | cam0                                   | cam3      | cam1
+        |-----> x  |-----> x                                |-----> x   |-----> x
+
+        '''
+        data_file = open(calib_path, 'r')
+        data_reader = csv.reader(data_file, delimiter=' ')
+        data = []
+
+        for row in data_reader:
+            data.append(row)
+
+        data_file.close()
+
+        p_all = []
+
+        for i in range(4):
+            p = data[i]
+            p = p[1:]
+            p = [float(p[i]) for i in range(len(p))]
+            p = np.reshape(p, (3, 4))
+            p_all.append(p)
+
+        # based on camera 0
+        self.p0 = p_all[0]
+        self.p1 = p_all[1]
+        self.p2 = p_all[2]
+        self.p3 = p_all[3]
+
+        # based on camera 2
+        self.p2_2 = np.copy(p_all[2]) 
+        self.p2_2[0,3] = self.p2_2[0,3] - self.p2[0,3]
+
+        self.p2_3 = np.copy(p_all[3]) 
+        self.p2_3[0,3] = self.p2_3[0,3] - self.p2[0,3]
+
+        self.t_cam2_cam0 = np.zeros(3)
+        self.t_cam2_cam0[0] = (self.p2[0,3] - self.p0[0,3])/self.p2[0,0]
+
+        # Read in rectification matrix
+        tr_rect = data[4]
+        tr_rect = tr_rect[1:]
+        tr_rect = [float(tr_rect[i]) for i in range(len(tr_rect))]
+        self.r0_rect = np.reshape(tr_rect, (3, 3))
+
+        # Read in velodyne to cam matrix
+        tr_v2c = data[5]
+        tr_v2c = tr_v2c[1:]
+        tr_v2c = [float(tr_v2c[i]) for i in range(len(tr_v2c))]
+        self.tr_velodyne_to_cam0 = np.reshape(tr_v2c, (3, 4))

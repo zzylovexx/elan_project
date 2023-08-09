@@ -1,14 +1,14 @@
 # check every time
-DATE="0809"
+DATE="0809car"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
-DEVICE=0
-TYPE=0 # 0 dim, 1 angle, 2 both, 3 BL
+DEVICE=2
+TYPE=2 # 0 dim, 1 angle, 2 both, 3 BL
+
 # hyper-parameter
 GROUP=0
-
 #FIXED
-EPOCH=1
+EPOCH=50
 BIN=4
 WARMUP=0
 # not done yet
@@ -58,9 +58,10 @@ then
     R_PATH=$R_PATH"_G_W$WARMUP"
 fi
 PKL=$PKL"_$EPOCH.pkl"
+
 echo "SHELL W_PATH:"$W_PATH
 echo "SHELL PKL:"$PKL
 echo "SHELL R_PATH:"$R_PATH
-python KITTI_Train_0808.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND
-#python KITTI_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH
+python KITTI_train_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND
+python KITTI_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH
 echo "SHELL FINISHED"

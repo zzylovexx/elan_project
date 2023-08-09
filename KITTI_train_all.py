@@ -1,4 +1,4 @@
-from torch_lib.KITTI_Dataset_0808 import *
+from torch_lib.KITTI_Dataset import *
 from torch_lib.Model_heading_bin import Model, compute_residual_loss
 from library.ron_utils import *
 
@@ -36,7 +36,7 @@ parser.add_argument("--cond", "-C", type=int, help='if True, 4-dim with theta_ra
 
 def main():
     cfg = {'path':'Kitti/training',
-            'class_list':['car'], 'diff_list': [], #0:DontCare, 1:Easy, 2:Moderate, 3:Hard, 4:Unknown
+            'class_list':['car'], 'diff_list': [1, 2], #0:DontCare, 1:Easy, 2:Moderate, 3:Hard, 4:Unknown
             'bins': 0, 'cond':False}
     FLAGS = parser.parse_args()
     keep_same_seeds(FLAGS.seed)
@@ -94,7 +94,7 @@ def main():
     total_num_batches = len(train_loader)
     passes = 0
     print('total_num_batches', total_num_batches)
-    for epoch in range(0):#(1, epochs+1):
+    for epoch in range(1, epochs+1):
         curr_batch = 0
         
         for batch_L, labels_L, batch_R, labels_R in train_loader:
@@ -111,7 +111,7 @@ def main():
             [residual_L, bin_L, dim_L] = model(batch_L)
 
             bin_loss = F.cross_entropy(bin_L, gt_bin,reduction='mean').to(device)
-            print(bin_loss.item())
+
             residual_loss, _ = compute_residual_loss(residual_L, gt_bin, gt_residual, device)
             
             # calc GT_alpha,return list type
@@ -234,7 +234,7 @@ def main():
             writer.add_scalar(f'{train_config}/L', dim_performance[2], epoch)
                 
 
-        if epoch % epochs == 0:
+        if epoch % 10 == 0:
             name = save_path + f'_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)
@@ -243,10 +243,7 @@ def main():
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': opt_SGD.state_dict(),
-                    'loss': loss,
                     'cfg': cfg,
-                    'bin': FLAGS.bin, # for evaluate
-                    'cond': FLAGS.cond, # for evaluate
                     'W_consist': W_consist,
                     'W_ry': W_ry
                     }, name)

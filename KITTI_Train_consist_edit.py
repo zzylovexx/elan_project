@@ -1,4 +1,4 @@
-from torch_lib.KITTI_Dataset import *
+from torch_lib.KITTI_Dataset_consist import *
 from torch_lib.Model_heading_bin import Model, compute_residual_loss
 from library.ron_utils import *
 
