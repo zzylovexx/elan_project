@@ -1,5 +1,5 @@
 from torch_lib.KITTI_Dataset import *
-from torch_lib.Model_heading_bin import Model, compute_residual_loss
+from torch_lib.Model_heading_bin import Model
 from library.ron_utils import *
 
 import torch
@@ -37,23 +37,25 @@ parser.add_argument("--cond", "-C", type=int, help='if True, 4-dim with theta_ra
 def main():
     cfg = {'path':'Kitti/training',
             'class_list':['car'], 'diff_list': [1, 2], #0:DontCare, 1:Easy, 2:Moderate, 3:Hard, 4:Unknown
-            'bins': 0, 'cond':False}
+            'bins': 0, 'cond':False, 'group':False}
     FLAGS = parser.parse_args()
     keep_same_seeds(FLAGS.seed)
     is_group = FLAGS.group
     is_cond = FLAGS.cond
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
-    type = FLAGS.type
+    type_ = FLAGS.type
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     epochs = FLAGS.epoch
     batch_size = 16 #64 worse than 8
-    alpha = 0.6
+    W_dim = 0.6
+    W_group = 0.3
     W_consist = 0.3
     W_ry = 0.1
     # make weights folder
     cfg['bins'] = bin_num
     cfg['cond'] = is_cond
+    cfg['group'] = is_group
     ##
     weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
     os.makedirs(weights_folder, exist_ok=True)
@@ -87,12 +89,17 @@ def main():
     # milestones:調整lr的epoch數，gamma:decay factor (https://hackmd.io/@Hong-Jia/H1hmbNr1d)
     #scheduler = torch.optim.lr_scheduler.MultiStepLR(opt_SGD, milestones=[i for i in range(10, epochs, 20)], gamma=0.5)
     #dim_loss_func = nn.MSELoss().to(device) #org function
-    if is_group:
-        print("< Train with GroupLoss >")
-        group_loss_func = stdGroupLoss_heading_bin
+    if is_group == 1:
+        print("< Train with compute_cos_group_loss >")
+        group_loss_func = compute_cos_group_loss
+    elif is_group ==2:
+        print("< Train with compute_sin_sin_group_loss >")
+        group_loss_func = compute_sin_sin_group_loss
+
     
     total_num_batches = len(train_loader)
     passes = 0
+    start = time.time()
     print('total_num_batches', total_num_batches)
     for epoch in range(1, epochs+1):
         curr_batch = 0
@@ -111,33 +118,25 @@ def main():
             [residual_L, bin_L, dim_L] = model(batch_L)
 
             bin_loss = F.cross_entropy(bin_L, gt_bin,reduction='mean').to(device)
-
-            residual_loss, _ = compute_residual_loss(residual_L, gt_bin, gt_residual, device)
-            
-            # calc GT_alpha,return list type
-            bin_argmax = torch.max(bin_L, dim=1)[1]
-            
-
+            residual_loss = compute_residual_loss(residual_L, gt_bin, gt_residual, device)
             loss_theta = bin_loss + residual_loss
             #dim_loss = F.mse_loss(dim, gt_dim, reduction='mean')  # org use mse_loss
             dim_loss = F.l1_loss(dim_L, gt_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
             #dim_loss = L1_loss_alpha(dim, gt_dim, GT_alpha, device) # 0613 try elevate dim performance            
 
-            loss = alpha * dim_loss + loss_theta
+            loss = W_dim * dim_loss + loss_theta
             #added loss
-            if is_group and epoch > warm_up:
-                truth_Theta = labels_L['Theta'].float().to(device)
-                truth_Ry = labels_L['Ry'].float().to(device)
-                truth_group = labels_L['Group'].float().to(device)
-                pred_alpha = angle_per_class*bin_argmax + residual_L[torch.arange(len(residual_L)), bin_argmax]
-                group_loss = group_loss_func(pred_alpha.detach(), truth_Theta, truth_group, device)
-                loss += 0.3 * group_loss
+            if is_group > 0 and epoch > warm_up:
+                GT_alphas = labels_L['Alpha'].to(device)
+                REG_alphas = compute_alpha(bin_L, residual_L, angle_per_class).to(device)
+                group_loss = group_loss_func(REG_alphas, GT_alphas)
+                loss += W_group * group_loss
             else:
                 group_loss = torch.tensor(0.0).to(device)
 
 
             # 0801 added consist loss
-            if type!= 3: # baseline
+            if type_!= 3: # baseline
                 reg_ry_L = compute_ry(bin_L, residual_L, gt_theta_ray_L, angle_per_class)
                 [residual_R, bin_R, dim_R] = model(batch_R)
                 reg_ry_R = compute_ry(bin_R, residual_R, gt_theta_ray_R, angle_per_class)
@@ -145,12 +144,12 @@ def main():
                 ry_angle_loss = F.l1_loss(torch.cos(reg_ry_L), torch.cos(reg_ry_R), reduction='mean')
                 
                 # angle_consist
-                if type==0:
+                if type_==0:
                     ry_angle_loss = torch.tensor(0.0)
                 # dim_consist
-                elif type==1:
+                elif type_==1:
                     consist_loss = torch.tensor(0.0)
-                # if type==2 : both calculated
+                # if type_==2 : both calculated
 
                 loss += W_consist*consist_loss.to(device) + W_ry*ry_angle_loss.to(device)
 
@@ -158,18 +157,18 @@ def main():
             loss.backward()
             opt_SGD.step()
 
-            if passes % 200 == 0 and type!=3:
+            if passes % 200 == 0 and type_!=3:
                 print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[residual_loss:%.4f],[dim_loss:%.4f]" \
                     %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item()))
                 print("[consist_loss: %.4f],[Ry_angle_loss:%.4f]" \
                     %(consist_loss.item(), ry_angle_loss.item()))
-                if is_group and epoch > warm_up:
+                if is_group > 0 and epoch > warm_up:
                     print('[group_loss:%.4f]'%(group_loss.item()))
             
             elif passes % 200 == 0:
                 print("--- epoch %s | batch %s/%s --- [loss: %.4f],[bin_loss:%.4f],[residual_loss:%.4f],[dim_loss:%.4f]" \
                     %(epoch, curr_batch, total_num_batches, loss.item(), bin_loss.item(), residual_loss.item(), dim_loss.item()))
-                if is_group and epoch > warm_up:
+                if is_group > 0 and epoch > warm_up:
                     print('[group_loss:%.4f]'%(group_loss.item()))
 
             passes += 1
@@ -184,7 +183,7 @@ def main():
         writer.add_scalar(f'{train_config}/loss_theta', loss_theta, epoch)
         writer.add_scalar(f'{train_config}/total_loss', loss, epoch) 
         writer.add_scalar(f'{train_config}/group_loss', group_loss, epoch)
-        if type!=3:
+        if type_!=3:
             writer.add_scalar(f'{train_config}/consist_loss', consist_loss, epoch)
             writer.add_scalar(f'{train_config}/ry_angle_loss', ry_angle_loss, epoch)
         
@@ -234,7 +233,7 @@ def main():
             writer.add_scalar(f'{train_config}/L', dim_performance[2], epoch)
                 
 
-        if epoch % 10 == 0:
+        if epoch % epochs == 0:
             name = save_path + f'_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)
@@ -245,22 +244,22 @@ def main():
                     'optimizer_state_dict': opt_SGD.state_dict(),
                     'cfg': cfg,
                     'W_consist': W_consist,
-                    'W_ry': W_ry
+                    'W_ry': W_ry,
+                    'W_group': W_group,
                     }, name)
             print("====================")
             
     writer.close()
-    #print(f'Elapsed time:{(time.time()-start)//60}min')
+    print(f'Elapsed time:{(time.time()-start)//60}min')
 
-def compute_ry(bin, residual, theta_rays, angle_per_class):
-    bin_argmax = torch.max(bin, dim=1)[1]
+def compute_ry(bin_, residual, theta_rays, angle_per_class):
+    bin_argmax = torch.max(bin_, dim=1)[1]
     residual = residual[torch.arange(len(residual)), bin_argmax] 
     alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
     rys = list()
     for a, ray in zip(alphas, theta_rays):
         rys.append(angle_correction(a+ray))
     return torch.Tensor(rys)
-
 
 def name_by_parameters(FLAGS):
     is_group = FLAGS.group
@@ -269,8 +268,8 @@ def name_by_parameters(FLAGS):
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     
     save_path = f'{FLAGS.weights_path}_B{bin_num}'
-    if is_group==1:
-        save_path += f'_G_W{warm_up}'
+    if is_group>0:
+        save_path += f'_G{is_group}_W{warm_up}'
     if is_cond==1:
         save_path += '_C'
 

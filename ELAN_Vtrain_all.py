@@ -315,13 +315,5 @@ def id_compare(now_id, last_id):
             last_id_list.append(find_idx)
     return now_id_list, last_id_list
 
-def compute_alpha(bin, residual, angle_per_class):
-    bin_argmax = torch.max(bin, dim=1)[1]
-    residual = residual[torch.arange(len(residual)), bin_argmax] 
-    alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
-    for i in range(len(alphas)):
-        alphas[i] = angle_correction(alphas[i])
-    return alphas
-
 if __name__ == '__main__':
     main()

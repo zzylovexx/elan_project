@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 from .Plotting import *
 
@@ -324,10 +325,11 @@ def angle2class(angle, num_heading_bin):
 
     return class_id, residual_angle
 
-# 0613 added 
-def L1_loss_alpha(input, target, alpha, device='cuda:0'):
+# 0613 added 0810 updated(3/4*)
+def L1_loss_alpha(input, target, alpha, device):
+    # [H, W, L]
     weights = [torch.ones(input.shape[0]).to(device), 1+torch.sin(alpha)**2, 1+torch.cos(alpha)**2]
-    weights = torch.stack(weights, dim=1).to(device)
+    weights = 3/4*torch.stack(weights, dim=1).to(device)
     loss = abs(input-target)
     loss *= weights
     return torch.mean(loss)
@@ -467,3 +469,116 @@ def keep_same_seeds(seed):
     np.random.seed(seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
+
+#0810 add
+def compute_residual_loss(residual, gt_bin, gt_residual, device):
+    one_hot = torch.zeros((residual).shape).to(device)
+    # make one hot map
+    for i in range(gt_bin.shape[0]):
+        one_hot[i][gt_bin[i]] = 1
+    reg_residual = torch.sum(residual * one_hot.to(device), axis=1)
+    residual_loss = F.l1_loss(reg_residual, gt_residual, reduction='mean')
+    return residual_loss
+
+#0810 add
+def compute_cos_group_loss(REG_alphas, GT_alphas):
+    REG_alphas = REG_alphas.detach()
+    GT_alphas = GT_alphas.detach()
+    GT_groups = get_bin_classes(GT_alphas.tolist())
+    group_idxs = get_group_idxs(GT_groups) #nested list
+    
+    group_loss = torch.tensor(0)
+    for idxs in group_idxs:
+        if len(idxs) == 1:
+            continue
+        reg = REG_alphas[idxs]
+        gt = GT_alphas[idxs]
+        ratio = reg.shape[0]/REG_alphas.shape[0]
+        loss = ratio * cos_std_loss(reg, gt)
+        group_loss = torch.add(group_loss, loss)
+    return group_loss.requires_grad_(True)
+
+def cos_std_loss(reg, gt):
+    return torch.std(torch.cos(reg-gt))
+
+def compute_sin_sin_group_loss(REG_alphas, GT_alphas):
+    REG_alphas = REG_alphas.detach()
+    GT_alphas = GT_alphas.detach()
+    GT_groups = get_bin_classes(GT_alphas.tolist())
+    group_idxs = get_group_idxs(GT_groups) #nested list
+    
+    group_loss = torch.tensor(0)
+    for idxs in group_idxs:
+        if len(idxs) == 1:
+            continue
+        reg = REG_alphas[idxs]
+        gt = GT_alphas[idxs]
+        ratio = reg.shape[0]/REG_alphas.shape[0]
+        loss = ratio * sin_sin_std_loss(reg, gt)
+        group_loss = torch.add(group_loss, loss)
+    return group_loss.requires_grad_(True)
+
+def sin_sin_std_loss(reg, gt):
+    return torch.std(torch.sin(reg)- torch.sin(gt))
+
+def compute_alpha(bin, residual, angle_per_class):
+    bin_argmax = torch.max(bin, dim=1)[1]
+    residual = residual[torch.arange(len(residual)), bin_argmax] 
+    alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
+    for i in range(len(alphas)):
+        alphas[i] = angle_correction(alphas[i])
+    return alphas
+
+# USED IN EXTRA LABELING
+
+def get_bin_classes(array, num_bin=60):
+    org_classes = list()
+    for value in array:
+        bin_class = angle2class(value, num_bin)[0]
+        org_classes.append(bin_class)
+    
+    info_dict = generate_info_dict(array, org_classes, num_bin)
+    info_dict = check_neighbor_classes(info_dict, num_bin)
+    new_classes = get_new_classes(info_dict, org_classes)
+    #diff = 0 if (org_classes == new_classes).all() else 1
+    return new_classes#, diff
+    
+def generate_info_dict(array, org_classes, num_bin):
+    tmp = [[] for i in range(num_bin)]
+    tmp_dict = dict()
+    for class_, value in zip(org_classes, array):
+        tmp[class_].append(value)
+    for idx, list_ in enumerate(tmp):
+        if len(list_)==0:
+            continue
+        tmp_dict[idx] = {'list': list_, 'mean': sum(list_)/len(list_), 'class': idx}
+    return tmp_dict
+
+def check_neighbor_classes(dict_, num_bin):
+    keys = sorted(dict_.keys())
+    angle_per_class = 2*np.pi / num_bin
+    # 0-num_bin-1
+    for i in range(len(keys)-1):
+        if keys[i] == keys[i+1]-1 and abs(dict_[keys[i]]['mean'] - dict_[keys[i+1]]['mean'] < angle_per_class):
+            len_i = len(dict_[keys[i]]['list'])
+            len_i_1 = len(dict_[keys[i+1]]['list'])
+
+            class_ = dict_[keys[i]]['class'] if len_i>= len_i_1 else dict_[keys[i+1]]['class']
+            dict_[keys[i]]['class'] = class_
+            dict_[keys[i+1]]['class'] = class_
+    # 0 and num_bin-1 is neighbor 
+    if 0 in keys and num_bin-1 in keys and abs(dict_[keys[i]]['mean'] - dict_[keys[i+1]]['mean']) < angle_per_class:
+        len_i = len(dict_[keys[i]]['list'])
+        len_i_1 = len(dict_[keys[i+1]]['list'])
+        class_ = dict_[keys[i]]['class'] if len_i>= len_i_1 else dict_[keys[i+1]]['class']
+        dict_[keys[i]]['class'] = class_
+        dict_[keys[i+1]]['class'] = class_
+    return dict_
+
+def get_new_classes(dict_, classes):
+    classes = np.array(classes)
+    for key in dict_.keys():
+        if key != dict_[key]['class']:
+            classes[classes==key] = dict_[key]['class']
+    return classes
+###
