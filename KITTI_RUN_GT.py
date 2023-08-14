@@ -100,10 +100,11 @@ def main():
     print('[MY CALC Depth error]')
     box_depth_error_calculation(GT_depth, CALC_depth, 5)
     #write as file as well
-    os.makedirs(f'KITTI_eval/{result_root.split("/")[0]}', exist_ok=True)
     org_stdout = sys.stdout
+    os.makedirs(f'KITTI_eval/{result_root.split("/")[0]}', exist_ok=True)
     f = open(f'KITTI_eval/{result_root}.txt', 'w')
     sys.stdout = f
+    print_info(checkpoint, cfg)
     ron_evaluation(val_ids, diff_list, cls_list, result_root)
     print('[MY CALC Depth error]')
     box_depth_error_calculation(GT_depth, CALC_depth, 5)
@@ -111,6 +112,21 @@ def main():
     f.close()
     print(f'save in KITTI_eval/{result_root}.txt')
     
+def print_info(ckpt, cfg):
+    class_list = cfg['class_list']
+    diff_list = cfg['diff_list']
+    group = cfg['group']
+    cond = cfg['cond']
+
+    W_consist = ckpt['W_consist']
+    W_ry = ckpt['W_ry']
+    W_group = ckpt['W_group']
+    print('Cls_list:', class_list, end=', ')
+    print('Diff_list:', diff_list, end=', ')
+    print(f'Group:{group}, cond:{cond}', end=' ')
+    print(f'[Weights] C_dim:{W_consist:.2f}, C_angle:{W_ry:.2f}, GroupLoss:{W_group:.2f}')
+
+
 
 if __name__ == '__main__':
     start = time.time()

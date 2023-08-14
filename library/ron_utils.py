@@ -521,6 +521,37 @@ def compute_sin_sin_group_loss(REG_alphas, GT_alphas):
 def sin_sin_std_loss(reg, gt):
     return torch.std(torch.sin(reg)- torch.sin(gt))
 
+def compute_compare_group_loss(REG_alphas, GT_alphas):
+    REG_alphas = REG_alphas.detach()
+    GT_alphas = GT_alphas.detach()
+    GT_groups = get_bin_classes(GT_alphas.tolist())
+    group_idxs = get_group_idxs(GT_groups) #nested list
+    
+    group_loss = torch.tensor(0)
+    for idxs in group_idxs:
+        if len(idxs) == 1:
+            continue
+        reg = REG_alphas[idxs]
+        gt = GT_alphas[idxs]
+        ratio = reg.shape[0]/REG_alphas.shape[0]
+        loss = ratio * compare_best_loss(reg, gt)
+        group_loss = torch.add(group_loss, loss)
+    return group_loss.requires_grad_(True)
+
+def compare_best_loss(reg, gt):
+    cos_delta = torch.cos(reg-gt)
+    best_idx = torch.argmax(cos_delta)
+    reg_best_delta = reg - reg[best_idx]
+    best_delta_loss = torch.sin(reg_best_delta).sum() #using sin for sin(0)~0
+    return best_delta_loss
+
+def compare_abs_best_loss(reg, gt):
+    cos_delta = torch.cos(reg-gt)
+    best_idx = torch.argmax(cos_delta)
+    reg_best_delta = reg - reg[best_idx]
+    best_delta_loss = abs(torch.sin(reg_best_delta).sum()) #using sin for sin(0)~0
+    return best_delta_loss
+
 def compute_alpha(bin, residual, angle_per_class):
     bin_argmax = torch.max(bin, dim=1)[1]
     residual = residual[torch.arange(len(residual)), bin_argmax] 

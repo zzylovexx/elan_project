@@ -1,12 +1,12 @@
 # check every time
-DATE="0811alpha_l1"
+DATE="0814"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
-DEVICE=2
-TYPE=2 # 0 dim, 1 angle, 2 both, 3 BL
+DEVICE=1
+TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
 
 # hyper-parameter
-GROUP=1 #1:cos, 2:sin_sin
+GROUP=3 #0:NO, 1:cos, 2:sin_sin, 3:compare
 #FIXED
 EPOCH=50
 BIN=12

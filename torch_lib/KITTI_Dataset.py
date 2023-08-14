@@ -105,6 +105,8 @@ class KITTI_Dataset(data.Dataset):
             obj_target['Location']= obj_L.pos
             obj_target['Heading_bin'], obj_target['Heading_res'] = angle2class(obj_L.alpha, self.bins)
             obj_target['Theta_ray'] = obj_L.theta_ray
+            obj_target['Calib'] = obj_L.calib
+            obj_target['img_W'] = obj_L.img_W
             targets_L.append(obj_target)
             # right image
             obj_target = dict()
@@ -117,6 +119,8 @@ class KITTI_Dataset(data.Dataset):
             obj_target['Location']= obj_R.pos
             obj_target['Heading_bin'], obj_target['Heading_res'] = angle2class(obj_R.alpha, self.bins)
             obj_target['Theta_ray'] = obj_R.theta_ray
+            obj_target['Calib'] = obj_L.calib
+            obj_target['img_W'] = obj_L.img_W
             targets_R.append(obj_target)
         return targets_L, targets_R
 
@@ -147,6 +151,7 @@ class Object3d(object):
         self.theta_ray = None
     
     def set_crop(self, img, calib, camera_pose):
+        self.img_W = img.shape[1]
         self.crop = img[self.box2d[1]:self.box2d[3]+1, self.box2d[0]:self.box2d[2]+1]
         self.calib = calib
         self.camera_pose = camera_pose.lower()

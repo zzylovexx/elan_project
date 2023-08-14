@@ -49,6 +49,7 @@ def main():
     epochs = FLAGS.epoch
     batch_size = 16 #64 worse than 8
     W_dim = 0.6
+    W_theta = 1
     W_group = 10
     W_consist = 0.3
     W_ry = 0.1
@@ -92,9 +93,12 @@ def main():
     if is_group == 1:
         print("< Train with compute_cos_group_loss >")
         group_loss_func = compute_cos_group_loss
-    elif is_group ==2:
+    elif is_group ==2 :
         print("< Train with compute_sin_sin_group_loss >")
         group_loss_func = compute_sin_sin_group_loss
+    elif is_group == 3:
+        print("< Train with compute_compare_group_loss >")
+        group_loss_func = compute_compare_group_loss
 
     
     total_num_batches = len(train_loader)
@@ -125,7 +129,7 @@ def main():
             GT_alphas = labels_L['Alpha'].to(device)
             dim_loss = L1_loss_alpha(dim_L, gt_dim, GT_alphas, device) # 0613 try elevate dim performance            
 
-            loss = W_dim * dim_loss + loss_theta
+            loss = W_dim * dim_loss + W_theta * loss_theta
             #added loss
             if is_group > 0 and epoch > warm_up:
                 #GT_alphas = labels_L['Alpha'].to(device)
@@ -152,7 +156,7 @@ def main():
                     consist_loss = torch.tensor(0.0)
                 # if type_==2 : both calculated
 
-                loss += W_consist*consist_loss.to(device) + W_ry*ry_angle_loss.to(device)
+                loss += W_consist * consist_loss.to(device) + W_ry * ry_angle_loss.to(device)
 
             opt_SGD.zero_grad()
             loss.backward()
@@ -180,13 +184,13 @@ def main():
         #write every epoch
         writer.add_scalar(f'{train_config}/bin_loss', bin_loss, epoch)
         writer.add_scalar(f'{train_config}/residual_loss', residual_loss, epoch)
-        writer.add_scalar(f'{train_config}/dim_loss', dim_loss, epoch)
-        writer.add_scalar(f'{train_config}/loss_theta', loss_theta, epoch)
+        writer.add_scalar(f'{train_config}/dim_loss', W_dim*dim_loss, epoch)
+        writer.add_scalar(f'{train_config}/loss_theta', W_theta*loss_theta, epoch)
         writer.add_scalar(f'{train_config}/total_loss', loss, epoch) 
-        writer.add_scalar(f'{train_config}/group_loss', group_loss, epoch)
+        writer.add_scalar(f'{train_config}/group_loss', W_group*group_loss, epoch)
         if type_!=3:
-            writer.add_scalar(f'{train_config}/consist_loss', consist_loss, epoch)
-            writer.add_scalar(f'{train_config}/ry_angle_loss', ry_angle_loss, epoch)
+            writer.add_scalar(f'{train_config}/consist_loss', W_consist*consist_loss, epoch)
+            writer.add_scalar(f'{train_config}/ry_angle_loss', W_ry*ry_angle_loss, epoch)
         
         # visiualize https://zhuanlan.zhihu.com/p/103630393
         #tensorboard --logdir=./{log_foler} --port 8123
@@ -244,6 +248,8 @@ def main():
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': opt_SGD.state_dict(),
                     'cfg': cfg,
+                    'W_dim': W_dim,
+                    'W_theta': W_theta,
                     'W_consist': W_consist,
                     'W_ry': W_ry,
                     'W_group': W_group,
