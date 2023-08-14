@@ -332,7 +332,7 @@ def L1_loss_alpha(input, target, alpha, device):
     weights = 3/4*torch.stack(weights, dim=1).to(device)
     loss = abs(input-target)
     loss *= weights
-    return torch.mean(loss)
+    return torch.mean(loss).to(device)
 
 def box_depth_error_calculation(depth_labels, depth_Calcs, out_range=10):
     class_GT = np.copy(depth_labels) #28742 car

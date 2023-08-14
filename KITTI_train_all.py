@@ -49,7 +49,7 @@ def main():
     epochs = FLAGS.epoch
     batch_size = 16 #64 worse than 8
     W_dim = 0.6
-    W_group = 0.3
+    W_group = 10
     W_consist = 0.3
     W_ry = 0.1
     # make weights folder
@@ -121,13 +121,14 @@ def main():
             residual_loss = compute_residual_loss(residual_L, gt_bin, gt_residual, device)
             loss_theta = bin_loss + residual_loss
             #dim_loss = F.mse_loss(dim, gt_dim, reduction='mean')  # org use mse_loss
-            dim_loss = F.l1_loss(dim_L, gt_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
-            #dim_loss = L1_loss_alpha(dim, gt_dim, GT_alpha, device) # 0613 try elevate dim performance            
+            #dim_loss = F.l1_loss(dim_L, gt_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
+            GT_alphas = labels_L['Alpha'].to(device)
+            dim_loss = L1_loss_alpha(dim_L, gt_dim, GT_alphas, device) # 0613 try elevate dim performance            
 
             loss = W_dim * dim_loss + loss_theta
             #added loss
             if is_group > 0 and epoch > warm_up:
-                GT_alphas = labels_L['Alpha'].to(device)
+                #GT_alphas = labels_L['Alpha'].to(device)
                 REG_alphas = compute_alpha(bin_L, residual_L, angle_per_class).to(device)
                 group_loss = group_loss_func(REG_alphas, GT_alphas)
                 loss += W_group * group_loss
