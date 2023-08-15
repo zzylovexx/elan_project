@@ -306,7 +306,8 @@ def calc_depth_by_width_corner(img_W, box2d, cam_to_img, obj_W, obj_L):
 # my_method
 def calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0):
     fovx = 2 * np.arctan(img_W / (2 * cam_to_img[0][0]))
-    box_W = get_box_size(box2d)[0] / (1-trun+0.01) #assume truncate related to W only
+    #box_W = get_box_size(box2d)[0] / (1-trun+0.01) #assume truncate related to W only
+    box_W = get_box_size(box2d)[0] / (1-trun) #assume truncate related to W only
     visual_W = abs(obj_L*np.cos(alpha)) + abs(obj_W*np.sin(alpha))
     theta_ray = calc_theta_ray(img_W, box2d, cam_to_img)
     visual_W /= abs(np.cos(theta_ray)) #new added !
@@ -534,22 +535,15 @@ def compute_compare_group_loss(REG_alphas, GT_alphas):
         reg = REG_alphas[idxs]
         gt = GT_alphas[idxs]
         ratio = reg.shape[0]/REG_alphas.shape[0]
-        loss = ratio * compare_best_loss(reg, gt)
+        loss = ratio * compare_abs_best_loss(reg, gt)
         group_loss = torch.add(group_loss, loss)
     return group_loss.requires_grad_(True)
-
-def compare_best_loss(reg, gt):
-    cos_delta = torch.cos(reg-gt)
-    best_idx = torch.argmax(cos_delta)
-    reg_best_delta = reg - reg[best_idx]
-    best_delta_loss = torch.sin(reg_best_delta).sum() #using sin for sin(0)~0
-    return best_delta_loss
 
 def compare_abs_best_loss(reg, gt):
     cos_delta = torch.cos(reg-gt)
     best_idx = torch.argmax(cos_delta)
-    reg_best_delta = reg - reg[best_idx]
-    best_delta_loss = abs(torch.sin(reg_best_delta).sum()) #using sin for sin(0)~0
+    reg_best_delta = abs(reg - reg[best_idx])
+    best_delta_loss = torch.sin(reg_best_delta).mean() #using sin for sin(0)~0
     return best_delta_loss
 
 def compute_alpha(bin, residual, angle_per_class):

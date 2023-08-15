@@ -1,9 +1,9 @@
 # check every time
-DATE="0815tune"
+DATE="D_0815"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
-DEVICE=0
-TYPE=2 # 0 dim, 1 angle, 2 both, 3 BL
+DEVICE=2
+TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
 
 # hyper-parameter
 BIN=4
@@ -62,6 +62,6 @@ PKL=$PKL"_$EPOCH.pkl"
 echo "SHELL W_PATH:"$W_PATH
 echo "SHELL PKL:"$PKL
 echo "SHELL R_PATH:"$R_PATH
-python KITTI_train_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND
+python KITTI_train_all_depth.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND
 python KITTI_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH -D=$DEVICE
 echo "SHELL FINISHED"
