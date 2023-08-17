@@ -13,6 +13,7 @@ parser.add_argument("--device", type=int, default=0, help='select cuda index')
 # path setting
 parser.add_argument("--weights-path", "-W_PATH", required=True, help='weights path, ie. weights/epoch_20.pkl')
 parser.add_argument("--result-path", "-R_PATH", required=True, help='path (folder name) of the generated pred-labels')
+parser.add_argument('--data-path', "-D_PATH", required=True, help='folder of the elan dataset')
 
 def plot_regressed_3d_bbox(img, cam_to_img, box2d, dimensions, alpha, theta_ray, detectionid):
 
@@ -31,6 +32,7 @@ def main():
     FLAGS = parser.parse_args()
     weights_path = FLAGS.weights_path
     result_root = FLAGS.result_path
+    data_root = FLAGS.data_path
     os.makedirs(result_root, exist_ok=True)
     #os.makedirs(result_root+'/image_2', exist_ok=True)
     os.makedirs(result_root+'/label_2', exist_ok=True)
@@ -55,8 +57,9 @@ def main():
                               normalize])
 
     # Kitti image_2 dir / label_2 dir
-    img_root = "Elan_3d_box/image_2"
-    label_root = "Elan_3d_box/renew_label"
+    print(data_root)
+    img_root = f"{data_root}/image_2"
+    label_root = f"{data_root}/renew_label"
     images = sorted(glob.glob(os.path.join(img_root, '*.png'), recursive=True))
     renew_labels = sorted(glob.glob(os.path.join(label_root, '*.txt'), recursive=True))
     # dim averages
@@ -66,7 +69,6 @@ def main():
             [0.000e+00, 1.418867e+03, 3.6e+02, 0],
             [0.000e+00, 000e+00, 1.0e+00, 0] ])
 
-    start = time.time()
     for i in range(len(renew_labels)):
         img = cv2.imread(images[i])
         lines = [x.strip() for x in open(renew_labels[i]).readlines()]
@@ -74,6 +76,8 @@ def main():
         for idx, line in enumerate(lines):
             #print(line)
             elements = line.split()
+            if elements[0].lower() != 'car':
+                continue
             for j in range(1, len(elements)):
                 elements[j] = float(elements[j])
             
@@ -85,8 +89,11 @@ def main():
             btm_right = (int(round(elements[6])), int(round(elements[7])))
             box2d = (top_left, btm_right)
             dim_gt = [elements[8], elements[9], elements[10]] # height, width, length
-            crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1] 
-            crop = process(crop)
+            crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1]
+            try:
+                crop = process(crop)
+            except:
+                print(renew_labels[i], line)
             #2dbox
             crop = torch.stack([crop]).to(device)
             #Location = [elements[11], elements[12], elements[13]]
@@ -117,7 +124,9 @@ def main():
         
         if i%500==0:
             print(i)
-    print('Done, take {} min {:.2f} sec'.format((time.time()-start)//60, (time.time()-start)%60))# around 2min
+    
 
 if __name__=='__main__':
+    start = time.time()
     main()
+    print('Done, take {} min'.format((time.time()-start)//60))# around 2min

@@ -1,13 +1,23 @@
 from library.ron_utils import *
 import sys, os
 import argparse
+import glob
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--result-path', "-R_PATH", required=True, help='folder of the predict result')
+parser.add_argument('--data-path', "-D_PATH", required=True, help='folder of the elan dataset')
 
-def evaluation(result_root):
-    valset = [x.strip() for x in open('Elan_3d_box/ImageSets/val.txt').readlines()]
+def evaluation(result_root, data_root):
+    try:
+        valset = [x.strip() for x in open(f'{data_root}/ImageSets/val.txt').readlines()]
+    except:
+        # temp way for 230808 dataset
+        all_labels = glob.glob(f'{data_root}/renew_label/*.txt')
+        valset = [name.split('/')[-1].split('.')[0] for name in all_labels]
+        print(len(valset))
+        
+
     dim_GT = list()
     dim_ELAN = list()
     depth_GT = list()
@@ -16,15 +26,15 @@ def evaluation(result_root):
     alpha_ELAN = list()
 
     for id_ in valset:
-        gt_lines = [x.strip() for x in open(f'Elan_3d_box/renew_label/{id_}.txt').readlines()]
-        gt_objects = [TrackingObject(line) for line in gt_lines if line.split()[0]=='Car']
+        gt_lines = [x.strip() for x in open(f'{data_root}/renew_label/{id_}.txt').readlines()]
+        gt_objects = [TrackingObject(line) for line in gt_lines if line.split()[0].lower()=='car']
         for obj in gt_objects:
             dim_GT.append(obj.dims[0])
             depth_GT.append(obj.locs[0][2])
             alpha_GT.append(obj.alphas[0])
             
         pred_lines = [x.strip() for x in open(f'{result_root}/label_2/{id_}.txt').readlines()]
-        pred_objects = [TrackingObject(line) for line in pred_lines if line.split()[0]=='Car']
+        pred_objects = [TrackingObject(line) for line in pred_lines if line.split()[0].lower()=='car']
         for obj in pred_objects:
             dim_ELAN.append(obj.dims[0])
             depth_ELAN.append(obj.locs[0][2])
@@ -49,15 +59,16 @@ def evaluation(result_root):
 def main():
     FLAGS = parser.parse_args()
     result_root = FLAGS.result_path
-    os.makedirs(f'ELAN_eval/{result_root.split("/")[0]}', exist_ok=True)
+    data_root = FLAGS.data_path
+    os.makedirs(f'{data_root}_eval/{result_root.split("/")[0]}', exist_ok=True)
     org_stdout = sys.stdout
-    f = open(f'ELAN_eval/{result_root}.txt', 'w')
+    f = open(f'{data_root}_eval/{result_root}.txt', 'w')
     sys.stdout = f
-    evaluation(result_root)
+    evaluation(result_root, data_root)
     sys.stdout = org_stdout
     f.close()
-    evaluation(result_root)
-    print(f'save in ELAN_eval/{result_root}.txt')
+    evaluation(result_root, data_root)
+    print(f'save in {data_root}_eval/{result_root}.txt')
 
 if __name__ == '__main__':
     main()

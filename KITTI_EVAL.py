@@ -8,7 +8,6 @@ parser = argparse.ArgumentParser()
 # path setting
 parser.add_argument("--weights-path", '-W_PATH', required=True, help='weighs path')
 parser.add_argument("--result-path", '-R_PATH', required=True, help='path (folder name) of the generated pred-labels')
-parser.add_argument("--split", '-S', default='val', help='train | val | trainval')
 
 # kitti evaluation should be with 3dAP, bevAP functions
 def ron_evaluation(val_ids, diff_list, cls_list, result_root, gt_root='Kitti/training/label_2'):
@@ -50,6 +49,24 @@ def ron_evaluation(val_ids, diff_list, cls_list, result_root, gt_root='Kitti/tra
     print('[Depth error]')
     box_depth_error_calculation(GT_depth, REG_depth, 5)
 
+def print_info(ckpt, cfg):
+    class_list = cfg['class_list']
+    diff_list = cfg['diff_list']
+    group = cfg['group']
+    cond = cfg['cond']
+    W_consist = ckpt['W_consist']
+    W_ry = ckpt['W_ry']
+    W_group = ckpt['W_group']
+    print('Class:', class_list, end=', ')
+    print('Diff:', diff_list, end=', ')
+    print(f'Group:{group}, cond:{cond}', end=' ')
+    print(f'[Weights] W_consist:{W_consist:.2f}, W_ry:{W_ry:.2f}, W_group:{W_group:.2f}', end='')
+    try:
+        W_depth = ckpt['W_depth']
+        print(f', W_depth:{W_depth:.2f}')
+    except:
+        print()
+
 if __name__ == '__main__':
     FLAGS = parser.parse_args()
     weights_path = FLAGS.weights_path
@@ -57,8 +74,24 @@ if __name__ == '__main__':
     split = FLAGS.split
     device = torch.device('cuda:0')
     checkpoint = torch.load(weights_path, map_location=device) #if training on 2 GPU, mapping on the same device
-    diff_list = [1, 2] #checkpoint['cfg'] ['diff_list']
-    cls_list = ['car'] #checkpoint['cond']['cls_list']
-    split_dir = f'Kitti/ImageSets/{split}.txt'
-    val_ids = [x.strip() for x in open(split_dir).readlines()]
+    cfg = checkpoint['cfg']
+    diff_list = cfg['diff_list']
+    cls_list = cfg['class_list']
+    val_ids = [x.strip() for x in open('Kitti/ImageSets/val.txt').readlines()]
+    print('=============[VAL EVAL]===============')
     ron_evaluation(val_ids, diff_list, cls_list, result_root)
+    train_ids = [x.strip() for x in open('Kitti/ImageSets/train.txt').readlines()]
+    print('=============[Train EVAL]===============')
+    ron_evaluation(train_ids, diff_list, cls_list, result_root)
+    '''
+    org_stdout = sys.stdout
+    os.makedirs(f'KITTI_eval/{result_root.split("/")[0]}', exist_ok=True)
+    f = open(f'KITTI_eval/{result_root}.txt', 'w')
+    sys.stdout = f
+    print_info(checkpoint, cfg)
+    ron_evaluation(val_ids, diff_list, cls_list, result_root)
+    print('[MY CALC Depth error]')
+    box_depth_error_calculation(val_GT_depth, val_CALC_depth, 5)
+    print('=============[Train EVAL]===============')
+    ron_evaluation(train_ids, diff_list, cls_list, result_root)
+    '''

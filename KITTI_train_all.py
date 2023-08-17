@@ -163,7 +163,8 @@ def main():
             # 0801 added consist loss
             if type_!= 3: # baseline
                 reg_ry_L = compute_ry(bin_L, residual_L, gt_theta_ray_L, angle_per_class)
-                [residual_R, bin_R, dim_R] = model(batch_R)
+                with torch.no_grad(): #0817 added
+                    [residual_R, bin_R, dim_R] = model(batch_R)
                 reg_ry_R = compute_ry(bin_R, residual_R, gt_theta_ray_R, angle_per_class)
                 consist_loss = F.l1_loss(dim_L, dim_R, reduction='mean')
                 ry_angle_loss = F.l1_loss(torch.cos(reg_ry_L), torch.cos(reg_ry_R), reduction='mean')

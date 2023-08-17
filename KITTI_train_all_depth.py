@@ -62,7 +62,7 @@ def main():
     W_group = 0.6 # 0.02
     W_consist = 1 #數值小0.02~0.04
     W_ry = 0.1 #數值大0.05~0.2
-    W_depth = 0.05 # 2
+    W_depth = 0.5 # 2
     # make weights folder
     cfg['bins'] = bin_num
     cfg['cond'] = is_cond
@@ -178,19 +178,22 @@ def main():
 
                 loss += W_consist * consist_loss.to(device) + W_ry * ry_angle_loss.to(device)
             
-            calc_depth = list()
-            for i in range(batch_L.shape[0]):
-                img_W = gt_img_W[i]
-                box2d = gt_box2d[i]
-                cam_to_img = gt_calib[i]
-                obj_W = dataset_train.get_cls_dim_avg(gt_class[i])[1] + dim_L.cpu().detach().numpy()[i][1]
-                obj_L = dataset_train.get_cls_dim_avg(gt_class[i])[2] + dim_L.cpu().detach().numpy()[i][2]
-                #alpha = reg_alpha[i]
-                alpha = GT_alphas[i].cpu().detach()
-                calc_depth.append(calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0))
-            calc_depth = torch.FloatTensor(calc_depth).to(device)
-            depth_loss = F.l1_loss(gt_depth, calc_depth)
-            loss += W_depth * depth_loss 
+            if epoch > warm_up:
+                calc_depth = list()
+                for i in range(batch_L.shape[0]):
+                    img_W = gt_img_W[i]
+                    box2d = gt_box2d[i]
+                    cam_to_img = gt_calib[i]
+                    obj_W = dataset_train.get_cls_dim_avg(gt_class[i])[1] + dim_L.cpu().detach().numpy()[i][1]
+                    obj_L = dataset_train.get_cls_dim_avg(gt_class[i])[2] + dim_L.cpu().detach().numpy()[i][2]
+                    #alpha = reg_alpha[i]
+                    alpha = GT_alphas[i].cpu().detach()
+                    calc_depth.append(calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0))
+                calc_depth = torch.FloatTensor(calc_depth).to(device)
+                depth_loss = F.mse_loss(gt_depth, calc_depth).to(device) #0815.16 L1, 0817 mse
+                loss += W_depth * depth_loss
+            else:
+                depth_loss = torch.tensor(0.0).to(device)
             
             opt_SGD.zero_grad()
             loss.backward()
@@ -288,6 +291,7 @@ def main():
                     'W_consist': W_consist,
                     'W_ry': W_ry,
                     'W_group': W_group,
+                    'W_depth': W_depth,
                     }, name)
             print("====================")
             

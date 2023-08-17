@@ -1,9 +1,9 @@
 # check every time
-DATE="0815tune"
+DATE="NG_0817"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
-DEVICE=0
-TYPE=2 # 0 dim, 1 angle, 2 both, 3 BL
+DEVICE=2
+TYPE=0 # 0 dim, 1 angle, 2 both, 3 BL
 
 # hyper-parameter
 BIN=4

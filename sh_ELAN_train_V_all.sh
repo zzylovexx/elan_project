@@ -1,15 +1,18 @@
 # check every time
-DATE="try"
+DATE="0801"
 W_PATH="weights/$DATE/"
 R_PATH="$DATE/"
 DEVICE=0
-TYPE=2
+TYPE=2 #0:consist dim, 1:angle, 2:both
 # hyper-parameter
 NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
 GROUP=1
 
+# data path
+D_PATH="Elan_3d_box_230808" #"Elan_3d_box"
+
 #FIXED
-EPOCH=2
+EPOCH=50
 BIN=4
 WARMUP=10
 # not done yet
@@ -51,7 +54,7 @@ then
 fi
 PKL=$PKL"_$EPOCH.pkl"
 
-python ELAN_Vtrain_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND
-python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH
-python ELAN_EVAL.py -R_PATH=$R_PATH
+#python ELAN_Vtrain_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND
+python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH -D_PATH=$D_PATH
+python ELAN_EVAL.py -R_PATH=$R_PATH -D_PATH=$D_PATH
 echo "SHELL FINISHED"

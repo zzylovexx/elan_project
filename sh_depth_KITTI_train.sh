@@ -1,16 +1,16 @@
 # check every time
-DATE="D_0815"
+DATE="D_0817"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
-DEVICE=2
+DEVICE=0
 TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
 
 # hyper-parameter
 BIN=4
 GROUP=0 #0:NO, 1:cos, 2:sin_sin, 3:compare,
 #FIXED
-EPOCH=50
-WARMUP=10
+EPOCH=100
+WARMUP=10 # for depth, group loss
 # not done yet
 COND=0
 ZERO=0
@@ -59,9 +59,12 @@ then
 fi
 PKL=$PKL"_$EPOCH.pkl"
 
+start=$(date +%s)
 echo "SHELL W_PATH:"$W_PATH
 echo "SHELL PKL:"$PKL
 echo "SHELL R_PATH:"$R_PATH
 python KITTI_train_all_depth.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND
 python KITTI_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH -D=$DEVICE
-echo "SHELL FINISHED"
+end=$(date +%s)
+elapsed=$((end-start))
+echo "Elapsed Time: $((elapsed/60)) mins"
