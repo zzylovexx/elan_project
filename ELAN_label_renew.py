@@ -29,11 +29,13 @@ def box_correction(left, right, top, btm, img_W=1280, img_H=720):
     return left, right, top, btm
 
 def main():
-    labels = glob.glob('Elan_3d_box/label_2/*.txt')
+    #data_root = 'Elan_3d_box' 
+    data_root = 'Elan_3d_box_230808'
+    labels = glob.glob(f'{data_root}/label_2/*.txt')
     print(len(labels))
     img_W  = 1280
     img_H = 720
-    os.makedirs('Elan_3d_box/renew_label', exist_ok=True)
+    os.makedirs(f'{data_root}/renew_label', exist_ok=True)
     for i in range(len(labels)):
         #ids = [int(x.strip()) for x in open(split_dir).readlines()]
         renew_labels = ''
@@ -50,11 +52,12 @@ def main():
             right = int(elements[6])
             btm = int(elements[7])
 
-            
+            left, right, top, btm = box_correction(left, right, top, btm, img_W, img_H)
+            if abs(left-right) < 2 or abs(top-btm) < 2:
+                continue
             # 2d box out of image
-            if check_box_range(left, right, top, btm, img_W, img_H):
-                #left, right, top, btm = box_correction(left, right, top, btm, img_W, img_H)
-                #correct labels!
+            elif check_box_range(left, right, top, btm, img_W, img_H):
+            #correct labels!
                 truncated = elements[1]
                 occluded = elements[2]
                 alpha = float(elements[3])

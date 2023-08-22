@@ -53,9 +53,13 @@ def main():
     label2_path = 'Kitti/training/label_2'
     calib_path = 'Kitti/training/calib'
     trainval_ids = [x.strip() for x in open('Kitti/ImageSets/trainval.txt').readlines()]
+    train_ids = [x.strip() for x in open('Kitti/ImageSets/train.txt').readlines()]
     val_ids = [x.strip() for x in open('Kitti/ImageSets/val.txt').readlines()]
-    GT_depth = list()
-    CALC_depth = list()
+
+    train_GT_depth = list()
+    train_CALC_depth = list()
+    val_GT_depth = list()
+    val_CALC_depth = list()
     for id_ in trainval_ids:
         label2_txt = os.path.join(label2_path, f'{id_}.txt')
         cam_to_img = FrameCalibrationData(os.path.join(calib_path, f'{id_}.txt'))
@@ -85,20 +89,26 @@ def main():
                 reg_pos, _ = calc_location(reg_dim, cam_to_img.p2, obj.box2d.reshape((2,2)), reg_alpha, obj.theta_ray)
                 reg_pos[1] += reg_dim[0]/2 #reg_pos is 3d center, + H/2 to be the same standard as gt label
                 reg_labels += obj.REG_result_to_kitti_format_label(reg_alpha, reg_dim, reg_pos) + '\n'
-                # compare GT_depth and CALC_depth
+                # [TRAIN]
+                if id_ in train_ids:
+                    train_GT_depth.append(obj.pos[2])
+                    train_CALC_depth.append(calc_depth_with_alpha_theta(img2.shape[1], obj.box2d, cam_to_img.p2, reg_dim[1], reg_dim[2], reg_alpha))
+                # [VAL] compare GT_depth and CALC_depth
                 if id_ in val_ids:
-                    GT_depth.append(obj.pos[2])
-                    CALC_depth.append(calc_depth_with_alpha_theta(img2.shape[1], obj.box2d, cam_to_img.p2, reg_dim[1], reg_dim[2], reg_alpha))
+                    val_GT_depth.append(obj.pos[2])
+                    val_CALC_depth.append(calc_depth_with_alpha_theta(img2.shape[1], obj.box2d, cam_to_img.p2, reg_dim[1], reg_dim[2], reg_alpha))
         
         with open(os.path.join(result_root, f'{id_}.txt'), 'w') as f:
             f.writelines(reg_labels)
     
     # eval part
-    GT_depth = np.array(GT_depth)
-    CALC_depth = np.array(CALC_depth)
+    train_GT_depth = np.array(train_GT_depth)
+    train_CALC_depth = np.array(train_CALC_depth)
+    val_GT_depth = np.array(val_GT_depth)
+    val_CALC_depth = np.array(val_CALC_depth)
     ron_evaluation(val_ids, diff_list, cls_list, result_root)
     print('[MY CALC Depth error]')
-    box_depth_error_calculation(GT_depth, CALC_depth, 5)
+    box_depth_error_calculation(val_GT_depth, val_CALC_depth, 5)
     #write as file as well
     org_stdout = sys.stdout
     os.makedirs(f'KITTI_eval/{result_root.split("/")[0]}', exist_ok=True)
@@ -107,7 +117,11 @@ def main():
     print_info(checkpoint, cfg)
     ron_evaluation(val_ids, diff_list, cls_list, result_root)
     print('[MY CALC Depth error]')
-    box_depth_error_calculation(GT_depth, CALC_depth, 5)
+    box_depth_error_calculation(val_GT_depth, val_CALC_depth, 5)
+    print('=============[Train EVAL]===============')
+    ron_evaluation(train_ids, diff_list, cls_list, result_root)
+    print('[MY CALC Depth error]')
+    box_depth_error_calculation(train_GT_depth, train_CALC_depth, 5)
     sys.stdout = org_stdout
     f.close()
     print(f'save in KITTI_eval/{result_root}.txt')
@@ -117,16 +131,18 @@ def print_info(ckpt, cfg):
     diff_list = cfg['diff_list']
     group = cfg['group']
     cond = cfg['cond']
-
     W_consist = ckpt['W_consist']
     W_ry = ckpt['W_ry']
     W_group = ckpt['W_group']
-    print('Cls_list:', class_list, end=', ')
-    print('Diff_list:', diff_list, end=', ')
+    print('Class:', class_list, end=', ')
+    print('Diff:', diff_list, end=', ')
     print(f'Group:{group}, cond:{cond}', end=' ')
-    print(f'[Weights] C_dim:{W_consist:.2f}, C_angle:{W_ry:.2f}, GroupLoss:{W_group:.2f}')
-
-
+    print(f'[Weights] W_consist:{W_consist:.2f}, W_ry:{W_ry:.2f}, W_group:{W_group:.2f}', end='')
+    try:
+        W_depth = ckpt['W_depth']
+        print(f', W_depth:{W_depth:.2f}')
+    except:
+        print()
 
 if __name__ == '__main__':
     start = time.time()

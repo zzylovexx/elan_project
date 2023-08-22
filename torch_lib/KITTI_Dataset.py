@@ -98,28 +98,29 @@ class KITTI_Dataset(data.Dataset):
             obj_target = dict()
             obj_target['Class'] = obj_L.cls_type
             obj_target['Truncation'] = obj_L.trucation
-            obj_target['Box2d']: obj_L.box2d
+            obj_target['Box2d'] = obj_L.box2d
             obj_target['Alpha'] = obj_L.alpha
             obj_target['Ry'] = obj_L.ry
-            obj_target['Dim_delta']= obj_L.dim - self.get_cls_dim_avg(obj_L.cls_type)
-            obj_target['Location']= obj_L.pos
+            obj_target['Dim_delta'] = obj_L.dim - self.get_cls_dim_avg(obj_L.cls_type)
+            obj_target['Location'] = obj_L.pos
+            obj_target['Depth'] = obj_L.pos[2]
             obj_target['Heading_bin'], obj_target['Heading_res'] = angle2class(obj_L.alpha, self.bins)
             obj_target['Theta_ray'] = obj_L.theta_ray
-            obj_target['Calib'] = obj_L.calib
+            obj_target['Calib'] = obj_L.calib.p2
             obj_target['img_W'] = obj_L.img_W
             targets_L.append(obj_target)
             # right image
             obj_target = dict()
             obj_target['Class'] = obj_R.cls_type
             obj_target['Truncation'] = obj_R.trucation
-            obj_target['Box2d']: obj_R.box2d
+            obj_target['Box2d'] = obj_R.box2d
             obj_target['Alpha'] = obj_R.alpha
             obj_target['Ry'] = obj_R.ry
             obj_target['Dim_delta']= obj_R.dim - self.get_cls_dim_avg(obj_R.cls_type)
-            obj_target['Location']= obj_R.pos
+            obj_target['Location'] = obj_R.pos
             obj_target['Heading_bin'], obj_target['Heading_res'] = angle2class(obj_R.alpha, self.bins)
             obj_target['Theta_ray'] = obj_R.theta_ray
-            obj_target['Calib'] = obj_L.calib
+            obj_target['Calib'] = obj_L.calib.p3
             obj_target['img_W'] = obj_L.img_W
             targets_R.append(obj_target)
         return targets_L, targets_R
@@ -145,6 +146,7 @@ class Object3d(object):
         #self.score = float(label[15]) if label.__len__() == 16 else -1.0
         self.level_str = None
         self.level = self.get_obj_level()
+        self.img_W = None
         self.crop = None
         self.calib = None
         self.camera_pose = None
