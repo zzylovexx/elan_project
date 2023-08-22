@@ -1,4 +1,4 @@
-from torchvision.models import vgg
+from torchvision.models import vgg, resnet, densenet
 from torch_lib.Model_heading_bin import *
 from torchvision import transforms
 from torch_lib.KITTI_Dataset import *
@@ -13,6 +13,7 @@ parser.add_argument("--device", '-D', type=int, default=0, help='select cuda ind
 # path setting
 parser.add_argument("--weights-path", '-W_PATH', required=True, help='weighs path')
 parser.add_argument("--result-path", '-R_PATH', required=True, help='path (folder name) of the generated pred-labels')
+parser.add_argument("--network", "-N", type=int, default=0, help='vgg/resnet/densenet')
 
 def main():
     #weights_path = 'weights/0808car/KITTI_BL_B4_50.pkl'
@@ -23,6 +24,7 @@ def main():
     FLAGS = parser.parse_args()
     weights_path = FLAGS.weights_path
     result_root = FLAGS.result_path
+    network = FLAGS.network
     os.makedirs(result_root, exist_ok=True)
 
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
@@ -35,12 +37,22 @@ def main():
     
     angle_per_class = 2*np.pi/float(bin_num)
 
-    my_vgg = vgg.vgg19_bn(weights='DEFAULT')
+    if network==0:
+        my_vgg = vgg.vgg19_bn(weights='DEFAULT') #512x7x7
+        model = vgg_Model(features=my_vgg.features, bins=bin_num).to(device)
+    elif network==1:
+        my_resnet = resnet.resnet18(weights='DEFAULT')
+        my_resnet = torch.nn.Sequential(*(list(my_resnet.children())[:-2])) #512x7x7
+        model = resnet_Model(features=my_resnet, bins=bin_num).to(device) # resnet no features
+    elif network==2:
+        my_dense = densenet.densenet121(weights='DEFAULT') #1024x7x7
+        model = dense_Model(features=my_dense.features, bins=bin_num).to(device)
+
     if is_cond:
-        print("< add Condition (4-dim) as input >")
-        my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
-    model = Model(features=my_vgg.features, bins=bin_num).to(device)
-    model.load_state_dict(checkpoint['model_state_dict'])
+        print("< 4-dim input, Theta_ray as Condition >")
+        model.features[0].in_channels = 4
+        #model.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
+
     model.eval()
     # for img processing
     process = transforms.Compose([transforms.ToTensor(), 

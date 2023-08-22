@@ -1,11 +1,11 @@
 from torch_lib.KITTI_Dataset import *
-from torch_lib.Model_heading_bin import Model
+from torch_lib.Model_heading_bin import *
 from library.ron_utils import *
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import vgg
+from torchvision.models import vgg, resnet, densenet
 from torch.utils import data
 from torchvision import transforms
 
@@ -21,6 +21,7 @@ parser.add_argument("--seed", type=int, default=2023, help='keep seeds to repres
 parser.add_argument("--weights-path", "-W_PATH", required=True, help='folder/date ie.weights/0721')
 
 #training setting
+parser.add_argument("--network", "-N", type=int, default=0, help='vgg/resnet/densenet')
 parser.add_argument("--type", "-T", type=int, default=0, help='0:dim, 1:alpha, 2:both, 3:BL')
 parser.add_argument("--device", "-D", type=int, default=0, help='select cuda index')
 parser.add_argument("--epoch", "-E", type=int, default=50, help='epoch num')
@@ -37,7 +38,7 @@ parser.add_argument("--cond", "-C", type=int, help='if True, 4-dim with theta_ra
 def main():
     cfg = {'path':'Kitti/training',
             'class_list':['car'], 'diff_list': [1, 2], #0:DontCare, 1:Easy, 2:Moderate, 3:Hard, 4:Unknown
-            'bins': 0, 'cond':False, 'group':False}
+            'bins': 0, 'cond':False, 'group':False, 'network':0}
     '''
     bin_num = 4
     is_cond = 0
@@ -56,17 +57,19 @@ def main():
     type_ = FLAGS.type
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     epochs = FLAGS.epoch
+    network = FLAGS.network
     batch_size = 16 #64 worse than 8
     W_dim = 1 #0.1~0.14
     W_theta = 1 #0.03~1
     W_group = 0.6 # 0.02
-    W_consist = 1 #數值小0.02~0.04
+    W_consist = 3 #數值小0.02~0.04  TODO W_consist要調高(0818) 5bad
     W_ry = 0.1 #數值大0.05~0.2
     W_depth = 0.05 # 2
     # make weights folder
     cfg['bins'] = bin_num
     cfg['cond'] = is_cond
     cfg['group'] = is_group
+    cfg['network'] = network
     
     weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
     os.makedirs(weights_folder, exist_ok=True)
@@ -90,11 +93,23 @@ def main():
     train_loader = data.DataLoader(dataset_train, **params)
     valid_loader = data.DataLoader(dataset_valid, **params)
 
-    my_vgg = vgg.vgg19_bn(weights='DEFAULT')
+    # 0818 added
+    if network==0:
+        my_vgg = vgg.vgg19_bn(weights='DEFAULT') #512x7x7
+        model = vgg_Model(features=my_vgg.features, bins=bin_num).to(device)
+    elif network==1:
+        my_resnet = resnet.resnet18(weights='DEFAULT')
+        my_resnet = torch.nn.Sequential(*(list(my_resnet.children())[:-2])) #512x7x7
+        model = resnet_Model(features=my_resnet, bins=bin_num).to(device) # resnet no features
+    elif network==2:
+        my_dense = densenet.densenet121(weights='DEFAULT') #1024x7x7
+        model = dense_Model(features=my_dense.features, bins=bin_num).to(device)
+
     if is_cond:
         print("< 4-dim input, Theta_ray as Condition >")
-        my_vgg.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
-    model = Model(features=my_vgg.features, bins=bin_num).to(device)
+        model.features[0].in_channels = 4
+        #model.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
+
     angle_per_class=2*np.pi/float(bin_num)
 
     opt_SGD = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
@@ -137,7 +152,7 @@ def main():
             model.train()
             [residual_L, bin_L, dim_L] = model(batch_L)
 
-            bin_loss = F.cross_entropy(bin_L, gt_bin,reduction='mean').to(device)
+            bin_loss = F.cross_entropy(bin_L, gt_bin, reduction='mean').to(device)
             residual_loss = compute_residual_loss(residual_L, gt_bin, gt_residual, device)
             loss_theta = bin_loss + residual_loss
             #dim_loss = F.mse_loss(dim, gt_dim, reduction='mean')  # org use mse_loss
@@ -309,12 +324,20 @@ def name_by_parameters(FLAGS):
     is_cond = FLAGS.cond
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
+    network = FLAGS.network
     
     save_path = f'{FLAGS.weights_path}_B{bin_num}'
     if is_group>0:
         save_path += f'_G{is_group}_W{warm_up}'
     if is_cond==1:
         save_path += '_C'
+    
+    if network==0:
+        save_path += '_vgg'
+    elif network==1:
+        save_path += '_resnet'
+    elif network==2:
+        save_path += '_dense'
 
     train_config = save_path.split("weights/")[1]
     log_path = f'log/{train_config}'
