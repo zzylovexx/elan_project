@@ -21,7 +21,7 @@ def class2angle(cls, residual, bins):
     return angle
 
 class KITTI_Dataset(data.Dataset):
-    def __init__(self, cfg, process, split='train'):
+    def __init__(self, cfg, process, split='train', is_flip=False):
         path = cfg['path']
         self.label2_path = os.path.join(path, 'label_2')
         self.img2_path = os.path.join(path, 'image_2')
@@ -45,6 +45,7 @@ class KITTI_Dataset(data.Dataset):
         self.objects_L, self.objects_R, = self.get_objects(self.ids)
         self.targets_L, self.targets_R, = self.get_targets(self.objects_L, self.objects_R)
         self.transform = process
+        self.is_flip = is_flip #horizontal
     
     def __len__(self):
         return len(self.objects_L)
@@ -71,9 +72,9 @@ class KITTI_Dataset(data.Dataset):
             # use left image obj-level as standard, or box-height results in differenet difficulty
             for obj_L, obj_R in zip(objects_L, objects_R):
                 if obj_L.cls_type in self.cls_list and obj_L.level in self.diff_list:
-                    obj_L.set_crop(img2, cam_to_img, 'left')
+                    obj_L.set_crop(img2, cam_to_img, 'left', self.is_flip)
                     all_objects_L.append(obj_L)
-                    obj_R.set_crop(img3, cam_to_img, 'right')
+                    obj_R.set_crop(img3, cam_to_img, 'right', self.is_flip)
                     all_objects_R.append(obj_R)
                     self.update_cls_dims(obj_L.cls_type, obj_L.dim) # for calcualte dim avg
         return all_objects_L, all_objects_R
@@ -152,9 +153,12 @@ class Object3d(object):
         self.camera_pose = None
         self.theta_ray = None
     
-    def set_crop(self, img, calib, camera_pose):
+    def set_crop(self, img, calib, camera_pose, is_flip=False):
         self.img_W = img.shape[1]
         self.crop = img[self.box2d[1]:self.box2d[3]+1, self.box2d[0]:self.box2d[2]+1]
+        if is_flip: #horizontal flip
+            self.crop = cv2.flip(self.crop, 1)
+            self.alpha = self.flip_orient(self.alpha)
         self.calib = calib
         self.camera_pose = camera_pose.lower()
         self.theta_ray = self.calc_theta_ray(img.shape[1], self.box2d, calib, camera_pose)
@@ -170,7 +174,13 @@ class Object3d(object):
         dx = abs(dx)
         angle = mult * np.arctan( (2*dx*np.tan(fovx/2)) / width )
         return angle_correction(angle)
-                                
+
+    def flip_orient(angle):
+        if angle>=0: 
+            return round(3.14-angle, 2)
+        elif angle<0:
+            return round(-3.14-angle, 2)
+
     def get_obj_level(self):
         height = float(self.box2d[3]) - float(self.box2d[1]) + 1
 

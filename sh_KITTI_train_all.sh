@@ -1,10 +1,10 @@
 # check every time
-DATE="0818"
+DATE="0822"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
 DEVICE=1 #跑densenet
 TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
-NETWORK=2 #0:vgg, 1:resnet, 2:densenet
+NETWORK=0 #0:vgg, 1:resnet, 2:densenet
 
 # hyper-parameter
 BIN=4

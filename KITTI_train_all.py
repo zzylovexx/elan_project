@@ -133,7 +133,7 @@ def main():
     print('total_num_batches', total_num_batches)
     for epoch in range(1, epochs+1):
         curr_batch = 0
-        
+        model.train()
         for batch_L, labels_L, batch_R, labels_R in train_loader:
 
             gt_residual = labels_L['Heading_res'].float().to(device)
@@ -149,7 +149,6 @@ def main():
 
             batch_L=batch_L.float().to(device)
             batch_R=batch_R.float().to(device)
-            model.train()
             [residual_L, bin_L, dim_L] = model(batch_L)
 
             bin_loss = F.cross_entropy(bin_L, gt_bin, reduction='mean').to(device)
@@ -249,7 +248,7 @@ def main():
 
         # save after every 10 epochs
         #scheduler.step()
-        if epoch % 10 == 0:
+        if epoch % 2 == 0:
             model.eval()
             with torch.no_grad():
                 GT_alpha_list = list()
