@@ -1,7 +1,7 @@
 import os, cv2, csv
 from torch.utils import data
 import numpy as np
-from library.ron_utils import angle_correction
+from library.ron_utils import angle_correction, flip_orient
 
 def angle2class(angle, bins):
     ''' Convert continuous angle to discrete class and residual. '''
@@ -42,10 +42,11 @@ class KITTI_Dataset(data.Dataset):
         split_dir = os.path.join('Kitti/ImageSets', split + '.txt')
         self.ids = [x.strip() for x in open(split_dir).readlines()]
         self.cls_dims = dict()
-        self.objects_L, self.objects_R, = self.get_objects(self.ids)
-        self.targets_L, self.targets_R, = self.get_targets(self.objects_L, self.objects_R)
-        self.transform = process
         self.is_flip = is_flip #horizontal
+        self.objects_L, self.objects_R = self.get_objects(self.ids)
+        self.targets_L, self.targets_R = self.get_targets(self.objects_L, self.objects_R)
+        self.transform = process
+        
     
     def __len__(self):
         return len(self.objects_L)
@@ -158,7 +159,7 @@ class Object3d(object):
         self.crop = img[self.box2d[1]:self.box2d[3]+1, self.box2d[0]:self.box2d[2]+1]
         if is_flip: #horizontal flip
             self.crop = cv2.flip(self.crop, 1)
-            self.alpha = self.flip_orient(self.alpha)
+            self.alpha = flip_orient(self.alpha)
         self.calib = calib
         self.camera_pose = camera_pose.lower()
         self.theta_ray = self.calc_theta_ray(img.shape[1], self.box2d, calib, camera_pose)
@@ -174,12 +175,6 @@ class Object3d(object):
         dx = abs(dx)
         angle = mult * np.arctan( (2*dx*np.tan(fovx/2)) / width )
         return angle_correction(angle)
-
-    def flip_orient(angle):
-        if angle>=0: 
-            return round(3.14-angle, 2)
-        elif angle<0:
-            return round(-3.14-angle, 2)
 
     def get_obj_level(self):
         height = float(self.box2d[3]) - float(self.box2d[1]) + 1

@@ -3,14 +3,6 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 
-def compute_residual_loss(orient_residual,truth_bin,truth_residual,device):#truth_residual:B,truth_bin:B,orient_residual:B,12
-
-    one_hot_map=torch.zeros((orient_residual.shape)).to(device).scatter_(dim=1,index=truth_bin.view(-1,1),value=1)#(batch,bin_class)
-    heading_res=torch.sum(orient_residual*one_hot_map,dim=1)
-    reg_loss=F.l1_loss(heading_res,truth_residual,reduction='mean')
-    
-    return reg_loss,heading_res
-
 class vgg_Model(nn.Module):
     def __init__(self, features=None, bins=4):
         super(vgg_Model, self).__init__()

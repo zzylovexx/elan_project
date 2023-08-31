@@ -28,6 +28,7 @@ parser.add_argument("--bin", "-B", type=int, default=4, help='heading bin num')
 parser.add_argument("--group", "-G", type=int, help='if True, add stdGroupLoss')
 parser.add_argument("--warm-up", "-W", type=int, default=10, help='warm up before adding group loss')
 parser.add_argument("--cond", "-C", type=int, help='if True, 4-dim with theta_ray | boxH_2d ')
+parser.add_argument("--aug", "-A", type=int, default=0, help='if True, flip dataset as augmentation')
 
 def main():
 
@@ -37,6 +38,7 @@ def main():
     epochs = FLAGS.epoch
     is_group = FLAGS.group
     is_cond = FLAGS.cond
+    is_aug = FLAGS.aug
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
@@ -50,7 +52,8 @@ def main():
     os.makedirs(log_path, exist_ok=True)
     writer = SummaryWriter(log_path)
 
-    # weights 
+    # weights
+    W_dim = 0.6
     W_consist = 0.3
     W_alpha = 0.1
     W_group = 0.3
@@ -64,8 +67,9 @@ def main():
     batch_size = 16
 
     my_vgg = vgg.vgg19_bn(weights='DEFAULT')
-    model = Model(features=my_vgg.features, bins=bin_num).to(device)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+    model = vgg_Model(features=my_vgg.features, bins=bin_num).to(device)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.999))
 
     if normalize_type==0: # IMAGENET
         normal = transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
@@ -98,9 +102,16 @@ def main():
             if obj_count == 0:
                 continue
             objects = [TrackingObject(line) for line in lines]
-            crops = [process(img[obj.box2d[0][1]:obj.box2d[1][1]+1 ,obj.box2d[0][0]:obj.box2d[1][0]+1]) for obj in objects]
+            crops = [process(img[obj.box2d[0][1]:obj.box2d[1][1]+1, obj.box2d[0][0]:obj.box2d[1][0]+1]) for obj in objects]
+            #0829added
+            if is_aug:
+                objects_flip = [TrackingObject(line, is_flip=True) for line in lines]
+                crops_flip = [process(cv2.flip(img[obj.box2d[0][1]:obj.box2d[1][1]+1, obj.box2d[0][0]:obj.box2d[1][0]+1], 1)) for obj in objects]
+                crops.extend(crops_flip)
+                objects.extend(objects_flip)
+            
             crops = torch.stack(crops).to(device)
-
+            ###
             gt_labels = get_object_label(objects, bin_num)
             gt_bin = gt_labels['bin'].to(device)
             gt_residual = gt_labels['residual'].to(device)
@@ -110,11 +121,12 @@ def main():
             [reg_residual, reg_bin, reg_dim_delta] = model(crops)
 
             bin_loss = F.cross_entropy(reg_bin, gt_bin, reduction='mean').to(device)
-            residual_loss, _ = compute_residual_loss(reg_residual, gt_bin, gt_residual, device)
+            residual_loss = compute_residual_loss(reg_residual, gt_bin, gt_residual, device)
             dim_loss = F.l1_loss(reg_dim_delta, gt_dim_delta, reduction='mean').to(device)
 
-            # GROUP LOSS
+            
             reg_alphas = compute_alpha(reg_bin, reg_residual, angle_per_class)
+            # GROUP LOSS
             if is_group and epoch > warm_up:
                 for i in range(len(objects)):
                     gt_labels['Group'].append(extra_labels[i]['Group_Ry'])
@@ -126,7 +138,7 @@ def main():
             else:
                 group_loss = torch.tensor(0.0)
             
-            loss = 0.6*dim_loss + bin_loss + residual_loss + W_group*group_loss # before0724 W_group=0.3
+            loss = W_dim*dim_loss + bin_loss + residual_loss + W_group*group_loss # before0724 W_group=0.3
     
             # CONSISTENCY LOSS
             if count == 0:
@@ -205,41 +217,54 @@ def main():
         # MobaXterm https://zhuanlan.zhihu.com/p/138811263
         #tensorboard --logdir=./{log_foler} --port 8123
 
-        #
-        model.eval()
-        GT_alpha_list = list()
-        REG_alpha_list = list()
-        with torch.no_grad():
-            for id_ in valset:
-                img = cv2.cvtColor(cv2.imread(f'Elan_3d_box/image_2/{id_}.png'), cv2.COLOR_BGR2RGB)
-                label = f'Elan_3d_box/renew_label_obj/{id_}.txt'
-                extra_labels = get_extra_labels(f'Elan_3d_box/extra_label/{id_}.txt')
-                lines = [x.strip() for x in open(label).readlines()]
-                obj_count = len(lines)
-                batch_count += len(lines)
+        if epoch % 2 == 0:
+            model.eval()
+            with torch.no_grad():
+                GT_alpha_list = list()
+                REG_alpha_list = list()
 
-                if obj_count == 0:
-                    continue
-                objects = [TrackingObject(line) for line in lines]
-                crops = [process(img[obj.box2d[0][1]:obj.box2d[1][1]+1 ,obj.box2d[0][0]:obj.box2d[1][0]+1]) for obj in objects]
-                crops = torch.stack(crops).to(device)
+                GT_dim_list = list()
+                REG_dim_list = list()
+                for id_ in valset:
+                    img = cv2.cvtColor(cv2.imread(f'Elan_3d_box/image_2/{id_}.png'), cv2.COLOR_BGR2RGB)
+                    label = f'Elan_3d_box/renew_label_obj/{id_}.txt'
+                    #extra_labels = get_extra_labels(f'Elan_3d_box/extra_label/{id_}.txt')
+                    lines = [x.strip() for x in open(label).readlines()]
+                    obj_count = len(lines)
+                    batch_count += len(lines)
 
-                gt_labels = get_object_label(objects, bin_num)
-                gt_bin = gt_labels['bin'].to(device)
-                gt_residual = gt_labels['residual'].to(device)
-                gt_dim_delta = gt_labels['dim_delta'].to(device)
+                    if obj_count == 0:
+                        continue
+                    objects = [TrackingObject(line) for line in lines]
+                    crops = [process(img[obj.box2d[0][1]:obj.box2d[1][1]+1 ,obj.box2d[0][0]:obj.box2d[1][0]+1]) for obj in objects]
+                    crops = torch.stack(crops).to(device)
 
-                [reg_residual, reg_bin, reg_dim_delta] = model(crops)
-                bin_argmax = torch.max(reg_bin, dim=1)[1]
-                reg_alpha = angle_per_class*bin_argmax + reg_residual[torch.arange(len(reg_residual)), bin_argmax]
-                GT_alpha = angle_per_class*gt_bin + gt_residual
-                REG_alpha_list += reg_alpha.tolist()
-                GT_alpha_list += GT_alpha.tolist()
-        
-        alpha_performance = angle_criterion(REG_alpha_list, GT_alpha_list)
-        print(f'alpha_performance: {alpha_performance:.4f}') #close to 0 is better\
-        writer.add_scalar(f'{train_config}/alpha_eval', alpha_performance, epoch)
-        #write every epoch
+                    gt_labels = get_object_label(objects, bin_num)
+                    gt_bin = gt_labels['bin'].to(device)
+                    gt_residual = gt_labels['residual'].to(device)
+                    gt_dim_delta = gt_labels['dim_delta'].to(device)
+
+                    [reg_residual, reg_bin, reg_dim_delta] = model(crops)
+                    bin_argmax = torch.max(reg_bin, dim=1)[1]
+                    reg_alpha = angle_per_class*bin_argmax + reg_residual[torch.arange(len(reg_residual)), bin_argmax]
+                    GT_alpha = angle_per_class*gt_bin + gt_residual
+                    
+                    REG_alpha_list += reg_alpha.tolist()
+                    GT_alpha_list += GT_alpha.tolist()
+                    
+                    REG_dim_list += reg_dim_delta .cpu().tolist()
+                    GT_dim_list += gt_dim_delta.cpu().tolist()
+            
+                alpha_performance = angle_criterion(REG_alpha_list, GT_alpha_list)
+                GT_dim_list = np.array(GT_dim_list)
+                REG_dim_list = np.array(REG_dim_list)
+                dim_performance =  np.mean(abs(GT_dim_list-REG_dim_list), axis=0)
+                print(f'[Alpha diff]: {alpha_performance:.4f}') #close to 0 is better
+                print(f'[DIM diff] H:{dim_performance[0]:.4f}, W:{dim_performance[1]:.4f}, L:{dim_performance[2]:.4f}')
+                writer.add_scalar(f'{train_config}/alpha_performance', alpha_performance, epoch)
+                writer.add_scalar(f'{train_config}/H', dim_performance[0], epoch)
+                writer.add_scalar(f'{train_config}/W', dim_performance[1], epoch)
+                writer.add_scalar(f'{train_config}/L', dim_performance[2], epoch)
             
         if epoch % epochs == 0:
                 name = save_path + f'_{epoch}.pkl'
@@ -263,6 +288,7 @@ def main():
 def name_by_parameters(FLAGS):
     is_group = FLAGS.group
     is_cond = FLAGS.cond
+    is_aug = FLAGS.aug
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     normalize_type = FLAGS.normal
@@ -272,6 +298,9 @@ def name_by_parameters(FLAGS):
         save_path += f'_G_W{warm_up}'
     if is_cond==1:
         save_path += '_C'
+    if is_aug==1:
+        save_path += '_aug'
+
 
     train_config = save_path.split("weights/")[1]
     log_path = f'log/{train_config}'

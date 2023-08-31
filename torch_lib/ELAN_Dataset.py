@@ -27,7 +27,7 @@ def angle2class(angle, num_heading_bin):
     return class_id, residual_angle
 
 class ELAN_Dataset(data.Dataset):
-    def __init__(self, path, split='train', num_heading_bin=4, condition=False, normal=0):
+    def __init__(self, path, split='train', num_heading_bin=4, condition=False, normal=0, is_flip=False):
         '''
         If condition==True, will concat theta_ray as 4-dim
         '''
@@ -40,6 +40,8 @@ class ELAN_Dataset(data.Dataset):
         split_dir = os.path.join(path, 'ImageSets', split + '.txt')
         self.ids = [x.strip() for x in open(split_dir).readlines()]
         self.normal = normal
+        self.is_flip = is_flip
+
         self.proj_matrix = np.array([
             [1.418667e+03, 0.000e+00, 6.4e+02, 0],
             [0.000e+00, 1.418867e+03, 3.6e+02, 0],
@@ -50,7 +52,6 @@ class ELAN_Dataset(data.Dataset):
         self.averages = ClassAverages(class_list, 'ELAN_class_averages.txt')
 
         self.object_list = self.get_objects(self.ids)
-
         
         self.labels = {}
         last_id = ""
@@ -77,7 +78,7 @@ class ELAN_Dataset(data.Dataset):
             self.curr_img = cv2.imread(self.top_img_path + '%s.png'%id)
 
         label = self.labels[id][str(line_num)]
-        obj = DetectedObject(self.curr_img, label['Class'], label['Box2d'], self.proj_matrix, self.normal, label=label)
+        obj = DetectedObject(self.curr_img, label['Class'], label['Box2d'], self.proj_matrix, self.normal, label=label, is_flip=self.is_flip)
         if self.condition:
             #cond = torch.tensor(obj.theta_ray).expand(1, obj.img.shape[1], obj.img.shape[2])
             cond = torch.tensor(obj.boxW_ratio).expand(1, obj.img.shape[1], obj.img.shape[2]) #box width ratio
@@ -128,6 +129,10 @@ class ELAN_Dataset(data.Dataset):
         Truncate = line[1] # truncate ratio
         Alpha = line[3] # what we will be regressing
         Ry = line[14]
+        if self.is_flip:
+            Alpha = flip_orient(Alpha)
+            Ry = flip_orient(Ry)
+        
         top_left = (int(round(line[4])), int(round(line[5])))
         bottom_right = (int(round(line[6])), int(round(line[7])))
         box2d = [top_left, bottom_right]
@@ -219,12 +224,13 @@ the angle to that image, and (optionally) the label for the object. The idea
 is to keep this abstract enough so it can be used in combination with YOLO
 """
 class DetectedObject:
-    def __init__(self, img, detection_class, box2d, proj_matrix, normal=0, label=None):
+    def __init__(self, img, detection_class, box2d, proj_matrix, normal=0, is_flip=False, label=None):
 
         self.img_W = img.shape[1]
         self.proj_matrix = proj_matrix
         self.theta_ray = self.calc_theta_ray(img, box2d, proj_matrix)
         self.normal = normal
+        self.is_flip = is_flip
         self.img = self.format_img(img, box2d)
         self.box2d = box2d
         self.label = label
@@ -270,10 +276,11 @@ class DetectedObject:
         pt2 = box2d[1]
         crop = img[pt1[1]:pt2[1]+1, pt1[0]:pt2[0]+1]
         crop = cv2.resize(src = crop, dsize=(224, 224), interpolation=cv2.INTER_CUBIC)
+        if self.is_flip:
+            crop = cv2.flip(crop, 1)
 
         # recolor, reformat
         batch = process(crop)
-
         return batch
     
     #offset ratio -1~1

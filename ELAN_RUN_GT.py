@@ -44,7 +44,7 @@ def main():
     angle_per_class = 2*np.pi/float(bin_num)
 
     my_vgg = vgg.vgg19_bn(weights='DEFAULT').to(device)
-    model = Model(features=my_vgg.features, bins=bin_num).to(device)
+    model = vgg_Model(features=my_vgg.features, bins=bin_num).to(device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     # for img processing
@@ -58,8 +58,8 @@ def main():
 
     # Kitti image_2 dir / label_2 dir
     print(data_root)
-    img_root = f"{data_root}/image_2"
-    label_root = f"{data_root}/renew_label"
+    img_root = os.path.join(data_root, 'image_2')
+    label_root = os.path.join(data_root, 'renew_label')
     images = sorted(glob.glob(os.path.join(img_root, '*.png'), recursive=True))
     renew_labels = sorted(glob.glob(os.path.join(label_root, '*.txt'), recursive=True))
     # dim averages
@@ -117,13 +117,15 @@ def main():
                             CLASS=class_, T=truncate, O=occluded, A=alpha_Elan, left=box2d[0][0], top=box2d[0][1], right=box2d[1][0], btm=box2d[1][1],
                             H=dim_Elan[0], W=dim_Elan[1], L=dim_Elan[2], X=loc[0], Y=loc[1], Z=loc[2], Ry=ry)
         
-        with open(renew_labels[i].replace(label_root, result_root + '/label_2'), 'w') as ELAN_f:
+        new_label_path = renew_labels[i].replace(label_root, result_root + '/label_2')
+        with open(new_label_path, 'w') as ELAN_f:
             ELAN_f.writelines(label_ELAN)
-
         #cv2.imwrite(images[i].replace(img_root, result_root + '/image_2'), img)
         
         if i%500==0:
             print(i)
+            
+    print(new_label_path)
     
 
 if __name__=='__main__':
