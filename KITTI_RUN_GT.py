@@ -53,6 +53,7 @@ def main():
         model.features[0].in_channels = 4
         #model.features[0] = nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
 
+    model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     # for img processing
     process = transforms.Compose([transforms.ToTensor(), 
@@ -151,6 +152,8 @@ def print_info(ckpt, cfg):
     print(f'Group:{group}, cond:{cond}', end=' ')
     print(f'[Weights] W_consist:{W_consist:.2f}, W_ry:{W_ry:.2f}, W_group:{W_group:.2f}', end='')
     try:
+        W_dim = ckpt['W_dim']
+        print(f', W_dim:{W_dim:.2f}', end='')
         W_depth = ckpt['W_depth']
         print(f', W_depth:{W_depth:.2f}')
     except:

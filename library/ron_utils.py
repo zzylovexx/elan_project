@@ -390,7 +390,7 @@ def angle_correction(angle:float) -> float:
     return angle
 
 class TrackingObject(object):
-    def __init__(self, line):
+    def __init__(self, line, is_flip=False):
         self.line = line
         self.class_ = None
         self.truncated = None
@@ -403,6 +403,7 @@ class TrackingObject(object):
         self.frames = list()
         self.crops = list()
         self.lines = list()
+        self.is_flip = is_flip
         self.set_info(line)
         
     def set_info(self, line):
@@ -413,16 +414,19 @@ class TrackingObject(object):
         self.class_ = elements[0]
         self.truncated = [elements[1]]
         self.occluded = [elements[2]]
-        self.alphas = [elements[3]]
+        if self.is_flip:
+            self.alphas = [flip_orient(elements[3])]
+        else:
+            self.alphas = [elements[3]]
         top_left = [int(round(elements[4])), int(round(elements[5]))]
         btm_right = [int(round(elements[6])), int(round(elements[7]))]
         self.box2d = np.array([top_left, btm_right])
         self.dims = [[elements[8], elements[9], elements[10]]]
         self.locs = [[elements[11], elements[12], elements[13]]]
         self.rys = [elements[14]]
-        if len(elements) == 16:
+        if len(elements) == 16: #group label
             self.id = int(elements[15])
-    
+
     def update_info(self, obj):
         self.box2d = obj.box2d
         self.truncated += obj.truncated
@@ -607,3 +611,9 @@ def get_new_classes(dict_, classes):
             classes[classes==key] = dict_[key]['class']
     return classes
 ###
+
+def flip_orient(angle):
+    if angle>=0: 
+        return round(3.14-angle, 2)
+    elif angle<0:
+        return round(-3.14-angle, 2)

@@ -59,7 +59,7 @@ def main():
     epochs = FLAGS.epoch
     network = FLAGS.network
     batch_size = 16 #64 worse than 8
-    W_dim = 1 #0.1~0.14
+    W_dim = 0.6 #0.1~0.14 | ORG:0.6, tried:1
     W_theta = 1 #0.03~1
     W_group = 0.6 # 0.02
     W_consist = 1 #數值小0.02~0.04  TODO W_consist要調高(0818) tried bad:3,5
@@ -85,14 +85,14 @@ def main():
                                 transforms.Resize([224,224], transforms.InterpolationMode.BICUBIC), 
                                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
     dataset_train = KITTI_Dataset(cfg, process, split='train')
+    dataset_train_flip = KITTI_Dataset(cfg, process, split='train', is_flip=True)
     dataset_valid = KITTI_Dataset(cfg, process, split='val')
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}
-    
-    dataset_train_flip = KITTI_Dataset(cfg, process, split='train', is_flip=True)
-    dataset_train = data.ConcatDataset([dataset_train, dataset_train_flip])
+
     train_loader = data.DataLoader(dataset_train, **params)
+    train_loader_flip = data.DataLoader(dataset_train_flip, **params)
     valid_loader = data.DataLoader(dataset_valid, **params)
 
     # 0818 added
@@ -114,10 +114,9 @@ def main():
 
     angle_per_class=2*np.pi/float(bin_num)
 
-    #optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.999))
+    opt_SGD = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
     # milestones:調整lr的epoch數，gamma:decay factor (https://hackmd.io/@Hong-Jia/H1hmbNr1d)
-    #scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[i for i in range(10, epochs, 20)], gamma=0.5)
+    #scheduler = torch.optim.lr_scheduler.MultiStepLR(opt_SGD, milestones=[i for i in range(10, epochs, 20)], gamma=0.5)
     #dim_loss_func = nn.MSELoss().to(device) #org function
     if is_group == 1:
         print("< Train with compute_cos_group_loss >")
@@ -137,14 +136,12 @@ def main():
     for epoch in range(1, epochs+1):
         curr_batch = 0
         model.train()
-        for batch_L, labels_L, batch_R, labels_R in train_loader:
-            optimizer.zero_grad()
+        for (batch_L, labels_L, _, _), (batch_flip, _, _, _) in zip(train_loader, train_loader_flip):
 
             gt_residual = labels_L['Heading_res'].float().to(device)
             gt_bin = labels_L['Heading_bin'].long().to(device)#這個角度在哪個class上
             gt_dim = labels_L['Dim_delta'].float().to(device)
             gt_theta_ray_L = labels_L['Theta_ray'].float().to(device)
-            gt_theta_ray_R = labels_R['Theta_ray'].float().to(device)
             gt_depth = labels_L['Depth'].float().to(device)
             gt_img_W = labels_L['img_W']
             gt_box2d = labels_L['Box2d']
@@ -152,7 +149,7 @@ def main():
             gt_class = labels_L['Class']
 
             batch_L=batch_L.float().to(device)
-            batch_R=batch_R.float().to(device)
+            batch_flip=batch_flip.float().to(device)
             [residual_L, bin_L, dim_L] = model(batch_L)
 
             bin_loss = F.cross_entropy(bin_L, gt_bin, reduction='mean').to(device)
@@ -161,8 +158,7 @@ def main():
             #dim_loss = F.mse_loss(dim, gt_dim, reduction='mean')  # org use mse_loss
             #dim_loss = F.l1_loss(dim_L, gt_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
             GT_alphas = labels_L['Alpha'].to(device)
-            #dim_loss = L1_loss_alpha(dim_L, gt_dim, GT_alphas, device) # 0613 try elevate dim performance       
-            dim_loss = F.mse_loss(dim_L, gt_dim, reduction='mean').to(device) # 0613 try elevate dim performance       
+            dim_loss = L1_loss_alpha(dim_L, gt_dim, GT_alphas, device) # 0613 try elevate dim performance            
 
             loss = W_dim * dim_loss + W_theta * loss_theta
             #added loss
@@ -182,11 +178,11 @@ def main():
             # 0801 added consist loss
             if type_!= 3: # baseline
                 reg_ry_L = compute_ry(bin_L, residual_L, gt_theta_ray_L, angle_per_class)
-                with torch.no_grad(): #0817 added
-                    [residual_R, bin_R, dim_R] = model(batch_R)
-                reg_ry_R = compute_ry(bin_R, residual_R, gt_theta_ray_R, angle_per_class)
-                consist_loss = F.l1_loss(dim_L, dim_R, reduction='mean')
-                ry_angle_loss = F.l1_loss(torch.cos(reg_ry_L), torch.cos(reg_ry_R), reduction='mean')
+                with torch.no_grad(): #0828 added
+                    [residual_R, bin_R, dim_flip] = model(batch_flip)
+                #reg_ry_R = compute_ry(bin_R, residual_R, gt_theta_ray_R, angle_per_class)
+                consist_loss = F.l1_loss(dim_L, dim_flip, reduction='mean')
+                #ry_angle_loss = F.l1_loss(torch.cos(reg_ry_L), torch.cos(reg_ry_R), reduction='mean')
                 
                 # angle_consist
                 if type_==0:
@@ -214,8 +210,9 @@ def main():
             loss += W_depth * depth_loss 
             '''
             
+            opt_SGD.zero_grad()
             loss.backward()
-            optimizer.step()
+            opt_SGD.step()
 
             if passes % 200 == 0 and type_!=3:
                 print("--- epoch %s | batch %s/%s --- [loss: %.4f],[theta_loss:%.4f],[dim_loss:%.4f]" \
@@ -300,7 +297,7 @@ def main():
             torch.save({
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
+                    'optimizer_state_dict': opt_SGD.state_dict(),
                     'cfg': cfg,
                     'W_dim': W_dim,
                     'W_theta': W_theta,

@@ -60,15 +60,18 @@ def main():
     FLAGS = parser.parse_args()
     result_root = FLAGS.result_path
     data_root = FLAGS.data_path
-    os.makedirs(f'{data_root}_eval/{result_root.split("/")[0]}', exist_ok=True)
+    #make folder
+    eval_folder = f'{data_root.replace("/","")}_eval/{result_root.split("/")[0]}'
+    eval_txt = os.path.join(eval_folder, f'{result_root.split("/")[-1]}.txt')
+    os.makedirs(eval_folder, exist_ok=True)
     org_stdout = sys.stdout
-    f = open(f'{data_root}_eval/{result_root}.txt', 'w')
+    f = open(eval_txt, 'w')
     sys.stdout = f
     evaluation(result_root, data_root)
     sys.stdout = org_stdout
     f.close()
     evaluation(result_root, data_root)
-    print(f'save in {data_root}_eval/{result_root}.txt')
+    print(f'save in {eval_txt}')
 
 if __name__ == '__main__':
     main()
