@@ -1,36 +1,15 @@
 import os, cv2, csv
 from torch.utils import data
 import numpy as np
-from library.ron_utils import angle_correction, flip_orient
-
-def angle2class(angle, bins):
-    ''' Convert continuous angle to discrete class and residual. '''
-    angle = angle % (2 * np.pi)
-    assert (angle >= 0 and angle <= 2 * np.pi)
-    angle_per_class = 2 * np.pi / float(bins)
-    shifted_angle = (angle + angle_per_class / 2) % (2 * np.pi)
-    class_id = int(shifted_angle / angle_per_class)
-    residual_angle = shifted_angle - (class_id * angle_per_class + angle_per_class / 2)
-    return class_id, residual_angle
-
-def class2angle(cls, residual, bins):
-    ''' Inverse function to angle2class. '''
-    angle_per_class = 2 * np.pi / float(bins)
-    angle_center = cls * angle_per_class
-    angle = angle_center + residual
-    return angle
+from library.ron_utils import angle2class, angle_correction, flip_orient
 
 class KITTI_Dataset(data.Dataset):
     def __init__(self, cfg, process, split='train', is_flip=False):
         path = cfg['path']
         self.label2_path = os.path.join(path, 'label_2')
         self.img2_path = os.path.join(path, 'image_2')
-        if split=='train':
-            self.label3_path = os.path.join(path, 'label_3')
-            self.img3_path = os.path.join(path, 'image_3')
-        elif split=='val':
-            self.label3_path = self.label2_path
-            self.img3_path = self.img2_path
+        self.label3_path = os.path.join(path, 'label_3')
+        self.img3_path = os.path.join(path, 'image_3')
 
         self.calib_path = os.path.join(path, 'calib') 
         self.extra_label_path = os.path.join(path, 'extra_label') #using generated extra label
@@ -53,11 +32,8 @@ class KITTI_Dataset(data.Dataset):
 
     def __getitem__(self, idx):
         # left_obj, left_label, right_obj, right_label
-        if self.split=='train':
-            return self.transform(self.objects_L[idx].crop), self.targets_L[idx],  \
-                   self.transform(self.objects_R[idx].crop), self.targets_R[idx]
-        else:
-            return self.transform(self.objects_L[idx].crop), self.targets_L[idx]
+        return self.transform(self.objects_L[idx].crop), self.targets_L[idx],  \
+                self.transform(self.objects_R[idx].crop), self.targets_R[idx]
 
     def get_objects(self, ids):
         all_objects_L = list()

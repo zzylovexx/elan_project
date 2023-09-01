@@ -1,12 +1,12 @@
-DATE="0831_Adam"
+DATE="0831_flip"
 W_PATH="weights/$DATE/"
 R_PATH="$DATE/"
-DEVICE=0
-TYPE=0 #0:consist dim, 1:angle, 2:both
+DEVICE=2
+TYPE=1 #0:consist dim, 1:angle, 2:both
 # hyper-parameter
 NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
 GROUP=0
-AUGMENT=1
+AUGMENT=0
 # data path
 D_PATH1="Elan_3d_box/"
 D_PATH2="Elan_3d_box_230808/"
@@ -70,7 +70,7 @@ then
 fi
 PKL=$PKL"_$EPOCH.pkl"
 
-python ELAN_Vtrain_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -A=$AUGMENT
+#python ELAN_Vtrain_flip.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -A=$AUGMENT
 python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH1 -D_PATH=$D_PATH1
 python ELAN_EVAL.py -R_PATH=$R_PATH1 -D_PATH=$D_PATH1
 python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH2 -D_PATH=$D_PATH2

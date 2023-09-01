@@ -97,9 +97,10 @@ def main():
     model = Model(features=my_vgg.features, bins=bin_num).to(device)
     angle_per_class=2*np.pi/float(bin_num)
 
-    opt_SGD = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.999))
     # milestones:調整lr的epoch數，gamma:decay factor (https://hackmd.io/@Hong-Jia/H1hmbNr1d)
-    #scheduler = torch.optim.lr_scheduler.MultiStepLR(opt_SGD, milestones=[i for i in range(10, epochs, 20)], gamma=0.5)
+    #scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[i for i in range(10, epochs, 20)], gamma=0.5)
     #dim_loss_func = nn.MSELoss().to(device) #org function
     if is_group == 1:
         print("< Train with compute_cos_group_loss >")
@@ -119,6 +120,10 @@ def main():
     for epoch in range(1, epochs+1):
         curr_batch = 0
         
+        avg_bin_loss, avg_residual_loss, avg_theta_loss = 0
+        avg_dim_loss, avg_depth_loss = 0
+        avg_total_loss = 0
+
         for batch_L, labels_L, batch_R, labels_R in train_loader:
 
             gt_residual = labels_L['Heading_res'].float().to(device)
@@ -195,9 +200,9 @@ def main():
             else:
                 depth_loss = torch.tensor(0.0).to(device)
             
-            opt_SGD.zero_grad()
+            optimizer.zero_grad()
             loss.backward()
-            opt_SGD.step()
+            optimizer.step()
 
             
             if passes % 200 == 0 and type_!=3:
@@ -284,7 +289,7 @@ def main():
             torch.save({
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': opt_SGD.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
                     'cfg': cfg,
                     'W_dim': W_dim,
                     'W_theta': W_theta,

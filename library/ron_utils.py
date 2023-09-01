@@ -476,13 +476,13 @@ def keep_same_seeds(seed):
     torch.backends.cudnn.deterministic = True
 
 #0810 add
-def compute_residual_loss(residual, gt_bin, gt_residual, device):
+def compute_residual_loss(residual, gt_bin, gt_residual, device, reduction='mean'):
     one_hot = torch.zeros((residual).shape).to(device)
     # make one hot map
     for i in range(gt_bin.shape[0]):
         one_hot[i][gt_bin[i]] = 1
     reg_residual = torch.sum(residual * one_hot.to(device), axis=1)
-    residual_loss = F.l1_loss(reg_residual, gt_residual, reduction='mean')
+    residual_loss = F.l1_loss(reg_residual, gt_residual, reduction=reduction)
     return residual_loss
 
 #0810 add
