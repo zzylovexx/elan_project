@@ -2,6 +2,7 @@ from torchvision.models import vgg, resnet, densenet
 from torch_lib.Model_heading_bin import *
 from torchvision import transforms
 from torch_lib.KITTI_Dataset import *
+from torch_lib.ClassAverages import *
 from KITTI_EVAL import ron_evaluation
 from library.ron_utils import *
 import os, cv2, time, sys
@@ -56,12 +57,13 @@ def main():
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
     # for img processing
-    process = transforms.Compose([transforms.ToTensor(), 
+    process = transforms.Compose([transforms.ToTensor(),
                                   transforms.Resize([224,224], transforms.InterpolationMode.BICUBIC), 
                                   transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
 
-    dataset_train = KITTI_Dataset(cfg, process, split='train')    
+    dataset_train = KITTI_Dataset(cfg, process, split='train')
+    Kitti_averages = ClassAverages(average_file='Kitti_class_averages.txt')
     img2_path = 'Kitti/training/image_2'
     label2_path = 'Kitti/training/label_2'
     calib_path = 'Kitti/training/calib'
@@ -145,12 +147,12 @@ def print_info(ckpt, cfg):
     group = cfg['group']
     cond = cfg['cond']
     W_consist = ckpt['W_consist']
-    W_ry = ckpt['W_ry']
+    W_angle = ckpt['W_angle']
     W_group = ckpt['W_group']
     print('Class:', class_list, end=', ')
     print('Diff:', diff_list, end=', ')
     print(f'Group:{group}, cond:{cond}', end=' ')
-    print(f'[Weights] W_consist:{W_consist:.2f}, W_ry:{W_ry:.2f}, W_group:{W_group:.2f}', end='')
+    print(f'[Weights] W_consist:{W_consist:.2f}, W_angle:{W_angle:.2f}, W_group:{W_group:.2f}', end='')
     try:
         W_dim = ckpt['W_dim']
         print(f', W_dim:{W_dim:.2f}', end='')

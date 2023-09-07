@@ -26,7 +26,6 @@ class KITTI_Dataset(data.Dataset):
         self.targets_L, self.targets_R = self.get_targets(self.objects_L, self.objects_R)
         self.transform = process
         
-    
     def __len__(self):
         return len(self.objects_L)
 
@@ -129,7 +128,13 @@ class Object3d(object):
         self.calib = None
         self.camera_pose = None
         self.theta_ray = None
+        self.frame = None
+        self.track_id = None
     
+    def set_track_info(self, frame, track_id):
+        self.frame = frame
+        self.track_id = track_id
+
     def set_crop(self, img, calib, camera_pose, is_flip=False):
         self.img_W = img.shape[1]
         self.crop = img[self.box2d[1]:self.box2d[3]+1, self.box2d[0]:self.box2d[2]+1]

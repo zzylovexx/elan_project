@@ -34,6 +34,7 @@ parser.add_argument("--group", "-G", type=int, help='if True, add stdGroupLoss')
 parser.add_argument("--warm-up", "-W", type=int, default=10, help='warm up before adding group loss')
 parser.add_argument("--cond", "-C", type=int, help='if True, 4-dim with theta_ray | boxH_2d ')
 parser.add_argument("--aug", "-A", type=int, default=0, help='if True, flip dataset as augmentation')
+parser.add_argument("--depth", "-DEP", type=int, default=0, help='if True, add depth loss')
 # TO BE ADDED (Loss的weights比例alpha, w of groupLoss, LRscheduler: milestone, gamma )
 
 def main():
@@ -54,6 +55,7 @@ def main():
     is_group = FLAGS.group
     is_cond = FLAGS.cond
     is_aug = FLAGS.aug
+    is_depth =FLAGS.depth
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     type_ = FLAGS.type
@@ -65,7 +67,7 @@ def main():
     W_theta = 1 #0.03~1
     W_group = 0.6 # 0.02
     W_consist = 1 #數值小0.02~0.04  TODO W_consist要調高(0818) tried bad:3,5
-    W_ry = 0.1 #數值大0.05~0.2
+    W_angle = 0.1 #數值大0.05~0.2
     W_depth = 0.05 # 2
     # make weights folder
     cfg['bins'] = bin_num
@@ -193,11 +195,11 @@ def main():
                     [residual_R, bin_R, dim_R] = model(batch_R)
                     reg_ry_R = compute_ry(bin_R, residual_R, gt_theta_ray_R, angle_per_class)
                     consist_loss = W_consist * F.l1_loss(dim_L, dim_R, reduction='mean').to(device)
-                    ry_angle_loss = W_ry * F.l1_loss(torch.cos(reg_ry_L), torch.cos(reg_ry_R), reduction='mean').to(device)
-                # angle_consist
+                    ry_angle_loss = W_angle * F.l1_loss(torch.cos(reg_ry_L), torch.cos(reg_ry_R), reduction='mean').to(device)
+                #  dim_consist
                 if type_==0:
                     ry_angle_loss = torch.tensor(0.0).to(device)
-                # dim_consist
+                # angle_consist
                 elif type_==1:
                     consist_loss = torch.tensor(0.0).to(device)
                 # if type_==2 : both calculated
@@ -205,19 +207,22 @@ def main():
                 loss += consist_loss + ry_angle_loss
         
             # depth_loss
-            calc_depth = list()
-            for i in range(batch_L.shape[0]):
-                img_W = gt_img_W[i]
-                box2d = gt_box2d[i]
-                cam_to_img = gt_calib[i]
-                obj_W = dataset_train.get_cls_dim_avg(gt_class[i])[1] + dim_L.cpu().detach().numpy()[i][1]
-                obj_L = dataset_train.get_cls_dim_avg(gt_class[i])[2] + dim_L.cpu().detach().numpy()[i][2]
-                #alpha = reg_alpha[i]
-                alpha = GT_alphas[i].cpu().detach()
-                calc_depth.append(calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0))
-            calc_depth = torch.FloatTensor(calc_depth).to(device)
-            depth_loss = W_depth * F.l1_loss(gt_depth, calc_depth).to(device)
-            loss += depth_loss 
+            if is_depth:
+                calc_depth = list()
+                for i in range(batch_L.shape[0]):
+                    img_W = gt_img_W[i]
+                    box2d = gt_box2d[i]
+                    cam_to_img = gt_calib[i]
+                    obj_W = dataset_train.get_cls_dim_avg(gt_class[i])[1] + dim_L.cpu().detach().numpy()[i][1]
+                    obj_L = dataset_train.get_cls_dim_avg(gt_class[i])[2] + dim_L.cpu().detach().numpy()[i][2]
+                    #alpha = reg_alpha[i]
+                    alpha = GT_alphas[i].cpu().detach()
+                    calc_depth.append(calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0))
+                calc_depth = torch.FloatTensor(calc_depth).to(device)
+                depth_loss = W_depth * F.l1_loss(gt_depth, calc_depth).to(device)
+                loss += depth_loss
+            else:
+                depth_loss = torch.tensor(0.0).to(device)
             
             loss.backward()
             optimizer.step()
@@ -318,7 +323,7 @@ def main():
                     [residual_R, bin_R, dim_R] = model(batch_R)
                     reg_ry_R = compute_ry(bin_R, residual_R, gt_theta_ray_R, angle_per_class)
                     consist_loss = W_consist * F.l1_loss(dim_L, dim_R, reduction='mean').to(device)
-                    ry_angle_loss = W_ry * F.l1_loss(torch.cos(reg_ry_L), torch.cos(reg_ry_R), reduction='mean').to(device)
+                    ry_angle_loss = W_angle * F.l1_loss(torch.cos(reg_ry_L), torch.cos(reg_ry_R), reduction='mean').to(device)
                     # angle_consist
                     if type_==0:
                         ry_angle_loss = torch.tensor(0.0).to(device)
@@ -366,6 +371,7 @@ def main():
 
             eval_bin_loss/=len(dataset_valid)
             eval_residual_loss/=len(dataset_valid)
+            eval_theta_loss/=len(dataset_valid)
             eval_dim_loss/=len(dataset_valid)
             eval_depth_loss/=len(dataset_valid)
             eval_total_loss/=len(dataset_valid)
@@ -401,7 +407,7 @@ def main():
         # visiualize https://zhuanlan.zhihu.com/p/103630393
         #tensorboard --logdir=./{log_foler} --port 8123
             
-        if epoch % epochs == 0:
+        if epoch % epochs == 0 or epoch % 50 == 0:
             name = save_path + f'_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)
@@ -414,7 +420,7 @@ def main():
                     'W_dim': W_dim,
                     'W_theta': W_theta,
                     'W_consist': W_consist,
-                    'W_ry': W_ry,
+                    'W_angle': W_angle,
                     'W_group': W_group,
                     }, name)
             print("====================")
@@ -435,6 +441,7 @@ def name_by_parameters(FLAGS):
     is_group = FLAGS.group
     is_cond = FLAGS.cond
     is_aug = FLAGS.aug
+    is_depth = FLAGS.depth
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     network = FLAGS.network
@@ -444,6 +451,8 @@ def name_by_parameters(FLAGS):
         save_path += f'_G{is_group}_W{warm_up}'
     if is_cond==1:
         save_path += '_C'
+    if is_depth==1:
+        save_path += '_dep'
     if is_aug==1:
         save_path += '_aug'
     
