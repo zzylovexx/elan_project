@@ -22,9 +22,13 @@ def ron_evaluation(val_ids, diff_list, cls_list, result_root, gt_root='Kitti/tra
         gt_objects = [Object3d(line) for line in open(gt_label).readlines()]
         reg_label = os.path.join(result_root, f'{id_}.txt')
         reg_objects = [Object3d(line) for line in open(reg_label).readlines()]
-
-        for gt, reg in zip(gt_objects, reg_objects):
-            if gt.cls_type in cls_list and gt.level in diff_list:
+        count = 0
+        for i in range(len(gt_objects)):
+            gt = gt_objects[i]
+            if gt.cls_type.lower() in cls_list and gt.level in diff_list:
+                #print(gt.alpha, reg.alpha)
+                reg = reg_objects[count]
+                count += 1
                 GT_dim.append(gt.dim)
                 GT_depth.append(gt.pos[2])
                 GT_alpha.append(gt.alpha)
