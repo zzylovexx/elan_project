@@ -20,19 +20,18 @@ def ron_evaluation(val_ids, diff_list, cls_list, result_root, gt_root='Kitti/tra
     for id_ in val_ids:
         gt_label = os.path.join(gt_root, f'{id_}.txt')
         gt_objects = [Object3d(line) for line in open(gt_label).readlines()]
-        for obj in gt_objects:
-            if obj.cls_type in cls_list and obj.level in diff_list:
-                GT_dim.append(obj.dim)
-                GT_depth.append(obj.pos[2])
-                GT_alpha.append(obj.alpha)
-                
         reg_label = os.path.join(result_root, f'{id_}.txt')
         reg_objects = [Object3d(line) for line in open(reg_label).readlines()]
-        for obj in reg_objects:
-            if obj.cls_type in cls_list and obj.level in diff_list:
-                REG_dim.append(obj.dim)
-                REG_depth.append(obj.pos[2])
-                REG_alpha.append(obj.alpha)
+
+        for gt, reg in zip(gt_objects, reg_objects):
+            if gt.cls_type in cls_list and gt.level in diff_list:
+                GT_dim.append(gt.dim)
+                GT_depth.append(gt.pos[2])
+                GT_alpha.append(gt.alpha)
+
+                REG_dim.append(reg.dim)
+                REG_depth.append(reg.pos[2])
+                REG_alpha.append(reg.alpha)
                 #reg_calc_depth = calc_depth_with_alpha_theta(img2.shape[1], obj.box2d, cam_to_img.p2, reg_dim[1], reg_dim[2], reg_alpha)
         
     GT_dim = np.array(GT_dim)

@@ -121,9 +121,6 @@ def main():
     train_CALC_depth = np.array(train_CALC_depth)
     val_GT_depth = np.array(val_GT_depth)
     val_CALC_depth = np.array(val_CALC_depth)
-    ron_evaluation(val_ids, diff_list, cls_list, result_root)
-    print('[MY CALC Depth error]')
-    box_depth_error_calculation(val_GT_depth, val_CALC_depth, 5)
     #write as file as well
     org_stdout = sys.stdout
     os.makedirs(f'KITTI_eval/{result_root.split("/")[0]}', exist_ok=True)
