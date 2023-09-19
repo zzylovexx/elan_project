@@ -447,9 +447,9 @@ class TrackingObject(object):
         print(f'Alpha:{self.alphas}, Ry:{self.rys}')
         print(f'Trun:{self.truncated}, Occ:{self.occluded}')
 
-def iou_2d(box1, box2):
-    box1 = box1.flatten()
-    box2 = box2.flatten()
+def calc_iou_2d(box1, box2):
+    box1 = np.array(box1, dtype=np.int32).flatten()
+    box2 = np.array(box2, dtype=np.int32).flatten()
     area1 = (box1[2]-box1[0])*(box1[3]-box1[1])
     area2 = (box2[2]-box2[0])*(box2[3]-box2[1])
     area_sum = abs(area1) + abs(area2)
@@ -463,8 +463,10 @@ def iou_2d(box1, box2):
     if x1 >= x2 or y1 >= y2:
         return 0
     else:
-        inter_area = abs((x2-x1)*(y2-y1))
-    return inter_area/(area_sum-inter_area)
+        area_overlap = abs((x2-x1)*(y2-y1))
+
+    area_union = area_sum-area_overlap
+    return area_overlap/area_union
 
 def keep_same_seeds(seed):
     torch.manual_seed(seed)
@@ -554,6 +556,7 @@ def compute_alpha(bin, residual, angle_per_class):
     bin_argmax = torch.max(bin, dim=1)[1]
     residual = residual[torch.arange(len(residual)), bin_argmax] 
     alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
+    alphas = alphas.cpu().detach().numpy()
     for i in range(len(alphas)):
         alphas[i] = angle_correction(alphas[i])
     return alphas
@@ -617,3 +620,73 @@ def flip_orient(angle):
         return round(3.14-angle, 2)
     elif angle<0:
         return round(-3.14-angle, 2)
+    
+## 0919 added
+
+def loc3d_2_box2d(orient, location, dimension, cam_to_img):
+    prj_points = []
+    R = np.array([[np.cos(orient), 0, np.sin(orient)], [0, 1, 0], [-np.sin(orient), 0, np.cos(orient)]])
+    corners = create_corners(dimension, location, R)
+    for corner in corners:
+        point = project_3d_pt(corner, cam_to_img)
+        prj_points.append(point)
+
+    prj_points = np.array(prj_points)
+    prj_points_X = prj_points[:,0]
+    prj_points_Y = prj_points[:,1]
+    prj_box = [min(prj_points_X), min(prj_points_Y), max(prj_points_X), max(prj_points_Y)]
+    prj_box = np.array(prj_box, dtype=np.int32)
+    return prj_box
+
+def calc_GIoU_2d(box1, box2):
+    box1 = np.array(box1, dtype=np.int32).flatten()
+    box2 = np.array(box2, dtype=np.int32).flatten()
+    area1 = (box1[2]-box1[0])*(box1[3]-box1[1])
+    area2 = (box2[2]-box2[0])*(box2[3]-box2[1])
+    area_sum = abs(area1) + abs(area2)
+
+    #計算重疊方形座標
+    x1 = max(box1[0], box2[0]) # left
+    y1 = max(box1[1], box2[1]) # top
+    x2 = min(box1[2], box2[2]) # right
+    y2 = min(box1[3], box2[3]) # btm
+
+    if x1 >= x2 or y1 >= y2:
+        return 0
+    else:
+        area_overlap = abs((x2-x1)*(y2-y1))
+
+    area_union = area_sum-area_overlap
+    IoU = area_overlap/area_union
+
+    #計算凸型面積 (包住AB的長方形 - union AB)
+    x1 = min(box1[0], box2[0]) # left
+    y1 = min(box1[1], box2[1]) # top
+    x2 = max(box1[2], box2[2]) # right
+    y2 = max(box1[3], box2[3]) # btm
+    
+    if x1 >= x2 or y1 >= y2:
+        area_C = 0
+    else:
+        area_C = abs((x2-x1)*(y2-y1))
+
+    GIoU= IoU - (area_C-area_union)/area_C
+    return GIoU
+
+def calc_iou_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
+    iou_loss = torch.tensor(0.0)
+    reg_ry = reg_alphas + gt_theta_ray
+    for i in range(len(reg_dims)):
+        reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
+        prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
+        iou_loss += torch.tensor(1 - calc_iou_2d(gt_box2d[i], prj_box2d))
+    return iou_loss / len(reg_dims)
+
+def calc_GIoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
+    iou_loss = torch.tensor(0.0)
+    reg_ry = reg_alphas + gt_theta_ray
+    for i in range(len(reg_dims)):
+        reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
+        prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
+        iou_loss += torch.tensor(1 - calc_GIoU_2d(gt_box2d[i], prj_box2d))
+    return iou_loss / len(reg_dims)

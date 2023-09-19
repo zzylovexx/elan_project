@@ -1,5 +1,5 @@
 # check every time
-DATE="0919_Giou"
+DATE="0918_mine"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
 DEVICE=0
@@ -11,7 +11,7 @@ DEPTH=0
 BIN=4
 GROUP=0 #0:NO, 1:cos, 2:sin_sin, 3:compare
 #FIXED
-EPOCH=1
+EPOCH=10
 WARMUP=50
 # not done yet
 COND=0
@@ -92,6 +92,6 @@ PKL=$PKL"_$EPOCH.pkl"
 echo "SHELL W_PATH:"$W_PATH
 echo "SHELL PKL:"$PKL
 echo "SHELL R_PATH:"$R_PATH
-python KITTI_train_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -A=$AUGMENT 
+python KITTI_train_BL_mine.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -A=$AUGMENT 
 python KITTI_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH -D=$DEVICE -N=$NETWORK
 echo "SHELL FINISHED"

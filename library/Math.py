@@ -57,11 +57,17 @@ def calc_location(dimension, proj_matrix, box2d, alpha, theta_ray):
     orient = alpha + theta_ray
     R = rotation_matrix(orient)
 
-    # format 2d corners
-    xmin = box2d[0][0]
-    ymin = box2d[0][1]
-    xmax = box2d[1][0]
-    ymax = box2d[1][1]
+    if len(box2d) == 2: # [ [left, top], [btm, right] ]
+        # format 2d corners
+        xmin = box2d[0][0]
+        ymin = box2d[0][1]
+        xmax = box2d[1][0]
+        ymax = box2d[1][1]
+    elif len(box2d) == 4: # [ left, top, btm, right ]
+        xmin = box2d[0]
+        ymin = box2d[1]
+        xmax = box2d[2]
+        ymax = box2d[3]
 
     # left top right bottom
     box_corners = [xmin, ymin, xmax, ymax]
