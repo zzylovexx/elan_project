@@ -22,11 +22,11 @@ def sign(num):
     return 1 if num>=0 else -1
 
 def get_box_center(box2d):
-    box2d = np.array(box2d).flatten()
-    return [(box2d[0]+box2d[2])//2, (box2d[1]+box2d[3])//2]
+    box2d = np.array(box2d, dtype=np.int32).flatten()
+    return [(box2d[0]+box2d[2])//2, (box2d[1]+box2d[3])//2] #x, y
 
 def get_box_size(box2d):
-    box2d = np.array(box2d).flatten()
+    box2d = np.array(box2d, dtype=np.int32).flatten()
     width = max(box2d[2]-box2d[0], 1)
     height = max(box2d[3]-box2d[1], 1)
     return width, height
@@ -447,7 +447,7 @@ class TrackingObject(object):
         print(f'Alpha:{self.alphas}, Ry:{self.rys}')
         print(f'Trun:{self.truncated}, Occ:{self.occluded}')
 
-def calc_iou_2d(box1, box2):
+def calc_IoU_2d(box1, box2):
     box1 = np.array(box1, dtype=np.int32).flatten()
     box2 = np.array(box2, dtype=np.int32).flatten()
     area1 = (box1[2]-box1[0])*(box1[3]-box1[1])
@@ -673,14 +673,16 @@ def calc_GIoU_2d(box1, box2):
     GIoU= IoU - (area_C-area_union)/area_C
     return GIoU
 
-def calc_iou_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
+def calc_IoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
     iou_loss = torch.tensor(0.0)
     reg_ry = reg_alphas + gt_theta_ray
     for i in range(len(reg_dims)):
         reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
         prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
-        iou_loss += torch.tensor(1 - calc_iou_2d(gt_box2d[i], prj_box2d))
-    return iou_loss / len(reg_dims)
+        #iou_loss += torch.tensor(1 - calc_IoU_2d(gt_box2d[i], prj_box2d)) #0919ver. 會和giou_loss大小相同
+        iou_loss += -1 * torch.log(torch.tensor(calc_IoU_2d(gt_box2d[i], prj_box2d))) #https://zhuanlan.zhihu.com/p/359982543
+    iou_loss /= len(reg_dims)
+    return iou_loss.requires_grad_(True)
 
 def calc_GIoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
     iou_loss = torch.tensor(0.0)
@@ -689,4 +691,12 @@ def calc_GIoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
         reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
         prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
         iou_loss += torch.tensor(1 - calc_GIoU_2d(gt_box2d[i], prj_box2d))
-    return iou_loss / len(reg_dims)
+    iou_loss /= len(reg_dims)
+    return iou_loss.requires_grad_(True)
+
+def box2d_area(box):
+    if len(box)==2: #[ [left, top], [right, btm] ]
+        area = (box[1][0]-box[0][0])*(box[1][1]-box[0][1])
+    elif len(box)==4: #[left, top, right, btm]
+        area = (box[2]-box[0])*(box[3]-box[1]) #有可能會overflow    
+    return area

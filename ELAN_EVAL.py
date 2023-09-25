@@ -10,12 +10,12 @@ parser.add_argument('--data-path', "-D_PATH", required=True, help='folder of the
 
 def evaluation(result_root, data_root):
     try:
-        valset = [x.strip() for x in open(f'{data_root}/ImageSets/val.txt').readlines()]
+        val_ids = [x.strip() for x in open(f'{data_root}/ImageSets/val.txt').readlines()]
     except:
         # temp way for 230808 dataset
         all_labels = glob.glob(f'{data_root}/renew_label/*.txt')
-        valset = [name.split('/')[-1].split('.')[0] for name in all_labels]
-        print(len(valset))
+        val_ids = [name.split('/')[-1].split('.')[0] for name in all_labels]
+        print('Dataset Elan_230808:', len(val_ids))
         
 
     dim_GT = list()
@@ -25,7 +25,7 @@ def evaluation(result_root, data_root):
     alpha_GT = list()
     alpha_ELAN = list()
 
-    for id_ in valset:
+    for id_ in val_ids:
         gt_lines = [x.strip() for x in open(f'{data_root}/renew_label/{id_}.txt').readlines()]
         gt_objects = [TrackingObject(line) for line in gt_lines if line.split()[0].lower()=='car']
         for obj in gt_objects:
@@ -70,7 +70,7 @@ def main():
     evaluation(result_root, data_root)
     sys.stdout = org_stdout
     f.close()
-    evaluation(result_root, data_root)
+    #evaluation(result_root, data_root)
     print(f'save in {eval_txt}')
 
 if __name__ == '__main__':

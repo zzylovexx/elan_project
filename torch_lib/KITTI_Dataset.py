@@ -74,7 +74,7 @@ class KITTI_Dataset(data.Dataset):
             # left image
             obj_target = dict()
             obj_target['Class'] = obj_L.cls_type
-            obj_target['Truncation'] = obj_L.trucation
+            obj_target['Truncation'] = obj_L.truncation
             obj_target['Box2d'] = obj_L.box2d
             obj_target['Alpha'] = obj_L.alpha
             obj_target['Ry'] = obj_L.ry
@@ -89,7 +89,7 @@ class KITTI_Dataset(data.Dataset):
             # right image
             obj_target = dict()
             obj_target['Class'] = obj_R.cls_type
-            obj_target['Truncation'] = obj_R.trucation
+            obj_target['Truncation'] = obj_R.truncation
             obj_target['Box2d'] = obj_R.box2d
             obj_target['Alpha'] = obj_R.alpha
             obj_target['Ry'] = obj_R.ry
@@ -108,7 +108,7 @@ class Object3d(object):
         label = line.strip().split(' ')
         self.src = line
         self.cls_type = label[0].lower()
-        self.trucation = float(label[1])
+        self.truncation = float(label[1])
         self.occlusion = float(label[2])  # 0:fully visible 1:partly occluded 2:largely occluded 3:unknown
         self.alpha = float(label[3])
         # str->float->np.int32
@@ -160,17 +160,17 @@ class Object3d(object):
     def get_obj_level(self):
         height = float(self.box2d[3]) - float(self.box2d[1]) + 1
 
-        if self.trucation == -1:
+        if self.truncation == -1:
             self.level_str = 'DontCare'
             return 0
 
-        if height >= 40 and self.trucation <= 0.15 and self.occlusion <= 0:
+        if height >= 40 and self.truncation <= 0.15 and self.occlusion <= 0:
             self.level_str = 'Easy'
             return 1  # Easy
-        elif height >= 25 and self.trucation <= 0.3 and self.occlusion <= 1:
+        elif height >= 25 and self.truncation <= 0.3 and self.occlusion <= 1:
             self.level_str = 'Moderate'
             return 2  # Moderate
-        elif height >= 25 and self.trucation <= 0.5 and self.occlusion <= 2:
+        elif height >= 25 and self.truncation <= 0.5 and self.occlusion <= 2:
             self.level_str = 'Hard'
             return 3  # Hard
         else:
@@ -197,7 +197,7 @@ class Object3d(object):
 
     def to_str(self):
         print_str = '%s %.3f %.3f %.3f box2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f' \
-                            % (self.cls_type, self.trucation, self.occlusion, self.alpha, self.box2d, self.h, self.w, self.l,
+                            % (self.cls_type, self.truncation, self.occlusion, self.alpha, self.box2d, self.h, self.w, self.l,
                                 self.pos, self.ry)
         return print_str
 
@@ -206,7 +206,7 @@ class Object3d(object):
         H, W, L = self.h, self.w, self.l
         X, Y, Z = self.pos
         print_str = '%s %.1f %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f' \
-                     % (self.cls_type, self.trucation, self.occlusion, self.alpha, left, top, right, btm,
+                     % (self.cls_type, self.truncation, self.occlusion, self.alpha, left, top, right, btm,
                         W, H, L, X, Y, Z, self.ry)
         return print_str
     
@@ -216,7 +216,7 @@ class Object3d(object):
         X, Y, Z = reg_pos
         reg_ry = self.ry - self.alpha + reg_alpha
         print_str = '%s %.1f %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f' \
-                     % (self.cls_type, self.trucation, self.occlusion, reg_alpha, left, top, right, btm,
+                     % (self.cls_type, self.truncation, self.occlusion, reg_alpha, left, top, right, btm,
                         W, H, L, X, Y, Z, reg_ry)
         return print_str
 
