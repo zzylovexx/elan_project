@@ -1,10 +1,10 @@
-DATE="0926"
+DATE="0926_iou"
 W_PATH="weights/$DATE/"
 R_PATH="$DATE/"
 DEVICE=1
 # hyper-parameter
 NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
-AUGMENT=1
+AUGMENT=0
 GROUP=0
 # data path
 D_PATH1="Elan_3d_box/"

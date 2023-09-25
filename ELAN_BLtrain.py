@@ -158,7 +158,7 @@ def main():
                 group_loss = torch.tensor(0.0).to(device)
             
             #loss = alpha * dim_loss + bin_loss + residual_loss + W_group * group_loss # W_group=0.3 before0724
-            loss = dim_loss + theta_loss #+ iou_loss
+            loss = dim_loss + theta_loss + iou_loss
             
             loss.backward()
             optimizer.step()
