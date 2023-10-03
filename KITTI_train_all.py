@@ -68,14 +68,14 @@ def main():
     W_group = 0.6 # 0.02
     W_consist = 1 #數值小0.02~0.04  TODO W_consist要調高(0818) tried bad:3,5
     W_angle = 0.1 #數值大0.05~0.2
-    W_iou = 1 # 數值大0.3~0.5 0919:0.2
+    W_iou = 0.2 # 數值大0.3~0.5 0919:0.2
     W_depth = 0.05 # 2
     # make weights folder
     cfg['bins'] = bin_num
     cfg['cond'] = is_cond
     cfg['group'] = is_group
     cfg['network'] = network
-    
+    iou_criterion = IoULoss(W_iou)
     weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
     os.makedirs(weights_folder, exist_ok=True)
     save_path, log_path, train_config = name_by_parameters(FLAGS)
@@ -165,6 +165,8 @@ def main():
             gt_box2d = labels_L['Box2d'].numpy()
             gt_calib = labels_L['Calib'].numpy()
             gt_class = labels_L['Class']
+            gt_locs = labels_L['Location'].numpy()
+            gt_rys = labels_L['Ry'].numpy()
 
             batch_L=batch_L.float().to(device)
             batch_R=batch_R.float().to(device)
@@ -184,11 +186,20 @@ def main():
             #0919added IOU
             reg_alphas = compute_alpha(bin_L, residual_L, angle_per_class)
             reg_dims = dataset_train.get_cls_dim_avg('car') + dim_L.cpu().detach().numpy()
+            gt_dims = dataset_train.get_cls_dim_avg('car') + gt_dim.cpu().detach().numpy()
             #TODO IOU aug, but DIOU, CIOU is close to IOU=GIOU value....
-            iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
+            
             #iou_loss = W_iou * calc_GIoU_loss(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
             #iou_loss = W_iou * iou_loss_func(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
-
+            #iou_loss = iou_criterion(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
+            
+            #iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
+            iou_loss = W_iou * calc_IoU_loss_0919(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
+            #iou_loss = W_iou * calc_IoU_loss_reg_ry_gt_loc(gt_box2d, gt_theta_ray_L, gt_locs, reg_dims, reg_alphas, gt_calib).to(device)
+            #iou_loss = W_iou * calc_IoU_loss_gt_ry_gt_loc(gt_box2d, gt_rys, gt_locs, reg_dims, gt_calib).to(device)
+            #iou_loss = W_iou * calc_IoU_loss_reg_ry_gt_dim(gt_box2d, gt_theta_ray_L, gt_dims, reg_alphas, gt_calib)
+            
+            #loss = iou_loss 
             loss = dim_loss + theta_loss + iou_loss
             #added loss
             if is_group > 0 and epoch > warm_up:
@@ -268,7 +279,7 @@ def main():
         #print(f'Epoch:{epoch} lr = {scheduler.get_last_lr()[0]}')
         
         if type_!=3:
-            print("--- epoch %s --- [loss:%.3f],[theta_loss:%.3f],[dim_loss:%.3f],[iou_loss:%.3f],[depth_loss:%.3f]" \
+            print("--- epoch %s Train--- [loss:%.3f],[theta_loss:%.3f],[dim_loss:%.3f],[iou_loss:%.3f],[depth_loss:%.3f]" \
                 %(epoch, avg_total_loss, avg_theta_loss, avg_dim_loss, avg_iou_loss, avg_depth_loss))
             print("[consist_loss:%.3f],[Ry_angle_loss:%.3f]" \
                 %(avg_consist_loss, avg_angle_loss))
@@ -276,7 +287,7 @@ def main():
                 print('[group_loss:%.3f]'%(group_loss.item()))
         #baseline
         else:
-            print("--- epoch %s --- [loss:%.3f],[theta_loss:%.3f],[dim_loss:%.3f],[iou_loss:%.3f],[depth_loss:%.3f]" \
+            print("--- epoch %s Train--- [loss:%.3f],[theta_loss:%.3f],[dim_loss:%.3f],[iou_loss:%.3f],[depth_loss:%.3f]" \
                 %(epoch, avg_total_loss, avg_theta_loss, avg_dim_loss, avg_iou_loss, avg_depth_loss))
             if is_group > 0 and epoch > warm_up:
                 print('[group_loss:%.3f]'%(group_loss.item()))
@@ -304,6 +315,8 @@ def main():
                 gt_box2d = labels_L['Box2d'].numpy()
                 gt_calib = labels_L['Calib'].numpy()
                 gt_class = labels_L['Class']
+                gt_locs = labels_L['Location'].numpy()
+                gt_rys = labels_L['Ry'].numpy()
 
                 batch_L=batch_L.float().to(device)
                 batch_R=batch_R.float().to(device)
@@ -320,12 +333,21 @@ def main():
                 #dim_loss = W_dim * F.mse_loss(dim_L, gt_dim, reduction='mean').to(device) # 0613 try elevate dim performance
                 val_alphas = compute_alpha(bin_L, residual_L, angle_per_class)
                 val_dims = dataset_train.get_cls_dim_avg('car') + dim_L.cpu().detach().numpy()
-                iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray_L, val_dims, val_alphas, gt_calib).to(device)
-                #iou_loss = W_iou * calc_GIoU_loss(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
-                #iou_loss = W_iou * iou_loss_func(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
-
+                gt_dims = dataset_train.get_cls_dim_avg('car') + gt_dim.cpu().detach().numpy()
+                #iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray_L, val_dims, val_alphas, gt_calib).to(device)
+                #iou_loss = W_iou * calc_GIoU_loss(gt_box2d, gt_theta_ray_L, val_dims, reg_alphas, gt_calib).to(device)
+                #iou_loss = W_iou * iou_loss_func(gt_box2d, gt_theta_ray_L, val_dims, reg_alphas, gt_calib).to(device)
+                #iou_loss = iou_criterion(gt_box2d, gt_theta_ray_L, val_dims, val_alphas, gt_calib).to(device)
+                
+                #iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray_L, val_dims, val_alphas, gt_calib).to(device)
+                iou_loss = W_iou * calc_IoU_loss_0919(gt_box2d, gt_theta_ray_L, val_dims, val_alphas, gt_calib).to(device)
+                #iou_loss = W_iou * calc_IoU_loss_reg_ry_gt_loc(gt_box2d, gt_theta_ray_L, gt_locs, val_dims, val_alphas, gt_calib).to(device)
+                #iou_loss = W_iou * calc_IoU_loss_gt_ry_gt_loc(gt_box2d, gt_rys, gt_locs, val_dims, gt_calib).to(device)
+                #iou_loss = W_iou * calc_IoU_loss_reg_ry_gt_dim(gt_box2d, gt_theta_ray_L, gt_dims, val_alphas, gt_calib)
+                #loss = iou_loss
                 loss = dim_loss + theta_loss + iou_loss
                 #added loss
+
                 if is_group > 0 and epoch > warm_up:
                     # before 0814 group_alpha_loss
                     #REG_alphas = compute_alpha(bin_L, residual_L, angle_per_class).to(device)
@@ -337,7 +359,6 @@ def main():
                     loss += group_loss
                 else:
                     group_loss = torch.tensor(0.0).to(device)
-
 
                 # 0801 added consist loss
                 if type_!= 3: # baseline
@@ -373,10 +394,10 @@ def main():
                     depth_loss = W_depth * F.l1_loss(gt_depth, calc_depth).to(device)
                     loss += depth_loss 
                 # get regressed values
-                reg_alphas = compute_alpha(bin_L, residual_L, angle_per_class)
-                GT_alphas = angle_per_class*gt_bin + gt_residual
-                REG_alpha_list += reg_alphas.cpu().tolist()
-                GT_alpha_list += GT_alphas.cpu().tolist()
+                #reg_alphas = compute_alpha(bin_L, residual_L, angle_per_class)
+                GT_alphas = labels_L['Alpha'].to(device)
+                REG_alpha_list += val_alphas.tolist()
+                GT_alpha_list += GT_alphas.tolist()
                 REG_dim_list += dim_L.cpu().tolist()
                 GT_dim_list += gt_dim.cpu().tolist()
                 # sum loss
@@ -403,6 +424,9 @@ def main():
                 eval_angle_loss/=len(dataset_valid)
 
             
+            print("--- epoch %s EVAL --- [loss:%.3f],[theta_loss:%.3f],[dim_loss:%.3f],[iou_loss:%.3f],[depth_loss:%.3f]" \
+                %(epoch, eval_total_loss, eval_theta_loss, eval_dim_loss, eval_iou_loss, eval_depth_loss))
+
             alpha_performance = angle_criterion(REG_alpha_list, GT_alpha_list)
             GT_dim_list = np.array(GT_dim_list)
             REG_dim_list = np.array(REG_dim_list)
@@ -414,7 +438,6 @@ def main():
             writer.add_scalar(f'{train_config}/W', dim_performance[1], epoch)
             writer.add_scalar(f'{train_config}/L', dim_performance[2], epoch)
 
-        
         #write every epoch
         writer.add_scalars(f'{train_config}/bin_loss', {'Train': avg_bin_loss, 'Valid': eval_bin_loss}, epoch)
         writer.add_scalars(f'{train_config}/residual_loss', {'Train': avg_residual_loss, 'Valid': eval_residual_loss}, epoch)

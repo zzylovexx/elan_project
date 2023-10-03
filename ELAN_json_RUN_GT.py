@@ -45,6 +45,7 @@ def main():
     print(data_root)
     # dim averages
     ELAN_averages = ClassAverages(average_file='all_ELAN_class_averages.txt')
+    # 5:行人,6:機車騎士,7:腳踏車騎士,8:大車,9:小車,10:機車,11:腳踏車
     class_dict = {8:'truck', 9:'car', 10:'motor'} #目前只有這3個class
     cam_to_img = np.array([
             [1.418667e+03, 0.000e+00, 6.4e+02, 0],
@@ -52,6 +53,10 @@ def main():
             [0.000e+00, 000e+00, 1.0e+00, 0] ])
 
     model.eval()
+    all_class_dict = dict()
+    all_class_dict[8]=0
+    all_class_dict[9]=0
+    all_class_dict[10]=0
     with torch.no_grad():
         for sub_f in sorted(os.listdir(data_root)):
             sub_folder = os.path.join(data_root, sub_f)
@@ -66,7 +71,13 @@ def main():
             with open(label_json) as f:
                 label_dicts = json.load(f)
             
-            result = list()
+            result_folder = list()
+            result_json = os.path.join(sub_folder, weights_name, 'REG_result.json')
+
+            all_class_dict = dict()
+            all_class_dict[8]=0
+            all_class_dict[9]=0
+            all_class_dict[10]=0
             for i in range(len(img_paths)):
                 path = os.path.join(data_root, img_paths[i])
                 #print(path)
@@ -74,24 +85,17 @@ def main():
                 label_dict = label_dicts[i]
                 img_save_path = path.replace('img', weights_name+ '/img')
 
-                result_json = os.path.join(sub_folder, weights_name, 'REG_result.json')
                 result_dict = dict()
                 result_dict['alpha'] = list()
                 result_dict['theta_ray'] = list()
                 result_dict['dimension'] = list()
                 result_dict['location'] = list()
                 for j in range(len(label_dict['labels'])):
-                    difficulty = label_dict['difficulties'][j] # 1 is hard to distinguish
-                    if difficulty == 0:
-                        color = (255, 0, 0)
-                        line_width = 2
-                    else:
-                        color = (0, 0, 255)
-                        line_width = 1
-                    
+                    difficulty = label_dict['difficulties'][j] # 1 is hard to distinguish                    
                     if label_dict['labels'][j] not in class_dict.keys(): #8,9,10,11
                         continue
-                    class_ = class_dict[label_dict['labels'][j]] # 5:行人,6:機車騎士,7:腳踏車騎士,8:大車,9:小車,10:機車,11:腳踏車
+                    class_ = class_dict[label_dict['labels'][j]] 
+                    all_class_dict[label_dict['labels'][j]] +=1
                     #object_id = label_dict['id'][j] # for tracking
                     box2d = label_dict['boxes'][j]
                     box2d = [[box2d[0], box2d[1]], [box2d[2],box2d[3]]]
@@ -114,6 +118,11 @@ def main():
                     
                     theta_ray = round(calc_theta_ray(img.shape[1], box2d, cam_to_img), 2)
                     loc, ry = plot_regressed_3d_bbox(img, cam_to_img, box2d, reg_dim, reg_alpha, theta_ray)
+                    txt_pos = [left_top[0], right_btm[1]]
+                    if txt_pos[0]<10:
+                        txt_pos[0]=0
+                    if txt_pos[1]>img.shape[1]-10:
+                        txt_pos[1]=img.shape[1]-10
                     cv2.putText(img, f'{round(ry,2)}', (left_top[0], right_btm[1]), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
                     reg_dim = round_list(reg_dim, 2)
                     loc = round_list(loc, 2)
@@ -123,13 +132,16 @@ def main():
                     result_dict['location'].append(loc)
                     cv2.imwrite(img_save_path, img)
 
-                result.append(result_dict)
+                result_folder.append(result_dict)
+                
+            print(all_class_dict)
             with open(result_json, 'w') as f:
-                json.dump(result, f)
-            
+                json.dump(result_folder, f)
             
             if i%500==0:
                 print(i)
+
+
 
 def plot_regressed_3d_bbox(img, cam_to_img, box2d, dimensions, alpha, theta_ray, detectionid=None):
 

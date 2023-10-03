@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torchvision.models import vgg
 from torch.utils import data
 from torchvision import transforms
-
+from torch.autograd import Variable
 from torch.utils.tensorboard import SummaryWriter
 import os, time
 import argparse
@@ -26,7 +26,7 @@ parser.add_argument("--epoch", "-E", type=int, default=50, help='epoch num')
 #parser.add_argument("--batch-size", type=int, default=16, help='batch size')
 
 # hyper-parameter (group | bin | cond)
-parser.add_argument("--normal", "-N", type=int, default=0, help='0:ImageNet, 1:ELAN')
+parser.add_argument("--normal", "-N", type=int, default=1, help='0:ImageNet, 1:ELAN')
 parser.add_argument("--bin", "-B", type=int, default=4, help='heading bin num')
 parser.add_argument("--group", "-G", type=int, help='if True, add stdGroupLoss')
 parser.add_argument("--warm-up", "-W", type=int, default=10, help='warm up before adding group loss')
@@ -47,11 +47,13 @@ def main():
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
+    print('DEVICE:', device)
     normalize_type = FLAGS.normal
     W_theta = 1
     W_dim = 0.6 #alpha = 0.6
-    W_iou = 0.2
+    W_iou = 1#0.2
     W_group = 0.3
+    IoU_criterion = IoULoss(W_iou)
 
     # make weights folder
     weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
@@ -64,9 +66,13 @@ def main():
     batch_size = 16 #64 worse than 8
     
 
+    if normalize_type == 0:
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
+    if normalize_type == 1:
+        normalize = transforms.Normalize(mean=[0.596, 0.612, 0.587], std=[0.256, 0.254, 0.257])
     process = transforms.Compose([transforms.ToTensor(), 
-                            transforms.Resize([224,224], transforms.InterpolationMode.BICUBIC), 
-                            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
+                              transforms.Resize([224,224], transforms.InterpolationMode.BICUBIC), 
+                              normalize])
     # model
     #dataset_train_flip = KITTI_Dataset(cfg, process, split='train', is_flip=True)
     dataset_train = ELAN_Dataset(cfg, process, is_flip=False, img_extension='png')
@@ -125,6 +131,7 @@ def main():
             gt_img_W = labels['img_W']
             gt_box2d = labels['Box2d'].numpy()
             gt_calib = labels['Calib'].numpy()
+            gt_alpha = labels['Alpha'].numpy()
             gt_class = labels['Class']
 
             batch=batch.float().to(device)
@@ -142,8 +149,9 @@ def main():
             reg_alphas = compute_alpha(bin, residual, angle_per_class)
             reg_dims = dataset_train.get_cls_dim_avg('car') + dim.cpu().detach().numpy()
             #TODO IOU aug, but DIOU, CIOU is close to IOU=GIOU value....
-            iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, gt_calib).to(device)
-
+            #calc_iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray, reg_dims, gt_alpha, gt_calib).to(device)
+            iou_loss = IoU_criterion(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, gt_calib).to(device)
+            
             #added loss
             if is_group and epoch > warm_up:
                 gt_Theta = labels['Theta'].float().to(device)
@@ -159,7 +167,7 @@ def main():
             
             #loss = alpha * dim_loss + bin_loss + residual_loss + W_group * group_loss # W_group=0.3 before0724
             loss = dim_loss + theta_loss + iou_loss
-            
+            #loss = iou_loss
             loss.backward()
             optimizer.step()
 
@@ -175,9 +183,12 @@ def main():
         avg_residual_loss/=len(dataset_train_all)
         avg_theta_loss/=len(dataset_train_all)
         avg_dim_loss/=len(dataset_train_all)
-        #avg_depth_loss/=len(dataset_train_all)
+        avg_depth_loss/=len(dataset_train_all)
         avg_total_loss/=len(dataset_train_all)
         avg_iou_loss/=len(dataset_train_all)
+        
+        print("--- epoch %s --- [loss:%.3f],[theta_loss:%.3f],[dim_loss:%.3f],[iou_loss:%.3f],[depth_loss:%.3f]" \
+                %(epoch, avg_total_loss, avg_theta_loss, avg_dim_loss, avg_iou_loss, avg_depth_loss))
 
         # eval part
         model.eval()
@@ -205,14 +216,16 @@ def main():
 
                 bin_loss = W_theta * F.cross_entropy(bin, gt_bin, reduction='mean').to(device)
                 residual_loss = W_theta * compute_residual_loss(residual, gt_bin, gt_residual, device)
-                theta_loss = bin_loss + residual_loss
+                val_theta_loss = bin_loss + residual_loss
 
                 
-                dim_loss = W_dim * F.l1_loss(dim, gt_dim, reduction='mean')
+                val_dim_loss = W_dim * F.l1_loss(dim, gt_dim, reduction='mean')
                 val_alphas = compute_alpha(bin, residual, angle_per_class)
                 val_dims = dataset_train.get_cls_dim_avg('car') + dim.cpu().detach().numpy()
-                iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray, val_dims, val_alphas, gt_calib).to(device)
+                #val_iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray, val_dims, val_alphas, gt_calib).to(device)
+                val_iou_loss = IoU_criterion(gt_box2d, gt_theta_ray, val_dims, val_alphas, gt_calib).to(device)
 
+                val_loss = val_dim_loss + val_theta_loss + val_iou_loss
                 # calc GT_alpha,return list type
                 #GT_alphas = labels['Alpha']
                 REG_alpha_list += val_alphas.tolist()
@@ -223,11 +236,11 @@ def main():
                 # sum loss
                 eval_bin_loss += bin_loss.item()*len(batch)
                 eval_residual_loss += residual_loss.item()*len(batch)
-                eval_theta_loss += theta_loss.item()*len(batch)
-                eval_dim_loss += dim_loss.item()*len(batch)
+                eval_theta_loss += val_theta_loss.item()*len(batch)
+                eval_dim_loss += val_dim_loss.item()*len(batch)
                 #eval_depth_loss += depth_loss.item()*len(batch) # my
-                eval_total_loss += loss.item()*len(batch)
-                eval_iou_loss += iou_loss.item()*len(batch)
+                eval_total_loss += val_loss.item()*len(batch)
+                eval_iou_loss += val_iou_loss.item()*len(batch)
 
             eval_bin_loss/=len(dataset_valid)
             eval_residual_loss/=len(dataset_valid)

@@ -1,15 +1,15 @@
 # check every time
-DATE="0925_SGD_ln_iou_02"
+DATE="1004_iou_0919"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
 DEVICE=2
 TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
-NETWORK=0 #0:vgg19_bn, 1:resnet18, 2:densenet121
-AUGMENT=1
+NETWORK=0 # 0:vgg19_bn, 1:resnet18, 2:densenet121
+AUGMENT=0
 DEPTH=0
 # hyper-parameter
 BIN=4
-GROUP=0 #0:NO, 1:cos, 2:sin_sin, 3:compare
+GROUP=0 # 0:NO, 1:cos, 2:sin_sin, 3:compare
 #FIXED
 EPOCH=50
 WARMUP=50

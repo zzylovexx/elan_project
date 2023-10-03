@@ -679,10 +679,67 @@ def calc_IoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
     for i in range(len(reg_dims)):
         reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
         prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
-        #iou_loss += torch.tensor(1 - calc_IoU_2d(gt_box2d[i], prj_box2d)) #0919ver. 會和giou_loss大小相同
-        iou_loss += -1 * torch.log(torch.tensor(calc_IoU_2d(gt_box2d[i], prj_box2d))) #https://zhuanlan.zhihu.com/p/359982543
+        iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
+        #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
+        #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
+        iou_loss += F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value)) #0926ver. cause somewhere wrong above (not converge)
     iou_loss /= len(reg_dims)
     return iou_loss.requires_grad_(True)
+
+def calc_IoU_loss_0919(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
+    iou_loss = torch.tensor(0.0)
+    reg_ry = reg_alphas + gt_theta_ray
+    for i in range(len(reg_dims)):
+        reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
+        prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
+        iou_loss += torch.tensor(1 - calc_IoU_2d(gt_box2d[i], prj_box2d))
+    iou_loss /= len(reg_dims)
+    return iou_loss.requires_grad_(True)
+
+def calc_IoU_loss_reg_ry_gt_loc(gt_box2d, gt_theta_rays, gt_locs, reg_dims, reg_alphas, calib):
+    iou_loss = torch.tensor(0.0)
+    reg_rys = reg_alphas + gt_theta_rays
+    for i in range(len(reg_dims)):
+        prj_box2d = loc3d_2_box2d(reg_rys[i], gt_locs[i], reg_dims[i], calib[i])
+        iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
+        #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
+        #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
+        iou_loss += F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value)) #0926ver. cause somewhere wrong above (not converge)
+    iou_loss /= len(reg_dims)
+    return iou_loss.requires_grad_(True)
+
+def calc_IoU_loss_gt_ry_gt_loc(gt_box2d, gt_rys, gt_locs, reg_dims, calib):
+    iou_loss = torch.tensor(0.0)
+    for i in range(len(reg_dims)):
+        prj_box2d = loc3d_2_box2d(gt_rys[i], gt_locs[i], reg_dims[i], calib[i])
+        iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
+        #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
+        #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
+        iou_loss += F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value)) #0926ver. cause somewhere wrong above (not converge)
+    iou_loss /= len(reg_dims)
+    return iou_loss.requires_grad_(True)
+
+def calc_IoU_loss_reg_ry_gt_dim(gt_box2d, gt_theta_ray, gt_dims, reg_alphas, calib):
+    iou_loss = torch.tensor(0.0)
+    reg_ry = reg_alphas + gt_theta_ray
+    for i in range(len(gt_dims)):
+        reg_loc, _ = calc_location(gt_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
+        prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, gt_dims[i], calib[i])
+        iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
+        #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
+        #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
+        iou_loss += F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value)) #0926ver. cause somewhere wrong above (not converge)
+    iou_loss /= len(gt_dims)
+    return iou_loss.requires_grad_(True)
+
+def get_reg_iou(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
+    iou_values = list()
+    reg_ry = reg_alphas + gt_theta_ray
+    for i in range(len(reg_dims)):
+        reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
+        prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
+        iou_values.append(calc_IoU_2d(gt_box2d[i], prj_box2d))
+    return torch.tensor(iou_values)
 
 def calc_GIoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
     iou_loss = torch.tensor(0.0)
@@ -700,3 +757,27 @@ def box2d_area(box):
     elif len(box)==4: #[left, top, right, btm]
         area = (box[2]-box[0])*(box[3]-box[1]) #有可能會overflow    
     return area
+
+class IoULoss(torch.nn.Module):
+    def __init__(self, weight):
+        # --------------------------------------------
+        # Initialization
+        # --------------------------------------------
+        super(IoULoss, self).__init__()
+        self.weight = weight
+#gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib
+    def forward(self, gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
+        # --------------------------------------------
+        # Define forward pass
+        # --------------------------------------------
+        iou_loss = torch.tensor(0.0)
+        reg_ry = reg_alphas + gt_theta_ray
+        for i in range(len(reg_dims)):
+            reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
+            prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
+            iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
+            #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
+            #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
+            iou_loss += F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value)) #0926ver. cause somewhere wrong above (not converge)
+        iou_loss /= len(reg_dims)
+        return self.weight * iou_loss
