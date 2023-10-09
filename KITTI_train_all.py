@@ -167,6 +167,7 @@ def main():
             gt_class = labels_L['Class']
             gt_locs = labels_L['Location'].numpy()
             gt_rys = labels_L['Ry'].numpy()
+            gt_alphas = labels_L['Alpha']
 
             batch_L=batch_L.float().to(device)
             batch_R=batch_R.float().to(device)
@@ -176,28 +177,12 @@ def main():
             residual_loss = W_theta * compute_residual_loss(residual_L, gt_bin, gt_residual, device)
             theta_loss = bin_loss + residual_loss
             
-            
-            GT_alphas = labels_L['Alpha'].to(device)
             #dim_loss = F.mse_loss(dim, gt_dim, reduction='mean')  # org use mse_loss
             dim_loss = W_dim * F.l1_loss(dim_L, gt_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
             #dim_loss = W_dim * L1_loss_alpha(dim_L, gt_dim, GT_alphas, device) # 0613 try elevate dim performance       
             #dim_loss = W_dim * F.mse_loss(dim_L, gt_dim, reduction='mean').to(device) # 0613 try elevate dim performance
+            loss = dim_loss + theta_loss
             
-            #0919added IOU
-            reg_alphas = compute_alpha(bin_L, residual_L, angle_per_class)
-            reg_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')) + dim_L.cpu().clone()
-            gt_dims = dataset_train.get_cls_dim_avg('car') + gt_dim.cpu().detach().numpy()
-            #TODO IOU aug, but DIOU, CIOU is close to IOU=GIOU value....
-            
-            #iou_loss = W_iou * calc_GIoU_loss(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
-            #iou_loss = W_iou * iou_loss_func(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
-            #iou_loss = iou_criterion(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
-            
-            #iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
-            iou_loss = W_iou * calc_IoU_loss_debug(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
-            
-            loss = iou_loss 
-            #loss = dim_loss + theta_loss #+ iou_loss
             #added loss
             if is_group > 0 and epoch > warm_up:
                 # before 0814 group_alpha_loss
@@ -230,40 +215,41 @@ def main():
 
                 loss += consist_loss + ry_angle_loss
         
-            # depth_loss
-            
-                depth_loss = torch.FloatTensor([0.]).to(device)
-                for i in range(batch_L.shape[0]):
-                    img_W = gt_img_W[i]
-                    box2d = gt_box2d[i]
-                    cam_to_img = gt_calib[i]
-                    obj_W = dataset_train.get_cls_dim_avg('car')[1] + dim_L.cpu().clone()[i][1]
-                    obj_L = dataset_train.get_cls_dim_avg('car')[2] + dim_L.cpu().clone()[i][2]
-                    #alpha = reg_alpha[i]
-                    alpha = GT_alphas[i].cpu().clone()
-                    ca_dep = calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0).to(device)
-                    depth_loss += F.l1_loss(ca_dep, gt_depth[i])
-                    #calc_depth[i] = calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0)
-                depth_loss = depth_loss / batch_L.shape[0]
-            
+            # 1008 depth_loss
             depth_loss = torch.tensor(0.0).to(device)
-            if is_depth:
+            reg_alphas = compute_alpha(bin_L, residual_L, angle_per_class)
+            if is_depth > 0:
                 for i in range(batch_L.shape[0]):
                     img_W = gt_img_W[i]
                     box2d = gt_box2d[i]
                     cam_to_img = gt_calib[i]
                     obj_W = dataset_train.get_cls_dim_avg('car')[1] + dim_L.cpu().clone()[i][1]
                     obj_L = dataset_train.get_cls_dim_avg('car')[2] + dim_L.cpu().clone()[i][2]
-                    #alpha = reg_alphas.cpu()[i]
-                    alpha = GT_alphas[i].cpu()
+                    if is_depth==1:
+                        alpha = gt_alphas[i]
+                    elif is_depth==2:
+                        alpha = reg_alphas[i]
                     calc_depth = calc_depth_with_alpha_theta_tensor(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0)
                     depth_loss += F.l1_loss(calc_depth, gt_depth[i])
                 depth_loss = W_depth * depth_loss / batch_L.shape[0]
-                depth_loss.backward()
-                loss += depth_loss
+            
+            loss += depth_loss
+            
+            #0919added IOU
+            #reg_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')) + dim_L.cpu().clone()
+            #gt_dims = dataset_train.get_cls_dim_avg('car') + gt_dim.cpu().detach().numpy()
+            #TODO IOU aug, but DIOU, CIOU is close to IOU=GIOU value....
+            #iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
+            #iou_loss = W_iou * calc_IoU_loss_debug(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib).to(device)
+            iou_loss = W_iou * torch.tensor(0.0).to(device)
+            loss += iou_loss      
             
             loss.backward()
+            #a = list(model.parameters())[-1].clone()
             optimizer.step()
+            #b = list(model.parameters())[-1].clone()
+            #print('IS EQUAL?', torch.equal(a.data, b.data))
+            
 
             avg_bin_loss += bin_loss.item()*len(batch_L)
             avg_residual_loss += residual_loss.item()*len(batch_L)
@@ -328,6 +314,7 @@ def main():
                 gt_class = labels_L['Class']
                 gt_locs = labels_L['Location'].numpy()
                 gt_rys = labels_L['Ry'].numpy()
+                gt_alphas = labels_L['Alpha']
 
                 batch_L=batch_L.float().to(device)
                 batch_R=batch_R.float().to(device)
@@ -336,29 +323,9 @@ def main():
                 bin_loss = W_theta * F.cross_entropy(bin_L, gt_bin, reduction='mean').to(device)
                 residual_loss = W_theta * compute_residual_loss(residual_L, gt_bin, gt_residual, device)
                 theta_loss = bin_loss + residual_loss
-                
-                GT_alphas = labels_L['Alpha'].to(device)
-                #dim_loss = F.mse_loss(dim, gt_dim, reduction='mean')  # org use mse_loss
-                dim_loss = W_dim * F.l1_loss(dim_L, gt_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
-                #dim_loss = W_dim * L1_loss_alpha(dim_L, gt_dim, GT_alphas, device) # 0613 try elevate dim performance       
-                #dim_loss = W_dim * F.mse_loss(dim_L, gt_dim, reduction='mean').to(device) # 0613 try elevate dim performance
-                val_alphas = compute_alpha(bin_L, residual_L, angle_per_class)
-                val_dims = dataset_train.get_cls_dim_avg('car') + dim_L.cpu().detach().numpy()
-                gt_dims = dataset_train.get_cls_dim_avg('car') + gt_dim.cpu().detach().numpy()
-                #iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray_L, val_dims, val_alphas, gt_calib).to(device)
-                #iou_loss = W_iou * calc_GIoU_loss(gt_box2d, gt_theta_ray_L, val_dims, reg_alphas, gt_calib).to(device)
-                #iou_loss = W_iou * iou_loss_func(gt_box2d, gt_theta_ray_L, val_dims, reg_alphas, gt_calib).to(device)
-                #iou_loss = iou_criterion(gt_box2d, gt_theta_ray_L, val_dims, val_alphas, gt_calib).to(device)
-                
-                #iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray_L, val_dims, val_alphas, gt_calib).to(device)
-                iou_loss = W_iou * calc_IoU_loss_debug(gt_box2d, gt_theta_ray_L, reg_dims, val_alphas, gt_calib).to(device)
-                #iou_loss = W_iou * calc_IoU_loss_reg_ry_gt_loc(gt_box2d, gt_theta_ray_L, gt_locs, val_dims, val_alphas, gt_calib).to(device)
-                #iou_loss = W_iou * calc_IoU_loss_gt_ry_gt_loc(gt_box2d, gt_rys, gt_locs, val_dims, gt_calib).to(device)
-                #iou_loss = W_iou * calc_IoU_loss_reg_ry_gt_dim(gt_box2d, gt_theta_ray_L, gt_dims, val_alphas, gt_calib)
-                loss = iou_loss
-                #loss = dim_loss + theta_loss #+ iou_loss
-                #added loss
+                loss = dim_loss + theta_loss
 
+                #added loss
                 if is_group > 0 and epoch > warm_up:
                     # before 0814 group_alpha_loss
                     #REG_alphas = compute_alpha(bin_L, residual_L, angle_per_class).to(device)
@@ -389,26 +356,32 @@ def main():
                     eval_angle_loss += ry_angle_loss*len(batch_L)
                     loss += consist_loss + ry_angle_loss
             
-                # depth_loss
-                if is_depth:
-                    calc_depth = list()
+                # 1008 depth_loss
+                reg_alphas = compute_alpha(bin_L, residual_L, angle_per_class)
+                depth_loss = torch.tensor(0.0).to(device)
+                if is_depth > 0:
                     for i in range(batch_L.shape[0]):
                         img_W = gt_img_W[i]
                         box2d = gt_box2d[i]
                         cam_to_img = gt_calib[i]
-                        obj_W = dataset_train.get_cls_dim_avg(gt_class[i])[1] + dim_L.cpu().detach().numpy()[i][1]
-                        obj_L = dataset_train.get_cls_dim_avg(gt_class[i])[2] + dim_L.cpu().detach().numpy()[i][2]
-                        #alpha = reg_alpha[i]
-                        alpha = GT_alphas[i].cpu().detach()
-                        calc_depth.append(calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0))
-                    calc_depth = torch.FloatTensor(calc_depth).to(device)
-                    depth_loss = W_depth * F.l1_loss(gt_depth, calc_depth).to(device)
-                    loss += depth_loss 
+                        obj_W = dataset_train.get_cls_dim_avg('car')[1] + dim_L.cpu().clone()[i][1]
+                        obj_L = dataset_train.get_cls_dim_avg('car')[2] + dim_L.cpu().clone()[i][2]
+                        if is_depth==1:
+                            alpha = gt_alphas[i]
+                        elif is_depth==2:
+                            alpha = reg_alphas[i]
+                        calc_depth = calc_depth_with_alpha_theta_tensor(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0)
+                        depth_loss += F.l1_loss(calc_depth, gt_depth[i])
+                    depth_loss = W_depth * depth_loss / batch_L.shape[0]
+                
+                loss += depth_loss
+                
+                iou_loss = W_iou * torch.tensor(0.0).to(device)
+                loss += iou_loss
+                
                 # get regressed values
-                #reg_alphas = compute_alpha(bin_L, residual_L, angle_per_class)
-                GT_alphas = labels_L['Alpha'].to(device)
-                REG_alpha_list += val_alphas.tolist()
-                GT_alpha_list += GT_alphas.tolist()
+                REG_alpha_list += reg_alphas.tolist()
+                GT_alpha_list += gt_alphas.tolist()
                 REG_dim_list += dim_L.cpu().tolist()
                 GT_dim_list += gt_dim.cpu().tolist()
                 # sum loss
@@ -461,11 +434,13 @@ def main():
         if type_!=3:
             writer.add_scalars(f'{train_config}/consist_loss', {'Train': avg_consist_loss, 'Valid': eval_consist_loss}, epoch)
             writer.add_scalars(f'{train_config}/ry_angle_loss', {'Train': avg_angle_loss, 'Valid': eval_angle_loss}, epoch)
+        if is_depth > 0:
+            writer.add_scalars(f'{train_config}/depth_loss', {'Train': avg_depth_loss, 'Valid': eval_depth_loss}, epoch)
         
         # visiualize https://zhuanlan.zhihu.com/p/103630393
         #tensorboard --logdir=./{log_foler} --port 8123
         
-        # 1007 added
+        # 1007 added record model weight (check updated)
         plot_params_hist(writer, model, epoch)
             
         if epoch % epochs == 0 or epoch % 50 == 0:
@@ -483,6 +458,7 @@ def main():
                     'W_consist': W_consist,
                     'W_angle': W_angle,
                     'W_group': W_group,
+                    'W_depth': W_depth,
                     'W_iou': W_iou
                     }, name)
             print("====================")
@@ -522,7 +498,9 @@ def name_by_parameters(FLAGS):
     if is_cond==1:
         save_path += '_C'
     if is_depth==1:
-        save_path += '_dep'
+        save_path += '_depGT'
+    elif is_depth==2:
+        save_path += '_depREG'
     if is_aug==1:
         save_path += '_aug'
     

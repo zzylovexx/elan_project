@@ -1,13 +1,13 @@
 # check every time
-DATE="1007_debug"
+DATE="1009_depth"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
-DEVICE=2
+DEVICE=1
 TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
-NETWORK=0 # 0:vgg19_bn, 1:resnet18, 2:densenet121
+DEPTH=1 # 0:NO, Calculate with 1:gt_alpha, 2:reg_alpha
 AUGMENT=0
-DEPTH=0
 # hyper-parameter
+NETWORK=0 # 0:vgg19_bn, 1:resnet18, 2:densenet121
 BIN=4
 GROUP=0 # 0:NO, 1:cos, 2:sin_sin, 3:compare
 #FIXED
@@ -63,8 +63,13 @@ then
 fi
 if [ $DEPTH = $ONE ]
 then
-    PKL=$PKL"_dep"
-    R_PATH=$R_PATH"_dep"
+    PKL=$PKL"_depGT"
+    R_PATH=$R_PATH"_depGT"
+fi
+if [ $DEPTH = $TWO ]
+then
+    PKL=$PKL"_depREG"
+    R_PATH=$R_PATH"_depREG"
 fi
 if [ $AUGMENT = $ONE ]
 then
