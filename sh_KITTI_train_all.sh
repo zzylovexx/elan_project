@@ -1,5 +1,5 @@
 # check every time
-DATE="1004_iou_0919"
+DATE="1007_debug"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
 DEVICE=2

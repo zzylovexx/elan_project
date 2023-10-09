@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from .Plotting import *
+import math
 
 def calc_theta_ray(width, box2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
     box2d = np.array(box2d).flatten()
@@ -15,7 +16,6 @@ def calc_theta_ray(width, box2d, proj_matrix):#透過跟2d bounding box 中心�
     dx = abs(dx)
     angle = np.arctan( (2*dx*np.tan(fovx/2)) / width )
     angle = angle * mult
-
     return angle
 
 def sign(num):
@@ -305,6 +305,17 @@ def calc_depth_by_width_corner(img_W, box2d, cam_to_img, obj_W, obj_L):
 
 # my_method
 def calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0):
+    '''
+    if type(obj_W) == torch.Tensor:
+        cos_func = torch.cos()
+        sin_func = torch.sin()
+    elif type(obj_W) == np.ndarray:
+        cos_func = np.cos()
+        sin_func = np.sin()
+    else:
+        cos_func = math.cos()
+        sin_func = math.sin()
+    '''
     fovx = 2 * np.arctan(img_W / (2 * cam_to_img[0][0]))
     #box_W = get_box_size(box2d)[0] / (1-trun+0.01) #assume truncate related to W only
     box_W = get_box_size(box2d)[0] / (1-trun) #assume truncate related to W only
@@ -313,6 +324,31 @@ def calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, t
     visual_W /= abs(np.cos(theta_ray)) #new added !
     Wview = (visual_W)*(img_W/box_W)
     depth = Wview/2 / np.tan(fovx/2)
+    return depth
+
+def calc_theta_ray_tensor(width, box2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
+    box2d = np.array(box2d).flatten()
+    fovx = 2 * torch.arctan(width / (2 * proj_matrix[0][0]))
+    center = (box2d[2] + box2d[0]) / 2
+    dx = center - (width / 2)
+
+    mult = 1
+    if dx < 0:
+        mult = -1
+    dx = abs(dx)
+    angle = torch.arctan( (2*dx*torch.tan(fovx/2)) / width )
+    angle = angle * mult
+    return angle
+
+def calc_depth_with_alpha_theta_tensor(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0):
+    fovx = 2 * torch.arctan(img_W / (2 * cam_to_img[0][0]))
+    #box_W = get_box_size(box2d)[0] / (1-trun+0.01) #assume truncate related to W only
+    box_W = get_box_size(box2d)[0] / (1-trun) #assume truncate related to W only
+    visual_W = abs(obj_L*torch.cos(alpha)) + abs(obj_W*torch.sin(alpha))
+    theta_ray = calc_theta_ray_tensor(img_W, box2d, cam_to_img)
+    visual_W /= abs(torch.cos(theta_ray)) #new added !
+    Wview = (visual_W)*(img_W/box_W)
+    depth = Wview/2 / torch.tan(fovx/2)
     return depth
 
 def angle2class(angle, num_heading_bin):
@@ -556,7 +592,7 @@ def compute_alpha(bin, residual, angle_per_class):
     bin_argmax = torch.max(bin, dim=1)[1]
     residual = residual[torch.arange(len(residual)), bin_argmax] 
     alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
-    alphas = alphas.cpu().detach().numpy()
+    alphas = alphas.cpu()
     for i in range(len(alphas)):
         alphas[i] = angle_correction(alphas[i])
     return alphas
@@ -674,7 +710,8 @@ def calc_GIoU_2d(box1, box2):
     return GIoU
 
 def calc_IoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
-    iou_loss = torch.tensor(0.0)
+    #iou_loss = torch.tensor(0.0)
+    iou_loss_list = list()
     reg_ry = reg_alphas + gt_theta_ray
     for i in range(len(reg_dims)):
         reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
@@ -682,18 +719,25 @@ def calc_IoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
         iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
         #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
         #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
-        iou_loss += F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value)) #0926ver. cause somewhere wrong above (not converge)
-    iou_loss /= len(reg_dims)
+        iou_loss_list.append(F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value))) #0926ver. cause somewhere wrong above (not converge)
+    iou_loss_list = torch.tensor(iou_loss_list)
+    iou_loss = iou_loss_list.sum() / len(iou_loss_list)
     return iou_loss.requires_grad_(True)
 
-def calc_IoU_loss_0919(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
-    iou_loss = torch.tensor(0.0)
-    reg_ry = reg_alphas + gt_theta_ray
+def calc_IoU_loss_debug(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
+    #iou_loss = torch.tensor(0.0)
+    iou_loss_list = list()
+    reg_rys = reg_alphas + gt_theta_ray
+    #gt_rys = gt_alphas + gt_theta_ray
     for i in range(len(reg_dims)):
-        reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
-        prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
-        iou_loss += torch.tensor(1 - calc_IoU_2d(gt_box2d[i], prj_box2d))
-    iou_loss /= len(reg_dims)
+        reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_rys[i], gt_theta_ray[i])
+        prj_box2d = loc3d_2_box2d(reg_rys[i], reg_loc, reg_dims[i], calib[i])
+        iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
+        #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
+        #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
+        iou_loss_list.append(F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value))) #0926ver. cause somewhere wrong above (not converge)
+    iou_loss_list = torch.tensor(iou_loss_list)
+    iou_loss = iou_loss_list.sum() / len(iou_loss_list)
     return iou_loss.requires_grad_(True)
 
 def calc_IoU_loss_reg_ry_gt_loc(gt_box2d, gt_theta_rays, gt_locs, reg_dims, reg_alphas, calib):
