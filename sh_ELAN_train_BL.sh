@@ -1,8 +1,10 @@
-DATE="0928_iou"
+DATE="1009_iou"
 W_PATH="weights/$DATE/"
 R_PATH="$DATE/"
 DEVICE=0
 # hyper-parameter
+IOU=1 # 0:NO, 1:REG alpha, 2:GT alpha (TODO 3:GT dim?)
+DEPTH=0 # 0:NO, Calculate with 1:gt_alpha, 2:reg_alpha
 NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
 AUGMENT=0
 GROUP=0
@@ -21,7 +23,8 @@ WARMUP=10
 # not done yet
 COND=0
 
-TRUE=1
+ONE=1
+TWO=2
 
 W_PATH=$W_PATH"BL"
 R_PATH1=$R_PATH1"BL"
@@ -29,19 +32,39 @@ R_PATH2=$R_PATH2"BL"
 PKL=$W_PATH"_B$BIN""_N$NORMAL"
 R_PATH1=$R_PATH1"_B$BIN""_N$NORMAL"
 R_PATH2=$R_PATH2"_B$BIN""_N$NORMAL"
-if [ $GROUP = $TRUE ]
+if [ $GROUP = $ONE ]
 then
     PKL=$PKL"_G_W$WARMUP"
     R_PATH1=$R_PATH1"_G_W$WARMUP"
     R_PATH2=$R_PATH2"_G_W$WARMUP"
 fi
-if [ $COND = $TRUE ]
+if [ $COND = $ONE ]
 then
     PKL=$PKL"_C"
     R_PATH1=$R_PATH1"_C"
     R_PATH2=$R_PATH2"_C"
 fi
-if [ $AUGMENT = $TRUE ]
+if [ $DEPTH = $ONE ]
+then
+    PKL=$PKL"_depGT"
+    R_PATH=$R_PATH"_depGT"
+fi
+if [ $DEPTH = $TWO ]
+then
+    PKL=$PKL"_depREG"
+    R_PATH=$R_PATH"_depREG"
+fi
+if [ $IOU = $ONE ]
+then
+    PKL=$PKL"_iou"
+    R_PATH=$R_PATH"_iou"
+fi
+if [ $IOU = $TWO ]
+then
+    PKL=$PKL"_iouA"
+    R_PATH=$R_PATH"_iouA"
+fi
+if [ $AUGMENT = $ONE ]
 then
     PKL=$PKL"_aug"
     R_PATH1=$R_PATH1"_aug"
@@ -53,7 +76,7 @@ echo "SHELL W_PATH:"$W_PATH
 echo "SHELL PKL:"$PKL
 echo "SHELL R_PATH1:"$R_PATH1
 echo "SHELL R_PATH2:"$R_PATH2
-python ELAN_BLtrain.py -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -A=$AUGMENT
+python ELAN_BLtrain.py -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -N=$NORMAL -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -A=$AUGMENT -IOU=$IOU
 python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH1 -D_PATH=$D_PATH1
 python ELAN_EVAL.py -R_PATH=$R_PATH1 -D_PATH=$D_PATH1
 python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH2 -D_PATH=$D_PATH2

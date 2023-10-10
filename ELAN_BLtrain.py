@@ -1,6 +1,7 @@
 from torch_lib.ELAN_Dataset_new import *
 from torch_lib.Model_heading_bin import *
 from library.ron_utils import *
+from library.Math_tensor import calc_IoU_loss_tensor
 
 import torch
 import torch.nn.functional as F
@@ -32,6 +33,8 @@ parser.add_argument("--group", "-G", type=int, help='if True, add stdGroupLoss')
 parser.add_argument("--warm-up", "-W", type=int, default=10, help='warm up before adding group loss')
 parser.add_argument("--cond", "-C", type=int, default=0, help='if True, 4-dim with theta_ray | boxH_2d ')
 parser.add_argument("--aug", "-A", type=int, default=0, help='if True, flip dataset as augmentation')
+parser.add_argument("--depth", "-DEP", type=int, default=0, help='if True, add depth loss')
+parser.add_argument("--iou", "-IOU", type=int, default=0, help='if True, add iou loss')
 
 def main():
     
@@ -43,6 +46,7 @@ def main():
     keep_same_seeds(FLAGS.seed)
     is_group = FLAGS.group
     is_cond = FLAGS.cond
+    is_iou = FLAGS.iou
     is_aug = FLAGS.aug
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
@@ -53,7 +57,6 @@ def main():
     W_dim = 0.6 #alpha = 0.6
     W_iou = 1#0.2
     W_group = 0.3
-    IoU_criterion = IoULoss(W_iou)
 
     # make weights folder
     weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
@@ -126,12 +129,12 @@ def main():
             gt_residual = labels['Heading_res'].float().to(device)
             gt_bin = labels['Heading_bin'].long().to(device)#這個角度在哪個class上
             gt_dim = labels['Dim_delta'].float().to(device)
-            gt_theta_ray = labels['Theta_ray'].numpy()
+            gt_theta_ray = labels['Theta_ray']
             gt_depth = labels['Depth'].float().to(device)
             gt_img_W = labels['img_W']
             gt_box2d = labels['Box2d'].numpy()
             gt_calib = labels['Calib'].numpy()
-            gt_alpha = labels['Alpha'].numpy()
+            gt_alphas = labels['Alpha'].numpy()
             gt_class = labels['Class']
 
             batch=batch.float().to(device)
@@ -144,13 +147,8 @@ def main():
             #dim_loss = F.mse_loss(dim, truth_dim, reduction='mean')  # org use mse_loss
             dim_loss = W_dim * F.l1_loss(dim, gt_dim, reduction='mean')  # 0613 added (monodle, monogup used) (compare L1 vs mse loss)
             #dim_loss = L1_loss_alpha(dim, truth_dim, GT_alpha, device) # 0613 try elevate dim performance       
-            
-            #0919added IOU
-            reg_alphas = compute_alpha(bin, residual, angle_per_class)
-            reg_dims = dataset_train.get_cls_dim_avg('car') + dim.cpu().detach().numpy()
-            #TODO IOU aug, but DIOU, CIOU is close to IOU=GIOU value....
-            #calc_iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray, reg_dims, gt_alpha, gt_calib).to(device)
-            iou_loss = IoU_criterion(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, gt_calib).to(device)
+
+            loss = theta_loss + dim_loss
             
             #added loss
             if is_group and epoch > warm_up:
@@ -165,11 +163,20 @@ def main():
             else:
                 group_loss = torch.tensor(0.0).to(device)
             
-            #loss = alpha * dim_loss + bin_loss + residual_loss + W_group * group_loss # W_group=0.3 before0724
-            loss = dim_loss + theta_loss + iou_loss
-            #loss = iou_loss
+            iou_loss = torch.tensor(0.0).to(device)
+            reg_alphas = compute_alpha(bin, residual, angle_per_class)
+            reg_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')) + dim.cpu().clone()
+            if is_iou == 1:
+                iou_loss = W_iou * calc_IoU_loss_tensor(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, gt_calib, device) #iou
+            elif is_iou == 2:
+                iou_loss = W_iou * calc_IoU_loss_tensor(gt_box2d, gt_theta_ray, reg_dims, torch.tensor(gt_alphas), gt_calib, device) #iouA
+            loss += iou_loss
+            
             loss.backward()
+            #a = list(model.parameters())[-1].clone()
             optimizer.step()
+            #b = list(model.parameters())[-1].clone()
+            #print('IS EQUAL?', torch.equal(a.data, b.data))
 
             avg_bin_loss += bin_loss.item()*len(batch)
             avg_residual_loss += residual_loss.item()*len(batch)
@@ -187,7 +194,7 @@ def main():
         avg_total_loss/=len(dataset_train_all)
         avg_iou_loss/=len(dataset_train_all)
         
-        print("--- epoch %s --- [loss:%.3f],[theta_loss:%.3f],[dim_loss:%.3f],[iou_loss:%.3f],[depth_loss:%.3f]" \
+        print("--- epoch %s Train--- [loss:%.3f],[theta_loss:%.3f],[dim_loss:%.3f],[iou_loss:%.3f],[depth_loss:%.3f]" \
                 %(epoch, avg_total_loss, avg_theta_loss, avg_dim_loss, avg_iou_loss, avg_depth_loss))
 
         # eval part
@@ -204,12 +211,13 @@ def main():
                 gt_residual = labels['Heading_res'].float().to(device)
                 gt_bin = labels['Heading_bin'].long().to(device)#這個角度在哪個class上
                 gt_dim = labels['Dim_delta'].float().to(device)
-                gt_theta_ray = labels['Theta_ray'].numpy()
+                gt_theta_ray = labels['Theta_ray']
                 gt_depth = labels['Depth'].float().to(device)
                 gt_img_W = labels['img_W']
                 gt_box2d = labels['Box2d'].numpy()
                 gt_calib = labels['Calib'].numpy()
                 gt_class = labels['Class']
+                gt_alphas = labels['Alpha'].numpy()
 
                 batch = batch.float().to(device)
                 [residual, bin, dim] = model(batch)
@@ -217,18 +225,23 @@ def main():
                 bin_loss = W_theta * F.cross_entropy(bin, gt_bin, reduction='mean').to(device)
                 residual_loss = W_theta * compute_residual_loss(residual, gt_bin, gt_residual, device)
                 val_theta_loss = bin_loss + residual_loss
-
-                
                 val_dim_loss = W_dim * F.l1_loss(dim, gt_dim, reduction='mean')
-                val_alphas = compute_alpha(bin, residual, angle_per_class)
-                val_dims = dataset_train.get_cls_dim_avg('car') + dim.cpu().detach().numpy()
-                #val_iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray, val_dims, val_alphas, gt_calib).to(device)
-                val_iou_loss = IoU_criterion(gt_box2d, gt_theta_ray, val_dims, val_alphas, gt_calib).to(device)
-
-                val_loss = val_dim_loss + val_theta_loss + val_iou_loss
-                # calc GT_alpha,return list type
-                #GT_alphas = labels['Alpha']
-                REG_alpha_list += val_alphas.tolist()
+                
+                val_loss = val_dim_loss + val_theta_loss
+                
+                reg_alphas = compute_alpha(bin, residual, angle_per_class)
+                reg_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')) + dim.cpu().clone()
+                val_iou_loss = torch.tensor(0.0).to(device)
+                # one take 1.38s (iou_loss = W_iou * calc_IoU_loss_tensor(gt_box2d, gt_theta_ray_L, reg_dims, reg_alphas, gt_calib, device)
+                # faster computation ? Yes, 0.05s
+                if is_iou == 1:
+                    iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray.numpy(), reg_dims.detach().numpy(), reg_alphas.detach().numpy(), gt_calib).to(device)
+                elif is_iou == 2:
+                    iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray.numpy(), reg_dims.detach().numpy(), gt_alphas, gt_calib).to(device)
+                
+                val_loss += val_iou_loss
+                
+                REG_alpha_list += reg_alphas.tolist()
                 GT_alpha_list += labels['Alpha'].tolist()
                 REG_dim_list += dim.cpu().tolist()
                 GT_dim_list += gt_dim.cpu().tolist()
@@ -250,6 +263,9 @@ def main():
             eval_total_loss/=len(dataset_valid)
             eval_iou_loss/=len(dataset_valid)
             
+            print("--- epoch %s EVAL --- [loss:%.3f],[theta_loss:%.3f],[dim_loss:%.3f],[iou_loss:%.3f],[depth_loss:%.3f]" \
+                %(epoch, eval_total_loss, eval_theta_loss, eval_dim_loss, eval_iou_loss, eval_depth_loss))
+            
             alpha_performance = angle_criterion(REG_alpha_list, GT_alpha_list)
             GT_dim_list = np.array(GT_dim_list)
             REG_dim_list = np.array(REG_dim_list)
@@ -267,7 +283,8 @@ def main():
         writer.add_scalars(f'{train_config}/dim_loss', {'Train': avg_dim_loss, 'Valid': eval_dim_loss}, epoch)
         writer.add_scalars(f'{train_config}/theta_loss', {'Train': avg_theta_loss, 'Valid': eval_theta_loss}, epoch)
         writer.add_scalars(f'{train_config}/total_loss', {'Train': avg_total_loss, 'Valid': eval_total_loss}, epoch)
-        writer.add_scalars(f'{train_config}/iou_loss', {'Train': avg_iou_loss, 'Valid': eval_iou_loss}, epoch)
+        if is_iou > 0:
+            writer.add_scalars(f'{train_config}/iou_loss', {'Train': avg_iou_loss, 'Valid': eval_iou_loss}, epoch)  
         
         # visiualize https://zhuanlan.zhihu.com/p/103630393
         # MobaXterm https://zhuanlan.zhihu.com/p/138811263
@@ -297,6 +314,7 @@ def main():
 def name_by_parameters(FLAGS):
     is_group = FLAGS.group
     is_cond = FLAGS.cond
+    is_iou = FLAGS.iou
     is_aug = FLAGS.aug
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
@@ -307,6 +325,10 @@ def name_by_parameters(FLAGS):
         save_path += f'_G_W{warm_up}'
     if is_cond==1:
         save_path += '_C'
+    if is_iou==1:
+        save_path += '_iou'
+    if is_iou==2:
+        save_path += '_iouA'
     if is_aug==1:
         save_path += '_aug'
 

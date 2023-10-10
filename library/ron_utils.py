@@ -331,7 +331,6 @@ def calc_theta_ray_tensor(width, box2d, proj_matrix):#透過跟2d bounding box �
     fovx = 2 * torch.arctan(width / (2 * proj_matrix[0][0]))
     center = (box2d[2] + box2d[0]) / 2
     dx = center - (width / 2)
-
     mult = 1
     if dx < 0:
         mult = -1

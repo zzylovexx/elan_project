@@ -1,10 +1,11 @@
 # check every time
-DATE="1009_depth"
+DATE="1009_iou"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
-DEVICE=1
+DEVICE=2
 TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
-DEPTH=1 # 0:NO, Calculate with 1:gt_alpha, 2:reg_alpha
+IOU=2 # 0:NO, 1:REG alpha, 2:GT alpha (TODO 3:GT dim?)
+DEPTH=0 # 0:NO, Calculate with 1:gt_alpha, 2:reg_alpha
 AUGMENT=0
 # hyper-parameter
 NETWORK=0 # 0:vgg19_bn, 1:resnet18, 2:densenet121
@@ -71,6 +72,16 @@ then
     PKL=$PKL"_depREG"
     R_PATH=$R_PATH"_depREG"
 fi
+if [ $IOU = $ONE ]
+then
+    PKL=$PKL"_iou"
+    R_PATH=$R_PATH"_iou"
+fi
+if [ $IOU = $TWO ]
+then
+    PKL=$PKL"_iouA"
+    R_PATH=$R_PATH"_iouA"
+fi
 if [ $AUGMENT = $ONE ]
 then
     PKL=$PKL"_aug"
@@ -97,6 +108,6 @@ PKL=$PKL"_$EPOCH.pkl"
 echo "SHELL W_PATH:"$W_PATH
 echo "SHELL PKL:"$PKL
 echo "SHELL R_PATH:"$R_PATH
-python KITTI_train_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -A=$AUGMENT 
+python KITTI_train_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -IOU=$IOU -A=$AUGMENT 
 python KITTI_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH -D=$DEVICE -N=$NETWORK
 echo "SHELL FINISHED"
