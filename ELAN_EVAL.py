@@ -14,7 +14,8 @@ def evaluation(result_root, data_root):
     except:
         # temp way for 230808 dataset
         all_labels = glob.glob(f'{data_root}/renew_label/*.txt')
-        val_ids = [name.split('/')[-1].split('.')[0] for name in all_labels]
+        #val_ids = [name.split('/')[-1].split('.')[0] for name in all_labels] #ubuntu
+        val_ids = [name.split('\\')[-1].split('.')[0] for name in all_labels] #windows
         print('Dataset Elan_230808:', len(val_ids))
         
 

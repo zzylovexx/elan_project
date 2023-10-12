@@ -44,7 +44,8 @@ class ELAN_Dataset(data.Dataset):
     
     def get_ids(self, label_path):
         all_labels = sorted(glob.glob(f'{label_path}/*.txt'))
-        all_ids = [name.split('/')[-1].split('.')[0] for name in all_labels]
+        #all_ids = [name.split('/')[-1].split('.')[0] for name in all_labels] #ubuntu
+        all_ids = [name.split('\\')[-1].split('.')[0] for name in all_labels] #windows
         return all_ids
 
     def get_objects(self, ids):

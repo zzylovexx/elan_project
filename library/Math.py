@@ -166,7 +166,7 @@ def calc_location(dimension, proj_matrix, box2d, alpha, theta_ray):
         M_array = [Ma, Mb, Mc, Md]
 
         # create A, b
-        A = np.zeros([4,3], dtype=np.float)
+        A = np.zeros([4,3])
         b = np.zeros([4,1])
 
         indicies = [0,1,0,1]

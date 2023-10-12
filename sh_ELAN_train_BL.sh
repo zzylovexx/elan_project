@@ -46,13 +46,13 @@ then
 fi
 if [ $DEPTH = $ONE ]
 then
-    PKL=$PKL"_depGT"
-    R_PATH=$R_PATH"_depGT"
+    PKL=$PKL"_dep"
+    R_PATH=$R_PATH"_dep"
 fi
 if [ $DEPTH = $TWO ]
 then
-    PKL=$PKL"_depREG"
-    R_PATH=$R_PATH"_depREG"
+    PKL=$PKL"_depA"
+    R_PATH=$R_PATH"_depA"
 fi
 if [ $IOU = $ONE ]
 then
