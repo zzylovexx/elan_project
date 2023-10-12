@@ -3,7 +3,7 @@ W_PATH="weights/$DATE/"
 R_PATH="$DATE/"
 DEVICE=0
 # hyper-parameter
-IOU=1 # 0:NO, 1:REG alpha, 2:GT alpha (TODO 3:GT dim?)
+IOU=0 # 0:NO, 1:REG alpha, 2:GT alpha (TODO 3:GT dim?)
 DEPTH=0 # 0:NO, Calculate with 1:gt_alpha, 2:reg_alpha
 NORMAL=1 # 0:IMAGENET, 1:ELAN_normal better
 AUGMENT=0
@@ -82,4 +82,4 @@ python ELAN_EVAL.py -R_PATH=$R_PATH1 -D_PATH=$D_PATH1
 python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH2 -D_PATH=$D_PATH2
 python ELAN_EVAL.py -R_PATH=$R_PATH2 -D_PATH=$D_PATH2
 echo "SHELL FINISHED"
-sh ./sh_ELAN_train_BL_2.sh 
+#sh ./sh_ELAN_train_BL_2.sh 

@@ -222,9 +222,9 @@ def main():
                     obj_W = dataset_train.get_cls_dim_avg('car')[1] + dim_L.cpu().clone()[i][1]
                     obj_L = dataset_train.get_cls_dim_avg('car')[2] + dim_L.cpu().clone()[i][2]
                     if is_depth==1:
-                        alpha = gt_alphas[i]
+                        alpha = gt_alphas[i] #depGT
                     elif is_depth==2:
-                        alpha = reg_alphas[i]
+                        alpha = reg_alphas[i] #depREG
                     calc_depth = calc_depth_with_alpha_theta_tensor(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0)
                     depth_loss += F.l1_loss(calc_depth, gt_depth[i])
                 depth_loss = W_depth * depth_loss / batch_L.shape[0]
@@ -453,7 +453,7 @@ def main():
         # 1007 added record model weight (check updated)
         plot_params_hist(writer, model, epoch)
             
-        if epoch % epochs == 0 or epoch % 50 == 0:
+        if epoch % epochs == 0 or epoch % 10 == 0:
             name = save_path + f'_{epoch}.pkl'
             print("====================")
             print ("Done with epoch %s!" % epoch)

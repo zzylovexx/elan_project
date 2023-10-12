@@ -1,10 +1,10 @@
 # check every time
-DATE="1009_iou"
+DATE="1011_iou"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
-DEVICE=2
+DEVICE=1
 TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
-IOU=2 # 0:NO, 1:REG alpha, 2:GT alpha (TODO 3:GT dim?)
+IOU=1 # 0:NO, 1:REG alpha, 2:GT alpha (TODO 3:GT dim?)
 DEPTH=0 # 0:NO, Calculate with 1:gt_alpha, 2:reg_alpha
 AUGMENT=0
 # hyper-parameter
