@@ -1,4 +1,4 @@
-DATE="1009_iou"
+DATE="1011_depth"
 W_PATH="weights/$DATE/"
 R_PATH="$DATE/"
 DEVICE=0
@@ -46,13 +46,13 @@ then
 fi
 if [ $DEPTH = $ONE ]
 then
-    PKL=$PKL"_dep"
-    R_PATH=$R_PATH"_dep"
+    PKL=$PKL"_depGT"
+    R_PATH=$R_PATH"_depGT"
 fi
 if [ $DEPTH = $TWO ]
 then
-    PKL=$PKL"_depA"
-    R_PATH=$R_PATH"_depA"
+    PKL=$PKL"_depREG"
+    R_PATH=$R_PATH"_depREG"
 fi
 if [ $IOU = $ONE ]
 then
