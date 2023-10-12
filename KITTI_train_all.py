@@ -79,8 +79,12 @@ def main():
     cfg['cond'] = is_cond
     cfg['group'] = is_group
     cfg['network'] = network
-    iou_criterion = IoULoss(W_iou)
-    weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
+    #https://shengyu7697.github.io/python-detect-os/
+    if os.name.lower() == 'posix': #ubuntu
+        weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
+    elif os.name.lower() == 'nt': #windows
+        weights_folder = os.path.join('weights', FLAGS.weights_path.split('\\')[1])
+        
     os.makedirs(weights_folder, exist_ok=True)
     save_path, log_path, train_config = name_by_parameters(FLAGS)
     print(f'SAVE PATH:{save_path}, LOG PATH:{log_path}, config:{train_config}')

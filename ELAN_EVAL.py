@@ -14,8 +14,11 @@ def evaluation(result_root, data_root):
     except:
         # temp way for 230808 dataset
         all_labels = glob.glob(f'{data_root}/renew_label/*.txt')
-        val_ids = [name.split('/')[-1].split('.')[0] for name in all_labels] #ubuntu
-        #val_ids = [name.split('\\')[-1].split('.')[0] for name in all_labels] #windows
+        #https://shengyu7697.github.io/python-detect-os/
+        if os.name.lower() == 'posix': #ubuntu 
+            val_ids = [name.split('/')[-1].split('.')[0] for name in all_labels]
+        elif os.name.lower() == 'nt': #windows
+            val_ids = [name.split('\\')[-1].split('.')[0] for name in all_labels]
         print('Dataset Elan_230808:', len(val_ids))
         
 
