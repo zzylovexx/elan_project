@@ -163,7 +163,7 @@ def main():
             gt_class = labels_L['Class']
             gt_locs = labels_L['Location'].float().to(device)
             gt_rys = labels_L['Ry'].numpy()
-            gt_alphas = labels_L['Alpha'].numpy()
+            gt_alphas = labels_L['Alpha'].to(device)
 
             batch_L=batch_L.float().to(device)
             batch_R=batch_R.float().to(device)
@@ -222,9 +222,9 @@ def main():
                     obj_W = dataset_train.get_cls_dim_avg('car')[1] + dim_L.cpu().clone()[i][1]
                     obj_L = dataset_train.get_cls_dim_avg('car')[2] + dim_L.cpu().clone()[i][2]
                     if is_depth==1:
-                        alpha = gt_alphas[i]
+                        alpha = reg_alphas[i] #dep
                     elif is_depth==2:
-                        alpha = reg_alphas[i]
+                        alpha = gt_alphas[i] #depA
                     calc_depth = calc_depth_with_alpha_theta_tensor(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0)
                     depth_loss += F.l1_loss(calc_depth, gt_depth[i])
                 depth_loss = W_depth * depth_loss / batch_L.shape[0]
@@ -367,13 +367,13 @@ def main():
                         obj_W = dataset_train.get_cls_dim_avg(gt_class[i])[1] + dim_L.cpu().detach().numpy()[i][1]
                         obj_L = dataset_train.get_cls_dim_avg(gt_class[i])[2] + dim_L.cpu().detach().numpy()[i][2]
                         if is_depth==1:
-                            alpha = gt_alphas[i]
-                        elif is_depth==2:
                             alpha = reg_alphas[i].detach().numpy()
+                        elif is_depth==2:
+                            alpha = gt_alphas[i]
                         # one #0.0052, faster computation than _theta one(0.0083)
                         calc_depth.append(calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0))
                     calc_depth = torch.FloatTensor(calc_depth).to(device)
-                    depth_loss = W_depth * F.l1_loss(gt_depth, calc_depth).to(device) #0815.16 L1, 0817 mse
+                    depth_loss = W_depth * F.l1_loss(gt_depth, calc_depth).to(device)
                 loss += depth_loss
                 
                 iou_loss = torch.tensor(0.0).to(device)
@@ -509,9 +509,9 @@ def name_by_parameters(FLAGS):
     if is_cond==1:
         save_path += '_C'
     if is_depth==1:
-        save_path += '_depGT'
+        save_path += '_dep'
     elif is_depth==2:
-        save_path += '_depREG'
+        save_path += '_depA'
     if is_iou==1:
         save_path += '_iou'
     if is_iou==2:

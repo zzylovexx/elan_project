@@ -4,8 +4,8 @@ W_PATH="weights/$DATE"
 R_PATH="$DATE"
 DEVICE=2
 TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
-IOU=2 # 0:NO, 1:REG alpha, 2:GT alpha (TODO 3:GT dim?)
-DEPTH=0 # 0:NO, Calculate with 1:gt_alpha, 2:reg_alpha
+IOU=2 # 0:NO, 1:REG alpha (iou), 2:GT alpha (iouA) [TODO] 3:GT dim?
+DEPTH=0 # 0:NO, Calculate with 1:REG alpha (dep), 2: GT alpha (depA)
 AUGMENT=0
 # hyper-parameter
 NETWORK=0 # 0:vgg19_bn, 1:resnet18, 2:densenet121
@@ -64,13 +64,13 @@ then
 fi
 if [ $DEPTH = $ONE ]
 then
-    PKL=$PKL"_depGT"
-    R_PATH=$R_PATH"_depGT"
+    PKL=$PKL"_dep"
+    R_PATH=$R_PATH"_dep"
 fi
 if [ $DEPTH = $TWO ]
 then
-    PKL=$PKL"_depREG"
-    R_PATH=$R_PATH"_depREG"
+    PKL=$PKL"_depA"
+    R_PATH=$R_PATH"_depA"
 fi
 if [ $IOU = $ONE ]
 then
