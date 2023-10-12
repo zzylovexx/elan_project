@@ -176,7 +176,6 @@ def main():
             
             # 1011 depth_loss
             depth_loss = torch.tensor(0.0).to(device)
-            reg_alphas = compute_alpha(bin, residual, angle_per_class)
             if is_depth > 0:
                 for i in range(batch.shape[0]):
                     img_W = gt_img_W[i]
@@ -185,9 +184,9 @@ def main():
                     obj_W = dataset_train.get_cls_dim_avg('car')[1] + dim.cpu().clone()[i][1]
                     obj_L = dataset_train.get_cls_dim_avg('car')[2] + dim.cpu().clone()[i][2]
                     if is_depth==1:
-                        alpha = gt_alphas[i]
+                        alpha = reg_alphas[i].to(device) #要記得換回來 1=reg 現在顛倒了 (已換)
                     elif is_depth==2:
-                        alpha = reg_alphas[i]
+                        alpha = gt_alphas[i]
                     calc_depth = calc_depth_with_alpha_theta_tensor(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0)
                     depth_loss += F.l1_loss(calc_depth, gt_depth[i])
                 depth_loss = W_depth * depth_loss / batch.shape[0]
@@ -268,7 +267,6 @@ def main():
                 val_depth_loss = torch.tensor(0.0).to(device)
                 if is_depth > 0:
                     calc_depth = list()
-                    start = time.time()
                     for i in range(batch.shape[0]):
                         img_W = gt_img_W[i]
                         box2d = gt_box2d[i]
@@ -276,9 +274,9 @@ def main():
                         obj_W = dataset_train.get_cls_dim_avg(gt_class[i])[1] + dim.cpu().detach().numpy()[i][1]
                         obj_L = dataset_train.get_cls_dim_avg(gt_class[i])[2] + dim.cpu().detach().numpy()[i][2]
                         if is_depth==1:
-                            alpha = gt_alphas[i]
-                        elif is_depth==2:
                             alpha = reg_alphas[i].detach().numpy()
+                        elif is_depth==2:
+                            alpha = gt_alphas[i]
                         # one #0.0052, faster computation than _theta one(0.0083)
                         calc_depth.append(calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0))
                     calc_depth = torch.FloatTensor(calc_depth).to(device)

@@ -1,5 +1,5 @@
 @echo off
-set DATE=1011_depth
+set DATE=1012_depth
 set "W_PATH=weights/%DATE%/"
 set "R_PATH=%DATE%"
 set DEVICE=0
@@ -49,19 +49,23 @@ if %COND% equ %ONE% (
 )
 if %DEPTH% equ %ONE% (
     set "PKL=%PKL%_dep"
-    set "R_PATH=%R_PATH%_dep"
+    set "R_PATH1=%R_PATH1%_dep"
+    set "R_PATH2=%R_PATH2%_dep"
 )
 if %DEPTH% equ %TWO% (
     set "PKL=%PKL%_depA"
-    set "R_PATH=%R_PATH%_depA"
+    set "R_PATH1=%R_PATH1%_depA"
+    set "R_PATH2=%R_PATH2%_depA"
 )
 if %IOU% equ %ONE% (
     set "PKL=%PKL%_iou"
-    set "R_PATH=%R_PATH%_iou"
+    set "R_PATH1=%R_PATH1%_iou"
+    set "R_PATH2=%R_PATH2%_iou"
 )
 if %IOU% equ %TWO% (
     set "PKL=%PKL%_iouA"
-    set "R_PATH=%R_PATH%_iouA"
+    set "R_PATH1=%R_PATH1%_iouA"
+    set "R_PATH2=%R_PATH2%_iouA"
 )
 if %AUGMENT% equ %ONE% (
     set "PKL=%PKL%_aug"
@@ -80,4 +84,4 @@ python ELAN_EVAL.py -R_PATH=%R_PATH1% -D_PATH=%D_PATH1%
 python ELAN_RUN_GT.py -W_PATH=%PKL% -R_PATH=%R_PATH2% -D_PATH=%D_PATH2%
 python ELAN_EVAL.py -R_PATH=%R_PATH2% -D_PATH=%D_PATH2%
 echo "BAT FINISHED"
-rem call bat_ELAN_train_BL2.bat
+rem call bat_ELAN_train_BL_2.bat

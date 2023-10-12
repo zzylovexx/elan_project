@@ -222,9 +222,9 @@ def main():
                     obj_W = dataset_train.get_cls_dim_avg('car')[1] + dim_L.cpu().clone()[i][1]
                     obj_L = dataset_train.get_cls_dim_avg('car')[2] + dim_L.cpu().clone()[i][2]
                     if is_depth==1:
-                        alpha = reg_alphas[i] #dep
+                        alpha = reg_alphas[i] #dep #check is reg_alpha on cuda? (Elan shows on cpu)
                     elif is_depth==2:
-                        alpha = gt_alphas[i] #depA
+                        alpha = gt_alphas[i] #depA 
                     calc_depth = calc_depth_with_alpha_theta_tensor(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0)
                     depth_loss += F.l1_loss(calc_depth, gt_depth[i])
                 depth_loss = W_depth * depth_loss / batch_L.shape[0]
