@@ -512,15 +512,26 @@ def keep_same_seeds(seed):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-#0810 add
+#0810 add #somewhere wrong
 def compute_residual_loss(residual, gt_bin, gt_residual, device, reduction='mean'):
     one_hot = torch.zeros((residual).shape).to(device)
     # make one hot map
     for i in range(gt_bin.shape[0]):
+        if gt_bin[i] >= residual.shape[1] or gt_bin[i] < 0:
+            print(gt_bin)
+            return torch.tensor(0.0)
         one_hot[i][gt_bin[i]] = 1
     reg_residual = torch.sum(residual * one_hot.to(device), axis=1)
     residual_loss = F.l1_loss(reg_residual, gt_residual, reduction=reduction)
     return residual_loss
+
+def old_residual_loss(orient_residual,truth_bin,truth_residual,device):#truth_residual:B,truth_bin:B,orient_residual:B,12
+
+    one_hot_map=torch.zeros((orient_residual.shape)).to(device).scatter_(dim=1,index=truth_bin.view(-1,1),value=1)#(batch,bin_class)
+    heading_res=torch.sum(orient_residual*one_hot_map,dim=1)
+    reg_loss=F.l1_loss(heading_res,truth_residual,reduction='mean')
+    
+    return reg_loss,heading_res
 
 #0810 add
 def compute_cos_group_loss(REG_alphas, GT_alphas):
