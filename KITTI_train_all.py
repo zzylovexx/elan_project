@@ -80,10 +80,11 @@ def main():
     cfg['group'] = is_group
     cfg['network'] = network
     #https://shengyu7697.github.io/python-detect-os/
-    if os.name.lower() == 'posix': #ubuntu
-        weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
-    elif os.name.lower() == 'nt': #windows
-        weights_folder = os.path.join('weights', FLAGS.weights_path.split('\\')[1])
+    print(FLAGS.weights_path)
+    #if os.name.lower() == 'posix': #ubuntu
+    weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
+    #elif os.name.lower() == 'nt': #windows
+    #    weights_folder = os.path.join('weights', FLAGS.weights_path.split('\\')[1])
         
     os.makedirs(weights_folder, exist_ok=True)
     save_path, log_path, train_config = name_by_parameters(FLAGS)
@@ -455,7 +456,7 @@ def main():
         #tensorboard --logdir=./{log_foler} --port 8123
         
         # 1007 added record model weight (check updated)
-        plot_params_hist(writer, model, epoch)
+        #plot_params_hist(writer, model, epoch)
             
         if epoch % epochs == 0 or epoch % 10 == 0:
             name = save_path + f'_{epoch}.pkl'

@@ -8,8 +8,12 @@ class KITTI_Dataset(data.Dataset):
         path = cfg['path']
         self.label2_path = os.path.join(path, 'label_2')
         self.img2_path = os.path.join(path, 'image_2')
-        self.label3_path = os.path.join(path, 'label_3')
-        self.img3_path = os.path.join(path, 'image_3')
+        if os.name.lower()=='posix':
+            self.label3_path = os.path.join(path, 'label_3')
+            self.img3_path = os.path.join(path, 'image_3')
+        elif os.name.lower()=='nt':
+            self.label3_path = os.path.join(path, 'label_2')
+            self.img3_path = os.path.join(path, 'image_2')
 
         self.calib_path = os.path.join(path, 'calib') 
         self.extra_label_path = os.path.join(path, 'extra_label') #using generated extra label

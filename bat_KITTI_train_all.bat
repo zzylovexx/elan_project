@@ -6,7 +6,7 @@ set DEVICE=0
     rem 0 dim, 1 angle, 2 both, 3 BL
 set TYPE=3
     rem 0:NO, 1:REG alpha (iou), 2:GT alpha (iouA) [TODO] 3:GT dim?
-set IOU=2 
+set IOU=1
     rem 0:NO, Calculate with 1:REG alpha (dep), 2: GT alpha (depA)
 set DEPTH=0 
 set AUGMENT=0
@@ -17,7 +17,7 @@ set BIN=4
     rem 0:NO, 1:cos, 2:sin_sin, 3:compare
 set GROUP=0 
 
-set EPOCH=1
+set EPOCH=50
 set WARMUP=50
     rem not done yet
 set COND=0
@@ -101,5 +101,5 @@ echo "SHELL W_PATH:%W_PATH%"
 echo "SHELL PKL:%PKL%"
 echo "SHELL R_PATH:%R_PATH%"
 python KITTI_train_all.py -T=%TYPE% -W_PATH=%W_PATH% -D=%DEVICE% -E=%EPOCH% -B=%BIN% -G=%GROUP% -W=%WARMUP% -C=%COND% -N=%NETWORK% -DEP=%DEPTH% -IOU=%IOU% -A=%AUGMENT% 
-python KITTI_RUN_GT.py -W_PATH=%PKL% -R_PATH=%R_PATH% -D=%DEVICE% -N=%NETWORK%
+rem python KITTI_RUN_GT.py -W_PATH=%PKL% -R_PATH=%R_PATH% -D=%DEVICE% -N=%NETWORK%
 echo "SHELL FINISHED"

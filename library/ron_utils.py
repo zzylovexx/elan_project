@@ -519,7 +519,6 @@ def compute_residual_loss(residual, gt_bin, gt_residual, device, reduction='mean
     for i in range(gt_bin.shape[0]):
         if gt_bin[i] >= residual.shape[1] or gt_bin[i] < 0:
             print(gt_bin)
-            return torch.tensor(0.0)
         one_hot[i][gt_bin[i]] = 1
     reg_residual = torch.sum(residual * one_hot.to(device), axis=1)
     residual_loss = F.l1_loss(reg_residual, gt_residual, reduction=reduction)
