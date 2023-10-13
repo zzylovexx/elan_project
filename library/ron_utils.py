@@ -599,13 +599,20 @@ def compare_abs_best_loss(reg, gt):
 
 def compute_alpha(bin, residual, angle_per_class):
     bin_argmax = torch.max(bin, dim=1)[1]
-    residual = residual[torch.arange(len(residual)), bin_argmax] 
+    residual = residual[torch.arange(len(residual)), bin_argmax]
     alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
-    alphas = alphas.cpu()
     for i in range(len(alphas)):
         alphas[i] = angle_correction(alphas[i])
     return alphas
 
+def compute_ry(bin_, residual, theta_rays, angle_per_class):
+    bin_argmax = torch.max(bin_, dim=1)[1]
+    residual = residual[torch.arange(len(residual)), bin_argmax] 
+    alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
+    rys = list()
+    for a, ray in zip(alphas, theta_rays):
+        rys.append(angle_correction(a+ray))
+    return torch.Tensor(rys)
 # USED IN EXTRA LABELING
 
 def get_bin_classes(array, num_bin=60):

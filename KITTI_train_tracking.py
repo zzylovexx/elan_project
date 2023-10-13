@@ -297,15 +297,6 @@ def main():
     writer.close()
     print(f'Elapsed time:{(time.time()-start)//60}min')
 
-def compute_ry(bin_, residual, theta_rays, angle_per_class):
-    bin_argmax = torch.max(bin_, dim=1)[1]
-    residual = residual[torch.arange(len(residual)), bin_argmax] 
-    alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
-    rys = list()
-    for a, ray in zip(alphas, theta_rays):
-        rys.append(angle_correction(a+ray))
-    return torch.Tensor(rys)
-
 #different from Elan get_object_label
 def get_object_label(objects, bin_num=4):
     Kitti_averages = ClassAverages(average_file='Kitti_class_averages.txt')

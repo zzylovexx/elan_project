@@ -4,7 +4,7 @@ W_PATH="weights/$DATE"
 R_PATH="$DATE"
 DEVICE=0
 TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
-IOU=1 # 0:NO, 1:REG alpha (iou), 2:GT alpha (iouA) [TODO] 3:GT dim?
+IOU=2 # 0:NO, 1:REG alpha (iou), 2:GT alpha (iouA) [TODO] 3:GT dim?
 DEPTH=0 # 0:NO, 1:REG alpha (dep), 2: GT alpha (depA)
 AUGMENT=0
 # hyper-parameter
@@ -111,4 +111,4 @@ echo "SHELL R_PATH:"$R_PATH
 python KITTI_train_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -IOU=$IOU -A=$AUGMENT 
 python KITTI_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH -D=$DEVICE -N=$NETWORK
 echo "SHELL FINISHED"
-sh ./sh_KITTI_train_all2.sh
+#sh ./sh_KITTI_train_all_2.sh

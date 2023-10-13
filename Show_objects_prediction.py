@@ -71,8 +71,6 @@ def main():
         rys = list()
         for detectedObject in objects:
 
-            print(detectedObject.bias)
-            continue
             label = detectedObject.label
 
             if label['Class'] == 'DontCare':

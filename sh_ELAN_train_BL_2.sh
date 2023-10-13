@@ -82,4 +82,4 @@ python ELAN_EVAL.py -R_PATH=$R_PATH1 -D_PATH=$D_PATH1
 python ELAN_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH2 -D_PATH=$D_PATH2
 python ELAN_EVAL.py -R_PATH=$R_PATH2 -D_PATH=$D_PATH2
 echo "SHELL FINISHED"
-#sh ./sh_ELAN_train_BL_2.sh 
+#sh ./sh_ELAN_train_BL_2.sh
