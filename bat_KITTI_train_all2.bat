@@ -8,9 +8,9 @@ set DEVICE=0
     rem TYPE:0 dim, 1 angle, 2 both, 3 BL
 set TYPE=3
     rem IOU:0:NO, 1:REG alpha (iou), 2:GT alpha (iouA) [TODO] 3:GT dim?
-set IOU=1
+set IOU=2
     rem DEPTH:0:NO, Calculate with 1:REG alpha (dep), 2: GT alpha (depA)
-set DEPTH=1
+set DEPTH=2
 
 set AUGMENT=0
     rem hyper-parameter
@@ -106,4 +106,3 @@ echo "SHELL R_PATH:%R_PATH%"
 python KITTI_train_all.py -T=%TYPE% -W_PATH=%W_PATH% -D=%DEVICE% -E=%EPOCH% -B=%BIN% -G=%GROUP% -W=%WARMUP% -C=%COND% -N=%NETWORK% -DEP=%DEPTH% -IOU=%IOU% -A=%AUGMENT%  -L_PATH=%L_PATH%
 python KITTI_RUN_GT.py -W_PATH=%PKL% -D=%DEVICE% -N=%NETWORK% -R_PATH=%R_PATH%
 echo "SHELL FINISHED"
-call bat_KITTI_train_all2.bat

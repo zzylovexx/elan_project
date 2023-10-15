@@ -4,9 +4,9 @@ set "W_PATH=weights/%DATE%/"
 set "R_PATH=%DATE%"
 set DEVICE=0
     rem hyper-parameter
-set IOU=0
+set IOU=1
     rem 0:NO, 1:REG alpha, 2:GT alpha (TODO 3:GT dim?)
-set DEPTH=2
+set DEPTH=0
     rem 0:NO, Calculate with 1:REG alpha,, 2:GT alpha 
 set NORMAL=1
     rem 0:IMAGENET, 1:ELAN_normal better

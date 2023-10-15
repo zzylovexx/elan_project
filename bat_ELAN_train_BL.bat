@@ -2,6 +2,8 @@
 set DATE=1012_depth
 set "W_PATH=weights/%DATE%/"
 set "R_PATH=%DATE%"
+    rem CONTINUE Training
+set "L_PATH="
 set DEVICE=0
     rem hyper-parameter
 set IOU=0
@@ -78,7 +80,7 @@ echo "BAT W_PATH:%W_PATH%"
 echo "BAT PKL:%PKL%"
 echo "BAT R_PATH1:%R_PATH1%"
 echo "BAT R_PATH2:%R_PATH2%"
-python ELAN_BLtrain.py -W_PATH=%W_PATH% -D=%DEVICE% -E=%EPOCH% -N=%NORMAL% -B=%BIN% -G=%GROUP% -W=%WARMUP% -C=%COND% -A=%AUGMENT% -DEP=%DEPTH% -IOU=%IOU%
+python ELAN_BLtrain.py -W_PATH=%W_PATH% -D=%DEVICE% -E=%EPOCH% -N=%NORMAL% -B=%BIN% -G=%GROUP% -W=%WARMUP% -C=%COND% -A=%AUGMENT% -DEP=%DEPTH% -IOU=%IOU% -L_PATH=%L_PATH%
 python ELAN_RUN_GT.py -W_PATH=%PKL% -R_PATH=%R_PATH1% -D_PATH=%D_PATH1%
 python ELAN_EVAL.py -R_PATH=%R_PATH1% -D_PATH=%D_PATH1%
 python ELAN_RUN_GT.py -W_PATH=%PKL% -R_PATH=%R_PATH2% -D_PATH=%D_PATH2%

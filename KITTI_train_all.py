@@ -19,6 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--seed", type=int, default=2023, help='keep seeds to represent same result')
 #path setting
 parser.add_argument("--weights-path", "-W_PATH", required=True, help='folder/date ie.weights/0721')
+parser.add_argument("--latest-path", "-L_PATH", default='', help='continue training')
 
 #training setting
 parser.add_argument("--network", "-N", type=int, default=0, help='vgg/resnet/densenet')
@@ -42,18 +43,11 @@ parser.add_argument("--iou", "-IOU", type=int, default=0, help='if True, add iou
 def main():
     cfg = {'path':'Kitti/training',
             'class_list':['car'], 'diff_list': [1, 2], #0:DontCare, 1:Easy, 2:Moderate, 3:Hard, 4:Unknown
-            'bins': 0, 'cond':False, 'group':False, 'network':0}
-    '''
-    bin_num = 4
-    is_cond = 0
-    is_group = 3
-    warm_up = 0
-    epochs=10
-    device = torch.device('cuda:0')
-    type_=3
-    '''
+            'bins': 4, 'cond':False, 'group':False, 'network':0}
     FLAGS = parser.parse_args()
     keep_same_seeds(FLAGS.seed)
+    device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
+    print('DEVICE:', device)
     is_group = FLAGS.group
     is_cond = FLAGS.cond
     is_aug = FLAGS.aug
@@ -62,8 +56,6 @@ def main():
     bin_num = FLAGS.bin
     warm_up = FLAGS.warm_up #大約15個epoch收斂 再加入grouploss訓練
     type_ = FLAGS.type
-    device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
-    print('DEVICE:', device)
     epochs = FLAGS.epoch
     network = FLAGS.network
     batch_size = 16 #64 worse than 8
@@ -79,13 +71,26 @@ def main():
     cfg['cond'] = is_cond
     cfg['group'] = is_group
     cfg['network'] = network
-    #https://shengyu7697.github.io/python-detect-os/
-    print(FLAGS.weights_path)
-    #if os.name.lower() == 'posix': #ubuntu
+    start_epoch = 0
+    best_value = 100 # for record best epoch
+    # continue training
+    if len(FLAGS.latest_path) > 0:
+        checkpoint = torch.load(FLAGS.latest_path, map_location=device) #if training on 2 GPU, mapping on the same device
+        start_epoch = checkpoint['epoch']
+        cfg = checkpoint['cfg']
+        network = cfg['network']
+        W_dim = checkpoint['W_dim']
+        W_theta = checkpoint['W_theta']
+        W_group = checkpoint['W_group']
+        W_consist = checkpoint['W_consist']
+        W_angle = checkpoint['W_angle']
+        W_iou = checkpoint['W_iou']
+        W_depth = checkpoint['W_depth']
+        #best_value = checkpoint['best_value']
+        #best_epoch = checkpoint['best_epoch']
+    
     weights_folder = os.path.join('weights', FLAGS.weights_path.split('/')[1])
-    #elif os.name.lower() == 'nt': #windows
-    #    weights_folder = os.path.join('weights', FLAGS.weights_path.split('\\')[1])
-        
+    print('weights_folder:', weights_folder)
     os.makedirs(weights_folder, exist_ok=True)
     save_path, log_path, train_config = name_by_parameters(FLAGS)
     print(f'SAVE PATH:{save_path}, LOG PATH:{log_path}, config:{train_config}')
@@ -94,7 +99,7 @@ def main():
     
     # model
     print("Loading all detected objects in dataset...")
-    print('Kitti dataset')
+    start = time.time()
     process = transforms.Compose([transforms.ToTensor(), 
                                 transforms.Resize([224,224], transforms.InterpolationMode.BICUBIC), 
                                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
@@ -103,6 +108,7 @@ def main():
     params = {'batch_size': batch_size,
               'shuffle': False,
               'num_workers': 6}
+    angle_per_class=2*np.pi/float(bin_num)
     if is_aug:
         dataset_train_flip = KITTI_Dataset(cfg, process, split='train', is_flip=True)
         dataset_train_all = data.ConcatDataset([dataset_train, dataset_train_flip])
@@ -110,7 +116,7 @@ def main():
         dataset_train_all = dataset_train
     train_loader = data.DataLoader(dataset_train_all, **params)
     valid_loader = data.DataLoader(dataset_valid, **params)
-
+    print(f'LOAD time:{(time.time()-start)//60}min')
     # 0818 added
     if network==0:
         my_vgg = vgg.vgg19_bn(weights='DEFAULT') #512x7x7
@@ -122,13 +128,11 @@ def main():
     elif network==2:
         my_dense = densenet.densenet121(weights='DEFAULT') #1024x7x7
         model = dense_Model(features=my_dense.features, bins=bin_num).to(device)
-
+        
     if is_cond:
         print("< 4-dim input, Theta_ray as Condition >")
         model.features[0].in_channels = 4
         #model.features[0] = torch.nn.Conv2d(4, 64, (3,3), (1,1), (1,1))
-
-    angle_per_class=2*np.pi/float(bin_num)
 
     optimizer = torch.optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
     #optimizer = torch.optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.999))
@@ -145,11 +149,15 @@ def main():
         print("< Train with compute_compare_group_loss >")
         group_loss_func = compute_compare_group_loss
 
+    if len(FLAGS.latest_path) > 0:
+        print('-------------CONTINUE TRAINING AND LOAD STATE DICT----------------')
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     
     print('total_batches', len(train_loader))
-    best_value = 100
+    
     start = time.time()
-    for epoch in range(1, epochs+1):
+    for epoch in range(start_epoch+1, epochs+1):
         avg_bin_loss, avg_residual_loss, avg_theta_loss = 0, 0, 0
         avg_dim_loss, avg_consist_loss, avg_angle_loss, avg_depth_loss = 0,0,0,0
         avg_total_loss, avg_iou_loss = 0, 0
@@ -238,7 +246,7 @@ def main():
             loss += depth_loss
             
             #0919added IOU TODO IOU==GIOU aug, but DIOU, CIOU is close to IOU=GIOU value....
-            '''
+            
             iou_loss = torch.tensor(0.0).to(device)
             if is_iou > 0:
                 reg_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')) + dim_L.cpu().clone()
@@ -247,7 +255,6 @@ def main():
                 elif is_iou == 2:
                     iou_loss = W_iou * calc_IoU_loss_tensor(gt_box2d, gt_theta_ray_L, reg_dims, torch.tensor(gt_alphas), gt_calib, device) #iouA
             '''
-
             # for NO_GRAD cal faster
             iou_loss = torch.tensor(0.0).to(device)
             if is_iou > 0:
@@ -258,8 +265,7 @@ def main():
                     iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alpha, gt_calib).to(device)
                 elif is_iou == 2:
                     iou_loss = W_iou * calc_IoU_loss(gt_box2d, gt_theta_ray, reg_dims, gt_alphas, gt_calib).to(device)
-
-
+            '''
             loss += iou_loss
             loss.backward()
             #a = list(model.parameters())[-1].clone()
@@ -449,7 +455,7 @@ def main():
         writer.add_scalar(f'{train_config}/W', dim_performance[1], epoch)
         writer.add_scalar(f'{train_config}/L', dim_performance[2], epoch)
 
-        overall_value = alpha_performance*3 + sum(dim_performance)
+        overall_value = alpha_performance*3 + np.sum(dim_performance)
         if overall_value < best_value:
             best_value = overall_value
             best_epoch = epoch
@@ -464,7 +470,9 @@ def main():
                 'W_angle': W_angle,
                 'W_group': W_group,
                 'W_depth': W_depth,
-                'W_iou': W_iou
+                'W_iou': W_iou,
+                'best_value': best_value,
+                'best_epoch': best_epoch
             }
         #write LOSS
         writer.add_scalars(f'{train_config}/bin_loss', {'Train': avg_bin_loss, 'Valid': eval_bin_loss}, epoch)
@@ -504,7 +512,9 @@ def main():
                     'W_angle': W_angle,
                     'W_group': W_group,
                     'W_depth': W_depth,
-                    'W_iou': W_iou
+                    'W_iou': W_iou,
+                    'best_value': best_value,
+                    'best_epoch': best_epoch
                     }, name)
             print("====================")
         print(f'Elapsed time:{(time.time()-start)//60}min')
