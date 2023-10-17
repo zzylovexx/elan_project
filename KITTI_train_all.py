@@ -227,7 +227,7 @@ def main():
         
             # 1008 depth_loss
             depth_loss = torch.tensor(0.0).to(device)
-            reg_alphas = compute_alpha(bin_L, residual_L, angle_per_class) #on cpu
+            reg_alphas = compute_alpha(bin_L, residual_L, angle_per_class)
             if is_depth > 0:
                 for i in range(batch_L.shape[0]):
                     img_W = gt_img_W[i]
@@ -381,7 +381,7 @@ def main():
             
                 # 1008 depth_loss
                 depth_loss = torch.tensor(0.0).to(device)
-                reg_alphas = compute_alpha(bin_L, residual_L, angle_per_class) #on cpu
+                reg_alphas = compute_alpha(bin_L, residual_L, angle_per_class)
                 if is_depth > 0:
                     for i in range(batch_L.shape[0]):
                         img_W = gt_img_W[i]
@@ -392,7 +392,7 @@ def main():
                         if is_depth==1:
                             alpha = reg_alphas[i] #dep #check is reg_alpha on cuda? (Elan shows on cpu)
                         elif is_depth==2:
-                            alpha = gt_alphas[i] #depA 
+                            alpha = gt_alphas[i].to(device) #depA 
                         calc_depth = calc_depth_with_alpha_theta_tensor(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0)
                         depth_loss += F.l1_loss(calc_depth, gt_depth[i])
                     depth_loss = W_depth * depth_loss / batch_L.shape[0]
