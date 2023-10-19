@@ -53,7 +53,7 @@ def calc_IoU_loss_tensor(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib, de
         reg_loc, _ = calc_location_tensor(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i], device)
         calib_tensor = torch.tensor(calib[i], dtype=torch.float)
         prj_box2d = loc3d_2_box2d_tensor(reg_ry[i], reg_loc, reg_dims[i], calib_tensor, device)
-        gt_box2d_tensor = torch.tensor(gt_box2d[i], dtype=torch.float).to(device)
+        gt_box2d_tensor = torch.tensor(gt_box2d[i].clone().detach(), dtype=torch.float).to(device)
         iou_value = calc_IoU_2d_tensor(gt_box2d_tensor, prj_box2d)
         #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
         #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543

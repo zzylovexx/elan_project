@@ -9,6 +9,7 @@ class KITTI_Dataset(data.Dataset):
         self.label2_path = os.path.join(path, 'label_2')
         self.img2_path = os.path.join(path, 'image_2')
         if os.name.lower()=='posix':
+            print('Load Right Images')
             self.label3_path = os.path.join(path, 'label_3')
             self.img3_path = os.path.join(path, 'image_3')
         elif os.name.lower()=='nt':
