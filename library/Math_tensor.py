@@ -46,19 +46,17 @@ def calc_IoU_2d_tensor(box1, box2):
     return area_overlap/area_union
 
 def calc_IoU_loss_tensor(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib, device):
-    iou_loss = torch.tensor(0.0).to(device)
-    #iou_loss_list = list()
+    iou_list = list()
     reg_ry = reg_alphas + gt_theta_ray
     for i in range(len(reg_dims)):
         reg_loc, _ = calc_location_tensor(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i], device)
         calib_tensor = torch.tensor(calib[i], dtype=torch.float)
         prj_box2d = loc3d_2_box2d_tensor(reg_ry[i], reg_loc, reg_dims[i], calib_tensor, device)
-        gt_box2d_tensor = torch.tensor(gt_box2d[i].clone().detach(), dtype=torch.float).to(device)
-        iou_value = calc_IoU_2d_tensor(gt_box2d_tensor, prj_box2d)
-        #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
-        #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
-        iou_loss += F.l1_loss(torch.tensor(1.0).to(device), iou_value) #0926ver. cause somewhere wrong above (not converge)
-    iou_loss = iou_loss / len(reg_dims)
+        iou_list.append(calc_IoU_2d_tensor(gt_box2d[i].to(device), prj_box2d))
+    #iou_loss = -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
+    iou_list = torch.stack(iou_list)
+    best_iou = torch.ones_like(iou_list).to(device)
+    iou_loss = F.l1_loss(iou_list, best_iou, reduction='mean') #0926ver. cause somewhere wrong above (not converge)
     return iou_loss
 
 def project_3d_pt_tensor(pt, cam_to_img, device):
@@ -248,3 +246,27 @@ def calc_location_tensor(dimension, proj_matrix, box2d, alpha, theta_ray, device
 
     best_loc = torch.stack([best_loc[0][0], best_loc[1][0], best_loc[2][0]])
     return best_loc, best_X
+
+def get_box_size_tensor(box2d):
+    width = box2d[:,2]-box2d[:,0]
+    height = box2d[:,3]-box2d[:,1]
+    return width, height
+
+def calc_theta_ray_tensor(img_W, box2d, calib):
+    box_center = (box2d[:,2] + box2d[:,0]) / 2
+    dx = box_center - (img_W / 2)
+    theta_ray = torch.arctan((dx/calib[:,0,0]))
+    return theta_ray
+
+#obj_W, obj_L = reg_dims[:,1], reg_dims[:,2]
+def calc_depth_with_alpha_theta_tensor(img_W, box2d, calib, obj_W, obj_L, alpha, trun, device):
+    box_W = get_box_size_tensor(box2d)[0]
+    not_trun = torch.ones_like(trun, dtype=torch.float16) - trun #1-trun
+    box_W = torch.div(box_W, not_trun).to(device) # trun assume 0?
+    visual_W = abs(obj_L*torch.cos(alpha)) + abs(obj_W*torch.sin(alpha))
+    fovx = 2 * torch.arctan(img_W / (2 * calib[:,0,0])).to(device)
+    theta_ray = calc_theta_ray_tensor(img_W, box2d, calib).to(device)
+    visual_W = torch.div(visual_W, abs(torch.cos(theta_ray)))
+    Wview = visual_W*img_W.to(device) / box_W
+    depth = Wview/2 / torch.tan(fovx/2)
+    return depth.to(device)

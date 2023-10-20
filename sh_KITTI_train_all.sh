@@ -1,10 +1,13 @@
 # check every time
-DATE="1013_iou_NOGRAD"
+DATE="1020"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
-DEVICE=0
-TYPE=3 # 0 dim, 1 angle, 2 both, 3 BL
-IOU=1 # 0:NO, 1:REG alpha (iou), 2:GT alpha (iouA) [TODO] 3:GT dim?
+#L_PATH="weights/1020/KITTI_BL_B4_dep_iou_vgg_best.pkl"
+L_PATH=""
+
+DEVICE=1
+TYPE=1 # 0:BL, 1:C_dim, 2:C_angle, 3 C_Both
+IOU=0 # 0:NO, 1:REG alpha (iou), 2:GT alpha (iouA) [TODO] 3:GT dim?
 DEPTH=0 # 0:NO, 1:REG alpha (dep), 2: GT alpha (depA)
 AUGMENT=0
 # hyper-parameter
@@ -24,26 +27,26 @@ THREE=3
 W_PATH=$W_PATH"/KITTI_"
 R_PATH=$R_PATH"/KITTI_"
 
-#consist_dim, angle, both, Baseline
+#Baseline, consist_dim, consist_angle, both, 
 if [ $TYPE = $ZERO ]
+then
+    W_PATH=$W_PATH"BL"
+    R_PATH=$R_PATH"BL"
+fi
+if [ $TYPE = $ONE ]
 then
     W_PATH=$W_PATH"D"
     R_PATH=$R_PATH"D"
 fi
-if [ $TYPE = $ONE ]
+if [ $TYPE = $TWO ]
 then
     W_PATH=$W_PATH"A"
     R_PATH=$R_PATH"A"
 fi
-if [ $TYPE = $TWO ]
+if [ $TYPE = $THREE ]
 then
     W_PATH=$W_PATH"DA"
     R_PATH=$R_PATH"DA"
-fi
-if [ $TYPE = $THREE ]
-then
-    W_PATH=$W_PATH"BL"
-    R_PATH=$R_PATH"BL"
 fi
 
 #W_PATH H-parameters generate in .py
@@ -104,11 +107,12 @@ then
     R_PATH=$R_PATH"_dense"
 fi
 
-PKL=$PKL"_$EPOCH.pkl"
+#PKL=$PKL"_$EPOCH.pkl"
+PKL=$PKL"_best.pkl"
 echo "SHELL W_PATH:"$W_PATH
 echo "SHELL PKL:"$PKL
 echo "SHELL R_PATH:"$R_PATH
-python KITTI_train_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -IOU=$IOU -A=$AUGMENT 
+python KITTI_train_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -IOU=$IOU -A=$AUGMENT -L_PATH=$L_PATH
 python KITTI_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH -D=$DEVICE -N=$NETWORK
 echo "SHELL FINISHED"
-sh ./sh_KITTI_train_all2.sh
+#sh ./sh_KITTI_train_all2.sh

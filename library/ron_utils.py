@@ -305,17 +305,6 @@ def calc_depth_by_width_corner(img_W, box2d, cam_to_img, obj_W, obj_L):
 
 # my_method
 def calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0):
-    '''
-    if type(obj_W) == torch.Tensor:
-        cos_func = torch.cos()
-        sin_func = torch.sin()
-    elif type(obj_W) == np.ndarray:
-        cos_func = np.cos()
-        sin_func = np.sin()
-    else:
-        cos_func = math.cos()
-        sin_func = math.sin()
-    '''
     fovx = 2 * np.arctan(img_W / (2 * cam_to_img[0][0]))
     #box_W = get_box_size(box2d)[0] / (1-trun+0.01) #assume truncate related to W only
     box_W = get_box_size(box2d)[0] / (1-trun) #assume truncate related to W only
@@ -324,30 +313,6 @@ def calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, t
     visual_W /= abs(np.cos(theta_ray)) #new added !
     Wview = (visual_W)*(img_W/box_W)
     depth = Wview/2 / np.tan(fovx/2)
-    return depth
-
-def calc_theta_ray_tensor(width, box2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
-    box2d = np.array(box2d).flatten()
-    fovx = 2 * torch.arctan(width / (2 * proj_matrix[0][0]))
-    center = (box2d[2] + box2d[0]) / 2
-    dx = center - (width / 2)
-    mult = 1
-    if dx < 0:
-        mult = -1
-    dx = abs(dx)
-    angle = torch.arctan( (2*dx*torch.tan(fovx/2)) / width )
-    angle = angle * mult
-    return angle
-
-def calc_depth_with_alpha_theta_tensor(img_W, box2d, cam_to_img, obj_W, obj_L, alpha, trun=0.0):
-    fovx = 2 * torch.arctan(img_W / (2 * cam_to_img[0][0]))
-    #box_W = get_box_size(box2d)[0] / (1-trun+0.01) #assume truncate related to W only
-    box_W = get_box_size(box2d)[0] / (1-trun) #assume truncate related to W only
-    visual_W = abs(obj_L*torch.cos(alpha)) + abs(obj_W*torch.sin(alpha))
-    theta_ray = calc_theta_ray_tensor(img_W, box2d, cam_to_img)
-    visual_W /= abs(torch.cos(theta_ray)) #new added !
-    Wview = (visual_W)*(img_W/box_W)
-    depth = Wview/2 / torch.tan(fovx/2)
     return depth
 
 def angle2class(angle, num_heading_bin):
@@ -675,7 +640,7 @@ def flip_orient(angle):
     
 ## 0919 added
 
-def loc3d_2_box2d(orient, location, dimension, cam_to_img):
+def loc3d_2_box2d_np(orient, location, dimension, cam_to_img):
     prj_points = []
     R = np.array([[np.cos(orient), 0, np.sin(orient)], [0, 1, 0], [-np.sin(orient), 0, np.cos(orient)]])
     corners = create_corners(dimension, location, R)
@@ -725,91 +690,17 @@ def calc_GIoU_2d(box1, box2):
     GIoU= IoU - (area_C-area_union)/area_C
     return GIoU
 
-def calc_IoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
-    #iou_loss = torch.tensor(0.0)
-    iou_loss_list = list()
-    reg_ry = reg_alphas + gt_theta_ray
-    for i in range(len(reg_dims)):
-        reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
-        prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
-        iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
-        #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
-        #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
-        iou_loss_list.append(F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value))) #0926ver. cause somewhere wrong above (not converge)
-    iou_loss_list = torch.tensor(iou_loss_list)
-    iou_loss = iou_loss_list.sum() / len(iou_loss_list)
-    return iou_loss.requires_grad_(True)
-
-def calc_IoU_loss_debug(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
-    #iou_loss = torch.tensor(0.0)
-    iou_loss_list = list()
-    reg_rys = reg_alphas + gt_theta_ray
-    #gt_rys = gt_alphas + gt_theta_ray
-    for i in range(len(reg_dims)):
-        reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_rys[i], gt_theta_ray[i])
-        prj_box2d = loc3d_2_box2d(reg_rys[i], reg_loc, reg_dims[i], calib[i])
-        iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
-        #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
-        #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
-        iou_loss_list.append(F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value))) #0926ver. cause somewhere wrong above (not converge)
-    iou_loss_list = torch.tensor(iou_loss_list)
-    iou_loss = iou_loss_list.sum() / len(iou_loss_list)
-    return iou_loss.requires_grad_(True)
-
-def calc_IoU_loss_reg_ry_gt_loc(gt_box2d, gt_theta_rays, gt_locs, reg_dims, reg_alphas, calib):
+def calc_IoU_loss(box2d, theta_rays, dims, alphas, calib):
     iou_loss = torch.tensor(0.0)
-    reg_rys = reg_alphas + gt_theta_rays
-    for i in range(len(reg_dims)):
-        prj_box2d = loc3d_2_box2d(reg_rys[i], gt_locs[i], reg_dims[i], calib[i])
-        iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
+    rys = alphas + theta_rays
+    for i in range(len(dims)):
+        reg_loc, _ = calc_location(dims[i], calib[i], box2d[i], rys[i], theta_rays[i])
+        prj_box2d = loc3d_2_box2d_np(rys[i], reg_loc, dims[i], calib[i])
         #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
         #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
-        iou_loss += F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value)) #0926ver. cause somewhere wrong above (not converge)
-    iou_loss /= len(reg_dims)
-    return iou_loss.requires_grad_(True)
-
-def calc_IoU_loss_gt_ry_gt_loc(gt_box2d, gt_rys, gt_locs, reg_dims, calib):
-    iou_loss = torch.tensor(0.0)
-    for i in range(len(reg_dims)):
-        prj_box2d = loc3d_2_box2d(gt_rys[i], gt_locs[i], reg_dims[i], calib[i])
-        iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
-        #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
-        #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
-        iou_loss += F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value)) #0926ver. cause somewhere wrong above (not converge)
-    iou_loss /= len(reg_dims)
-    return iou_loss.requires_grad_(True)
-
-def calc_IoU_loss_reg_ry_gt_dim(gt_box2d, gt_theta_ray, gt_dims, reg_alphas, calib):
-    iou_loss = torch.tensor(0.0)
-    reg_ry = reg_alphas + gt_theta_ray
-    for i in range(len(gt_dims)):
-        reg_loc, _ = calc_location(gt_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
-        prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, gt_dims[i], calib[i])
-        iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
-        #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
-        #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
-        iou_loss += F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value)) #0926ver. cause somewhere wrong above (not converge)
-    iou_loss /= len(gt_dims)
-    return iou_loss.requires_grad_(True)
-
-def get_reg_iou(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
-    iou_values = list()
-    reg_ry = reg_alphas + gt_theta_ray
-    for i in range(len(reg_dims)):
-        reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
-        prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
-        iou_values.append(calc_IoU_2d(gt_box2d[i], prj_box2d))
-    return torch.tensor(iou_values)
-
-def calc_GIoU_loss(gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
-    iou_loss = torch.tensor(0.0)
-    reg_ry = reg_alphas + gt_theta_ray
-    for i in range(len(reg_dims)):
-        reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
-        prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
-        iou_loss += torch.tensor(1 - calc_GIoU_2d(gt_box2d[i], prj_box2d))
-    iou_loss /= len(reg_dims)
-    return iou_loss.requires_grad_(True)
+        iou_loss += torch.tensor(1 - calc_IoU_2d(box2d[i], prj_box2d))
+        #iou_loss += torch.tensor(1 - calc_GIoU_2d(gt_box2d[i], prj_box2d)) GIoU loss
+    return iou_loss / len(dims)
 
 def box2d_area(box):
     if len(box)==2: #[ [left, top], [right, btm] ]
@@ -834,10 +725,55 @@ class IoULoss(torch.nn.Module):
         reg_ry = reg_alphas + gt_theta_ray
         for i in range(len(reg_dims)):
             reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
-            prj_box2d = loc3d_2_box2d(reg_ry[i], reg_loc, reg_dims[i], calib[i])
+            prj_box2d = loc3d_2_box2d_np(reg_ry[i], reg_loc, reg_dims[i], calib[i])
             iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
             #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
             #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
             iou_loss += F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value)) #0926ver. cause somewhere wrong above (not converge)
         iou_loss /= len(reg_dims)
         return self.weight * iou_loss
+    
+def init_loss_dict():
+    loss_dict = dict()
+    # org
+    loss_dict['total'] = 0 
+    loss_dict['dim'] = 0
+    loss_dict['bin'] = 0
+    loss_dict['residual'] = 0
+    loss_dict['theta'] = 0 # theta = bin+residual
+    # mine
+    loss_dict['group'] = 0
+    loss_dict['C_dim'] = 0
+    loss_dict['C_angle'] = 0
+    loss_dict['depth'] = 0
+    loss_dict['iou'] = 0
+    return loss_dict
+
+def loss_dict_add(loss_dict, batch_size, bin, residual, dim, total, group, consist_dim, consist_angle, depth, iou): #.item()
+    # org
+    loss_dict['total'] += total*batch_size
+    loss_dict['dim'] += dim*batch_size
+    loss_dict['bin'] += bin*batch_size
+    loss_dict['residual'] += residual*batch_size
+    loss_dict['theta'] = loss_dict['bin'] + loss_dict['theta']
+    # mine
+    loss_dict['group'] += group*batch_size
+    loss_dict['C_dim'] += consist_dim*batch_size
+    loss_dict['C_angle'] += consist_angle*batch_size
+    loss_dict['depth'] += depth*batch_size
+    loss_dict['iou'] += iou*batch_size
+    return loss_dict
+
+def calc_avg_loss(loss_dict, total_num): #len(dataset_train_all)
+    for key in loss_dict.keys():
+        loss_dict[key] /= total_num
+    return loss_dict
+
+def print_epoch_loss(loss_dict, epoch, type='Train'): #len(dataset_train_all)
+    print(f'--- epoch {epoch} {type}---', end=' ')
+    for key in loss_dict.keys():
+        if key == 'group': # for better observation
+            print()
+            print('\t\t\t', end='')
+        print(f'[{key}:{loss_dict[key]:.3f}]', end=', ')
+    print()

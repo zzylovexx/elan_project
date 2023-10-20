@@ -62,7 +62,7 @@ def main():
                                   transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])
 
 
-    dataset_train = KITTI_Dataset(cfg, process, split='train')
+    dataset_train = KITTI_Dataset(cfg, process, split='train') #TODO change to load txt files for avg_dims
     Kitti_averages = ClassAverages(average_file='Kitti_class_averages.txt')
     img2_path = 'Kitti/training/image_2'
     label2_path = 'Kitti/training/label_2'
@@ -139,25 +139,33 @@ def main():
     f.close()
     print(f'save in KITTI_eval/{result_root}.txt')
     
-def print_info(ckpt, cfg):
+def print_info(checkpoint, cfg):
     class_list = cfg['class_list']
     diff_list = cfg['diff_list']
     group = cfg['group']
     cond = cfg['cond']
-    W_consist = ckpt['W_consist']
-    W_angle = ckpt['W_angle']
-    W_group = ckpt['W_group']
     print('Class:', class_list, end=', ')
     print('Diff:', diff_list, end=', ')
-    print(f'Group:{group}, cond:{cond}', end=' ')
-    print(f'[Weights] W_consist:{W_consist:.2f}, W_angle:{W_angle:.2f}, W_group:{W_group:.2f}', end='')
-    try:
-        W_dim = ckpt['W_dim']
-        print(f', W_dim:{W_dim:.2f}', end='')
-        W_depth = ckpt['W_depth']
-        print(f', W_depth:{W_depth:.2f}')
-    except:
+    print(f'Group:{group}, cond:{cond}')
+    #1020 updated
+    if 'weight_dict' in checkpoint.keys():
+        print(f'Best@{checkpoint["best_epoch"]}:{checkpoint["best_value"]:.4f}  [Weights] ', end='')
+        for key in checkpoint['weight_dict'].keys():
+            print(f'{key}:{checkpoint["weight_dict"][key]:.2f}', end=', ')
         print()
+    else:
+        W_consist = checkpoint['W_consist']
+        W_ry = checkpoint['W_ry']
+        W_group = checkpoint['W_group']
+
+        print(f'[Weights] W_consist:{W_consist:.2f}, W_ry:{W_ry:.2f}, W_group:{W_group:.2f}', end='')
+        try:
+            W_iou = checkpoint['W_iou']
+            print(f', W_IOU:{W_iou:.2f}', end='')
+            W_depth = checkpoint['W_depth']
+            print(f', W_depth:{W_depth:.2f}')
+        except:
+            print()
 
 if __name__ == '__main__':
     start = time.time()

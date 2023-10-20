@@ -52,25 +52,33 @@ def ron_evaluation(val_ids, diff_list, cls_list, result_root, gt_root='Kitti/tra
     print('[Depth error]')
     box_depth_error_calculation(GT_depth, REG_depth, 5)
 
-def print_info(ckpt, cfg):
+def print_info(checkpoint, cfg):
     class_list = cfg['class_list']
     diff_list = cfg['diff_list']
     group = cfg['group']
     cond = cfg['cond']
-    W_consist = ckpt['W_consist']
-    W_ry = ckpt['W_ry']
-    W_group = ckpt['W_group']
     print('Class:', class_list, end=', ')
     print('Diff:', diff_list, end=', ')
-    print(f'Group:{group}, cond:{cond}', end=' ')
-    print(f'[Weights] W_consist:{W_consist:.2f}, W_ry:{W_ry:.2f}, W_group:{W_group:.2f}', end='')
-    try:
-        W_iou = ckpt['W_iou']
-        print(f', W_IOU:{W_iou:.2f}', end='')
-        W_depth = ckpt['W_depth']
-        print(f', W_depth:{W_depth:.2f}')
-    except:
+    print(f'Group:{group}, cond:{cond}')
+    #1020 updated
+    if 'weight_dict' in checkpoint.keys():
+        print(f'Best@{checkpoint["best_epoch"]}:{checkpoint["best_value"]:.4f}  [Weights] ', end='')
+        for key in checkpoint['weight_dict'].keys():
+            print(f'{key}:{checkpoint["weight_dict"][key]:.2f}', end=', ')
         print()
+    else:
+        W_consist = checkpoint['W_consist']
+        W_ry = checkpoint['W_ry']
+        W_group = checkpoint['W_group']
+
+        print(f'[Weights] W_consist:{W_consist:.2f}, W_ry:{W_ry:.2f}, W_group:{W_group:.2f}', end='')
+        try:
+            W_iou = checkpoint['W_iou']
+            print(f', W_IOU:{W_iou:.2f}', end='')
+            W_depth = checkpoint['W_depth']
+            print(f', W_depth:{W_depth:.2f}')
+        except:
+            print()
 
 if __name__ == '__main__':
     FLAGS = parser.parse_args()
