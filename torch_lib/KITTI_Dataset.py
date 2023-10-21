@@ -1,7 +1,8 @@
 import os, cv2, csv
 from torch.utils import data
 import numpy as np
-from library.ron_utils import angle2class, angle_correction, flip_orient
+from library.ron_utils import angle2class, angle_correction, flip_orient, FrameCalibrationData
+from KITTI_label_3 import generate_Kitti_label_3
 
 class KITTI_Dataset(data.Dataset):
     def __init__(self, cfg, process, split='train', is_flip=False):
@@ -11,6 +12,10 @@ class KITTI_Dataset(data.Dataset):
         if os.name.lower()=='posix':
             print('Load Right Images')
             self.label3_path = os.path.join(path, 'label_3')
+            #TODO label3
+            if not os.path.isdir(self.label3_path): # generate label_3
+                print('Generating Kitti_label_3')
+                generate_Kitti_label_3()
             self.img3_path = os.path.join(path, 'image_3')
         elif os.name.lower()=='nt':
             self.label3_path = os.path.join(path, 'label_2')
@@ -224,91 +229,3 @@ class Object3d(object):
                      % (self.cls_type, self.truncation, self.occlusion, reg_alpha, left, top, right, btm,
                         W, H, L, X, Y, Z, reg_ry)
         return print_str
-
-#https://github.com/HKUST-Aerial-Robotics/Stereo-RCNN/blob/63c6ab98b7a5e36c7bcfdec4529804fc940ee900/lib/model/utils/kitti_utils.py#L97C5-L97C25
-class FrameCalibrationData:
-    '''Frame Calibration Holder
-        p0-p3      Camera P matrix. Contains extrinsic 3x4    
-                   and intrinsic parameters.
-        r0_rect    Rectification matrix, required to transform points 3x3    
-                   from velodyne to camera coordinate frame.
-        tr_velodyne_to_cam0     Used to transform from velodyne to cam 3x4    
-                                coordinate frame according to:
-                                Point_Camera = P_cam * R0_rect *
-                                                Tr_velo_to_cam *
-                                                Point_Velodyne.
-    '''
-
-    def __init__(self, calib_path):
-        self.calib_path = calib_path
-        self.p0 = []
-        self.p1 = []
-        self.p2 = []
-        self.p3 = []
-        self.p2_2 = []
-        self.p2_3 = []
-        self.r0_rect = []
-        self.t_cam2_cam0 = []
-        self.tr_velodyne_to_cam0 = []
-        self.set_info(calib_path)
-        
-    def set_info(self, calib_path):
-        ''' 
-        Reads in Calibration file from Kitti Dataset.
-        
-        Inputs:
-        CALIB_PATH : Str PATH of the calibration file.
-        
-        Returns:
-        frame_calibration_info : FrameCalibrationData
-                                Contains a frame's full calibration data.
-        ^ z        ^ z                                      ^ z         ^ z
-        | cam2     | cam0                                   | cam3      | cam1
-        |-----> x  |-----> x                                |-----> x   |-----> x
-
-        '''
-        data_file = open(calib_path, 'r')
-        data_reader = csv.reader(data_file, delimiter=' ')
-        data = []
-
-        for row in data_reader:
-            data.append(row)
-
-        data_file.close()
-
-        p_all = []
-
-        for i in range(4):
-            p = data[i]
-            p = p[1:]
-            p = [float(p[i]) for i in range(len(p))]
-            p = np.reshape(p, (3, 4))
-            p_all.append(p)
-
-        # based on camera 0
-        self.p0 = p_all[0]
-        self.p1 = p_all[1]
-        self.p2 = p_all[2]
-        self.p3 = p_all[3]
-
-        # based on camera 2
-        self.p2_2 = np.copy(p_all[2]) 
-        self.p2_2[0,3] = self.p2_2[0,3] - self.p2[0,3]
-
-        self.p2_3 = np.copy(p_all[3]) 
-        self.p2_3[0,3] = self.p2_3[0,3] - self.p2[0,3]
-
-        self.t_cam2_cam0 = np.zeros(3)
-        self.t_cam2_cam0[0] = (self.p2[0,3] - self.p0[0,3])/self.p2[0,0]
-
-        # Read in rectification matrix
-        tr_rect = data[4]
-        tr_rect = tr_rect[1:]
-        tr_rect = [float(tr_rect[i]) for i in range(len(tr_rect))]
-        self.r0_rect = np.reshape(tr_rect, (3, 3))
-
-        # Read in velodyne to cam matrix
-        tr_v2c = data[5]
-        tr_v2c = tr_v2c[1:]
-        tr_v2c = [float(tr_v2c[i]) for i in range(len(tr_v2c))]
-        self.tr_velodyne_to_cam0 = np.reshape(tr_v2c, (3, 4))

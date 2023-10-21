@@ -17,16 +17,16 @@ parser.add_argument("--result-path", '-R_PATH', required=True, help='path (folde
 parser.add_argument("--network", "-N", type=int, default=0, help='vgg/resnet/densenet')
 
 def main():
-    #weights_path = 'weights/0808car/KITTI_BL_B4_50.pkl'
-    #result_root = '0808car/KITTI_BL_B4_50'
-    #os.makedirs(result_root, exist_ok=True)
-    #device = torch.device('cuda:0') # 選gpu的index
-
+    
+    #1022 added
+    os.makedirs('KITTI_labels', exist_ok=True)
+    
     FLAGS = parser.parse_args()
     weights_path = FLAGS.weights_path
-    result_root = FLAGS.result_path
+    eval_root = FLAGS.result_path
+    save_root = os.path.join('KITTI_labels', eval_root)
     network = FLAGS.network
-    os.makedirs(result_root, exist_ok=True)
+    os.makedirs(save_root, exist_ok=True)
 
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     checkpoint = torch.load(weights_path, map_location=device) #if training on 2 GPU, mapping on the same device
@@ -114,7 +114,7 @@ def main():
                         val_GT_depth.append(obj.pos[2])
                         val_CALC_depth.append(calc_depth_with_alpha_theta(img2.shape[1], obj.box2d, cam_to_img.p2, reg_dim[1], reg_dim[2], reg_alpha))
             
-            with open(os.path.join(result_root, f'{id_}.txt'), 'w') as f:
+            with open(os.path.join(save_root, f'{id_}.txt'), 'w') as f:
                 f.writelines(reg_labels)
     
     # eval part
@@ -124,20 +124,20 @@ def main():
     val_CALC_depth = np.array(val_CALC_depth)
     #write as file as well
     org_stdout = sys.stdout
-    os.makedirs(f'KITTI_eval/{result_root.split("/")[0]}', exist_ok=True)
-    f = open(f'KITTI_eval/{result_root}.txt', 'w')
+    os.makedirs(f'KITTI_eval/{eval_root.split("/")[0]}', exist_ok=True)
+    f = open(f'KITTI_eval/{eval_root}.txt', 'w')
     sys.stdout = f
     print_info(checkpoint, cfg)
-    ron_evaluation(val_ids, diff_list, cls_list, result_root)
+    ron_evaluation(val_ids, diff_list, cls_list, eval_root)
     print('[MY CALC Depth error]')
     box_depth_error_calculation(val_GT_depth, val_CALC_depth, 5)
     print('=============[Train EVAL]===============')
-    ron_evaluation(train_ids, diff_list, cls_list, result_root)
+    ron_evaluation(train_ids, diff_list, cls_list, eval_root)
     print('[MY CALC Depth error]')
     box_depth_error_calculation(train_GT_depth, train_CALC_depth, 5)
     sys.stdout = org_stdout
     f.close()
-    print(f'save in KITTI_eval/{result_root}.txt')
+    print(f'save in KITTI_eval/{eval_root}.txt')
     
 def print_info(checkpoint, cfg):
     class_list = cfg['class_list']

@@ -1,13 +1,12 @@
-import csv
 import glob
 import cv2
 import os
 import numpy as np
 from library.Math import create_corners, rotation_matrix
-from library.Plotting import project_3d_pt, plot_3d_box
-from torch_lib.KITTI_Dataset import FrameCalibrationData
+from library.Plotting import project_3d_pt
+from library.ron_utils import FrameCalibrationData
 
-def main():
+def generate_Kitti_label_3():
     calib = sorted(glob.glob('Kitti/training/calib/*.txt'))
     images_2 = sorted(glob.glob('Kitti/training/image_2/*.png'))
     labels_2 = sorted(glob.glob('Kitti/training/label_2/*.txt'))
@@ -64,5 +63,5 @@ def main():
 
 if __name__ == '__main__':
     print('START')
-    main()
+    generate_Kitti_label_3()
     print('DONE')
