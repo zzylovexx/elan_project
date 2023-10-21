@@ -497,51 +497,29 @@ def old_residual_loss(orient_residual,truth_bin,truth_residual,device):#truth_re
     
     return reg_loss,heading_res
 
-#0810 add
-def compute_cos_group_loss(REG_alphas, GT_alphas):
-    REG_alphas = REG_alphas.detach()
-    GT_alphas = GT_alphas.detach()
-    GT_groups = get_bin_classes(GT_alphas.tolist())
+# 1021 updated
+def compute_group_loss(REG_alphas, GT_alphas, loss_func):
+    GT_groups = get_bin_classes(GT_alphas)
     group_idxs = get_group_idxs(GT_groups) #nested list
-    
-    group_loss = torch.tensor(0)
+    group_loss = torch.tensor(0.)
     for idxs in group_idxs:
         if len(idxs) == 1:
             continue
         reg = REG_alphas[idxs]
         gt = GT_alphas[idxs]
         ratio = reg.shape[0]/REG_alphas.shape[0]
-        loss = ratio * cos_std_loss(reg, gt)
+        loss = ratio * loss_func(reg, gt)
         group_loss = torch.add(group_loss, loss)
-    return group_loss.requires_grad_(True)
+    return group_loss.requires_grad_(True) # add for 0. tensor
 
 def cos_std_loss(reg, gt):
     return torch.std(torch.cos(reg-gt))
-
-def compute_sin_sin_group_loss(REG_alphas, GT_alphas):
-    REG_alphas = REG_alphas.detach()
-    GT_alphas = GT_alphas.detach()
-    GT_groups = get_bin_classes(GT_alphas.tolist())
-    group_idxs = get_group_idxs(GT_groups) #nested list
-    
-    group_loss = torch.tensor(0)
-    for idxs in group_idxs:
-        if len(idxs) == 1:
-            continue
-        reg = REG_alphas[idxs]
-        gt = GT_alphas[idxs]
-        ratio = reg.shape[0]/REG_alphas.shape[0]
-        loss = ratio * sin_sin_std_loss(reg, gt)
-        group_loss = torch.add(group_loss, loss)
-    return group_loss.requires_grad_(True)
 
 def sin_sin_std_loss(reg, gt):
     return torch.std(torch.sin(reg)- torch.sin(gt))
 
 def compute_compare_group_loss(REG_alphas, GT_alphas):
-    REG_alphas = REG_alphas.detach()
-    GT_alphas = GT_alphas.detach()
-    GT_groups = get_bin_classes(GT_alphas.tolist())
+    GT_groups = get_bin_classes(GT_alphas)
     group_idxs = get_group_idxs(GT_groups) #nested list
     
     group_loss = torch.tensor(0)
@@ -562,6 +540,7 @@ def compare_abs_best_loss(reg, gt):
     best_delta_loss = torch.sin(reg_best_delta).mean() #using sin for sin(0)~0
     return best_delta_loss
 
+# TODO remove later, same function as compute_angle_by_bin_residual
 def compute_alpha(bin, residual, angle_per_class):
     bin_argmax = torch.max(bin, dim=1)[1]
     residual = residual[torch.arange(len(residual)), bin_argmax]
@@ -570,16 +549,31 @@ def compute_alpha(bin, residual, angle_per_class):
         alphas[i] = angle_correction(alphas[i])
     return alphas
 
-def compute_ry(bin_, residual, theta_rays, angle_per_class):
-    bin_argmax = torch.max(bin_, dim=1)[1]
-    residual = residual[torch.arange(len(residual)), bin_argmax] 
-    alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
-    rys = list()
-    for a, ray in zip(alphas, theta_rays):
-        rys.append(angle_correction(a+ray))
-    return torch.Tensor(rys)
-# USED IN EXTRA LABELING
+# TODO remove later, same function as compute_angle_by_bin_residual
+def compute_ry(bin, residual, theta_rays, angle_per_class): 
+    bin_argmax = torch.max(bin, dim=1)[1]
+    residual = residual[torch.arange(len(residual)), bin_argmax]
+    angles = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
+    for i in range(len(angles)):
+        angles[i] = angle_correction(angles[i]+theta_rays[i])
+    return angles
 
+# 1021 added
+def compute_angle_by_bin_residual(bin, residual, angle_per_class, theta_rays=None):
+    '''
+        theta_rays=None : Alpha
+        theta_rays!=None : Ry
+    '''
+    bin_argmax = torch.max(bin, dim=1)[1]
+    residual = residual[torch.arange(len(residual)), bin_argmax] 
+    angles = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
+    if theta_rays==None:
+        theta_rays = torch.zeros_like(angles)
+    for i in range(len(angles)):
+        angles[i] = angle_correction(angles[i]+theta_rays[i])
+    return angles
+
+# USED IN EXTRA LABELING
 def get_bin_classes(array, num_bin=60):
     org_classes = list()
     for value in array:
@@ -755,7 +749,7 @@ def loss_dict_add(loss_dict, batch_size, bin, residual, dim, total, group, consi
     loss_dict['dim'] += dim*batch_size
     loss_dict['bin'] += bin*batch_size
     loss_dict['residual'] += residual*batch_size
-    loss_dict['theta'] = loss_dict['bin'] + loss_dict['theta']
+    loss_dict['theta'] = loss_dict['bin'] + loss_dict['residual']
     # mine
     loss_dict['group'] += group*batch_size
     loss_dict['C_dim'] += consist_dim*batch_size

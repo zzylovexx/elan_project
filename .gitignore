@@ -203,3 +203,7 @@ Elan_3d_box/
 *.txt
 IVAvalid_for_NCTU/
 IVA_scenario_data_NCTU/
+
+sh_KITTI_train_BL[0-9].sh
+sh_KITTI_train_D[0-9].sh
+sh_KITTI_train_DA[0-9].sh
