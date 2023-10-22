@@ -59,7 +59,7 @@ def main():
     epochs = FLAGS.epoch
     network = FLAGS.network
     batch_size = 16 #64 worse than 8
-    weight_dict = {'dim':1, 'theta':1, 'group': 0.1, 'C_dim':1, 'C_angle':0.2, 'depth':0.05, 'iou':0.2}
+    weight_dict = {'dim':1, 'theta':1, 'group': 1, 'C_dim':1, 'C_angle':0.2, 'depth':0.05, 'iou':0.2}
     # make weights folder
     cfg['bins'] = bin_num
     cfg['cond'] = is_cond
