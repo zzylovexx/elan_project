@@ -152,6 +152,7 @@ def main():
     print('total_batches', len(train_loader))
     start = time.time()
     for epoch in range(start_epoch+1, epochs+1):
+        # ---------------------------------------- TRAINING PART ---------------------------------------- #
         model.train()
         train_loss_dict = init_loss_dict()
         before_par = [par.clone() for par in list(model.parameters())]
@@ -299,12 +300,6 @@ def main():
                     C_angle_loss = torch.tensor(0.0).to(device)
                 # group_loss
                 if is_group > 0 :
-                    if is_group == 1:
-                        group_loss_func = cos_std_loss 
-                    elif is_group == 2:
-                        group_loss_func = sin_sin_std_loss
-                    elif is_group == 3:
-                        group_loss_func = compare_abs_best_loss
                     reg_rys = compute_angle_by_bin_residual(bin_L, residual_L, angle_per_class, gt_theta_ray_L).to(device)
                     group_loss = weight_dict['group'] * compute_group_loss(reg_rys, gt_rys, loss_func=group_loss_func)
                 else:

@@ -6,19 +6,21 @@ R_PATH="$DATE"
 L_PATH=""
 
 DEVICE=2
+# hyper-parameter
 TYPE=2 # 0:BL, 1:C_dim, 2:C_angle, 3 C_Both
 IOU=0 # 0:NO, 1:REG alpha (iou), 2:GT alpha (iouA) [TODO] 3:GT dim?
 DEPTH=0 # 0:NO, 1:REG alpha (dep), 2: GT alpha (depA)
+GROUP=0 # 0:NO, 1:cos, 2:sin_sin, 3:compare
+
+#FIXED
 AUGMENT=0
-# hyper-parameter
+EPOCH=50
+WARMUP=0
 NETWORK=0 # 0:vgg19_bn, 1:resnet18, 2:densenet121
 BIN=4
-GROUP=0 # 0:NO, 1:cos, 2:sin_sin, 3:compare
-#FIXED
-EPOCH=2
-WARMUP=50
 # not done yet
 COND=0
+#
 ZERO=0
 ONE=1
 TWO=2

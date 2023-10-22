@@ -115,4 +115,4 @@ echo "SHELL R_PATH:"$R_PATH
 python KITTI_train_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -IOU=$IOU -A=$AUGMENT -L_PATH=$L_PATH
 python KITTI_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH -D=$DEVICE -N=$NETWORK
 echo "SHELL FINISHED"
-#sh ./sh_KITTI_train_all2.sh
+#sh ./sh_KITTI_train_Group2.sh
