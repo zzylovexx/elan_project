@@ -34,6 +34,15 @@ class vgg_Model(nn.Module):
                     nn.Dropout(),
                     nn.Linear(512, 3)
                 )
+        self.truncation = nn.Sequential(
+                    nn.Linear(512 * 7 * 7, 512),
+                    nn.ReLU(True),
+                    nn.Dropout(),
+                    nn.Linear(512, 512),
+                    nn.ReLU(True),
+                    nn.Dropout(),
+                    nn.Linear(512, 1)
+                )
 
     def forward(self, x):
         x = self.features(x) #vgg output 512 x 7 x 7
@@ -41,7 +50,8 @@ class vgg_Model(nn.Module):
         orientation = self.orientation(x)
         confidence = self.confidence(x)
         dimension = self.dimension(x)
-        return orientation, confidence, dimension
+        truncation = self.truncation(x)
+        return orientation, confidence, dimension, truncation
 
 class resnet_Model(nn.Module):
     def __init__(self, features=None, bins=4):
