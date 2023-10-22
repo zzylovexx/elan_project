@@ -1,7 +1,4 @@
-import torch
-import numpy as np
 import torch.nn as nn
-import torch.nn.functional as F
 
 class vgg_Model(nn.Module):
     def __init__(self, features=None, bins=4):

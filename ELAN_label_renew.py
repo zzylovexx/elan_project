@@ -1,6 +1,5 @@
 import os
 import glob
-
 import numpy as np
 
 def angle_correction(angle):
@@ -28,11 +27,9 @@ def box_correction(left, right, top, btm, img_W=1280, img_H=720):
     btm = min(btm, img_H)
     return left, right, top, btm
 
-def main():
-    #data_root = 'Elan_3d_box' 
-    data_root = 'Elan_3d_box_230808'
-    labels = glob.glob(f'{data_root}/label_2/*.txt')
-    print(len(labels))
+def label_renew(data_root):
+    
+    labels = sorted(glob.glob(f'{data_root}/label_2/*.txt'))
     img_W  = 1280
     img_H = 720
     os.makedirs(f'{data_root}/renew_label', exist_ok=True)
@@ -79,4 +76,7 @@ def main():
             print(i)
 
 if __name__=='__main__':
-    main()
+    print('Start label renewing')
+    #data_root = 'Elan_3d_box' 
+    #data_root = 'Elan_3d_box_230808'
+    label_renew(data_root='Elan_3d_box')

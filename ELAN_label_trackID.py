@@ -25,7 +25,7 @@ def tracking_obj_by_labels(labels, images, WRITE_FILE=False, folder='renew_label
                 match = False
                 for key in tracking_dict.keys():
                     last_box2d = tracking_dict[key].box2d
-                    iou_value = iou_2d(now_box2d, last_box2d)
+                    iou_value = calc_IoU_2d(now_box2d, last_box2d)
                     last_frame = tracking_dict[key].frames[-1]
                     if iou_value > 0.6 and idx - last_frame < 5:
                         #print(f'MATCHED:{iou_value:.2f}')

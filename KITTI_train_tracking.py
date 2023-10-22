@@ -138,13 +138,26 @@ def main():
             track_labels = open(label).readlines()
             last_frame = 0, 0
             last_Track_id = None
+            crops = list()
             for t_label in track_labels:
                 line = t_label.split()
                 frame = int(line[0])
                 track_id = int(line[1])
                 class_ = line[2]
-
+                
                 if class_.lower() not in cfg['class_list']:
+                    continue
+                '''
+                if height >= 40 and self.trucation <= 0.15 and self.occlusion <= 0:
+                    self.level_str = 'Easy'
+                    return 1  # Easy
+                elif height >= 25 and self.trucation <= 0.3 and self.occlusion <= 1:
+                    self.level_str = 'Moderate'
+                '''
+                truncation = float(line[3])
+                occlusion = float(line[4])
+                height = float(line[9]) - float(line[7]) + 1
+                if not (height >= 40 and truncation <= 0.15 and occlusion <= 0) and not (height >= 25 and truncation <= 0.3 and occlusion <= 1):
                     continue
                 # obj in the same frame_idx
                 if frame == last_frame:
@@ -159,9 +172,10 @@ def main():
                     img = cv2.cvtColor(cv2.imread(f'Kitti/training/image_02/{folder}/{frame:06}.png'), cv2.COLOR_BGR2RGB)
                     objects = [Object3d(line) for line in lines]
                     for obj, f, id_ in zip(objects, Frames, Track_id):
-                        obj.set_track_info(f, id_)
+                        if obj.level in cfg['diff_list']:
+                            obj.set_track_info(f, id_)
+                            crops.append(process(img[obj.box2d[1]:obj.box2d[3]+1, obj.box2d[0]:obj.box2d[2]+1]))
                     
-                    crops = [process(img[obj.box2d[1]:obj.box2d[3]+1, obj.box2d[0]:obj.box2d[2]+1]) for obj in objects]
                     crops = torch.stack(crops).to(device)
                     gt_labels = get_object_label(objects, bin_num)
                     gt_bin = gt_labels['bin'].to(device)
@@ -216,7 +230,7 @@ def main():
                     avg_theta_loss += theta_loss.item()*len(lines)
                     avg_dim_loss += dim_loss.item()*len(lines)
                     #avg_depth_loss += depth_loss.item()*len(lines) # my
-                    avg_total_loss += loss.item()*len(lines)
+                    avg_total_loss += loss.item()*batch_size
                     avg_consist_loss += consist_loss.item()*len(lines) # my
                     avg_angle_loss += angle_loss.item()*len(lines) # my
 
@@ -231,6 +245,7 @@ def main():
                     lines = [t_label[len(line[0])+len(line[1])+2:]]
                     Frames = [frame]
                     Track_id = [track_id]
+                    crops = list()
                     #print(now_id, last_id)
                     
                 last_frame = frame
@@ -243,7 +258,7 @@ def main():
         avg_residual_loss/=obj_count
         avg_dim_loss/=obj_count
         avg_theta_loss/=obj_count
-        avg_depth_loss/=obj_count
+        #avg_depth_loss/=obj_count
         avg_total_loss/=obj_count
         avg_consist_loss/=obj_count
         avg_angle_loss/=obj_count
@@ -254,7 +269,7 @@ def main():
         writer.add_scalar(f'{train_config}/total_loss', avg_total_loss, epoch)
         writer.add_scalar(f'{train_config}/consist_loss', avg_consist_loss, epoch)
         writer.add_scalar(f'{train_config}/ry_angle_loss', avg_angle_loss, epoch)
-        
+        print('object count', obj_count)
         print("--- epoch %s --- [loss: %.3f],[bin_loss:%.3f],[residual_loss:%.3f],[dim_loss:%.3f],[consist_loss:%.3f],[angle_loss:%.3f]" \
                 %(epoch, avg_total_loss, avg_bin_loss, avg_residual_loss, avg_dim_loss, avg_consist_loss, avg_angle_loss))
         
@@ -281,15 +296,6 @@ def main():
             
     writer.close()
     print(f'Elapsed time:{(time.time()-start)//60}min')
-
-def compute_ry(bin_, residual, theta_rays, angle_per_class):
-    bin_argmax = torch.max(bin_, dim=1)[1]
-    residual = residual[torch.arange(len(residual)), bin_argmax] 
-    alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
-    rys = list()
-    for a, ray in zip(alphas, theta_rays):
-        rys.append(angle_correction(a+ray))
-    return torch.Tensor(rys)
 
 #different from Elan get_object_label
 def get_object_label(objects, bin_num=4):

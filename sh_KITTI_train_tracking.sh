@@ -1,9 +1,9 @@
 # check every time
-DATE="0905"
+DATE="0907"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
-DEVICE=2
-TYPE=1 # 0 dim, 1 angle, 2 both, 3 BL
+DEVICE=1
+TYPE=2 # 0 dim, 1 angle, 2 both, 3 BL
 NETWORK=0 #0:vgg19_bn, 1:resnet18, 2:densenet121
 AUGMENT=0
 DEPTH=0
@@ -92,6 +92,6 @@ PKL=$PKL"_$EPOCH.pkl"
 echo "SHELL W_PATH:"$W_PATH
 echo "SHELL PKL:"$PKL
 echo "SHELL R_PATH:"$R_PATH
-#python KITTI_train_tracking.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -A=$AUGMENT 
+python KITTI_train_tracking.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -A=$AUGMENT 
 python KITTI_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH -D=$DEVICE -N=$NETWORK
 echo "SHELL FINISHED"

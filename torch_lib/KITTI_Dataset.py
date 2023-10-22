@@ -1,15 +1,25 @@
 import os, cv2, csv
 from torch.utils import data
 import numpy as np
-from library.ron_utils import angle2class, angle_correction, flip_orient
+from library.ron_utils import angle2class, angle_correction, flip_orient, FrameCalibrationData
+from KITTI_label_3 import generate_Kitti_label_3
 
 class KITTI_Dataset(data.Dataset):
     def __init__(self, cfg, process, split='train', is_flip=False):
         path = cfg['path']
         self.label2_path = os.path.join(path, 'label_2')
         self.img2_path = os.path.join(path, 'image_2')
-        self.label3_path = os.path.join(path, 'label_3')
-        self.img3_path = os.path.join(path, 'image_3')
+        if os.name.lower()=='posix':
+            print('Load Right Images')
+            self.label3_path = os.path.join(path, 'label_3')
+            #TODO label3
+            if not os.path.isdir(self.label3_path): # generate label_3
+                print('Generating Kitti_label_3')
+                generate_Kitti_label_3()
+            self.img3_path = os.path.join(path, 'image_3')
+        elif os.name.lower()=='nt':
+            self.label3_path = os.path.join(path, 'label_2')
+            self.img3_path = os.path.join(path, 'image_2')
 
         self.calib_path = os.path.join(path, 'calib') 
         self.extra_label_path = os.path.join(path, 'extra_label') #using generated extra label
@@ -74,7 +84,7 @@ class KITTI_Dataset(data.Dataset):
             # left image
             obj_target = dict()
             obj_target['Class'] = obj_L.cls_type
-            obj_target['Truncation'] = obj_L.trucation
+            obj_target['Truncation'] = obj_L.truncation
             obj_target['Box2d'] = obj_L.box2d
             obj_target['Alpha'] = obj_L.alpha
             obj_target['Ry'] = obj_L.ry
@@ -89,7 +99,7 @@ class KITTI_Dataset(data.Dataset):
             # right image
             obj_target = dict()
             obj_target['Class'] = obj_R.cls_type
-            obj_target['Truncation'] = obj_R.trucation
+            obj_target['Truncation'] = obj_R.truncation
             obj_target['Box2d'] = obj_R.box2d
             obj_target['Alpha'] = obj_R.alpha
             obj_target['Ry'] = obj_R.ry
@@ -108,7 +118,7 @@ class Object3d(object):
         label = line.strip().split(' ')
         self.src = line
         self.cls_type = label[0].lower()
-        self.trucation = float(label[1])
+        self.truncation = float(label[1])
         self.occlusion = float(label[2])  # 0:fully visible 1:partly occluded 2:largely occluded 3:unknown
         self.alpha = float(label[3])
         # str->float->np.int32
@@ -160,17 +170,17 @@ class Object3d(object):
     def get_obj_level(self):
         height = float(self.box2d[3]) - float(self.box2d[1]) + 1
 
-        if self.trucation == -1:
+        if self.truncation == -1:
             self.level_str = 'DontCare'
             return 0
 
-        if height >= 40 and self.trucation <= 0.15 and self.occlusion <= 0:
+        if height >= 40 and self.truncation <= 0.15 and self.occlusion <= 0:
             self.level_str = 'Easy'
             return 1  # Easy
-        elif height >= 25 and self.trucation <= 0.3 and self.occlusion <= 1:
+        elif height >= 25 and self.truncation <= 0.3 and self.occlusion <= 1:
             self.level_str = 'Moderate'
             return 2  # Moderate
-        elif height >= 25 and self.trucation <= 0.5 and self.occlusion <= 2:
+        elif height >= 25 and self.truncation <= 0.5 and self.occlusion <= 2:
             self.level_str = 'Hard'
             return 3  # Hard
         else:
@@ -197,7 +207,7 @@ class Object3d(object):
 
     def to_str(self):
         print_str = '%s %.3f %.3f %.3f box2d: %s hwl: [%.3f %.3f %.3f] pos: %s ry: %.3f' \
-                            % (self.cls_type, self.trucation, self.occlusion, self.alpha, self.box2d, self.h, self.w, self.l,
+                            % (self.cls_type, self.truncation, self.occlusion, self.alpha, self.box2d, self.h, self.w, self.l,
                                 self.pos, self.ry)
         return print_str
 
@@ -206,104 +216,20 @@ class Object3d(object):
         H, W, L = self.h, self.w, self.l
         X, Y, Z = self.pos
         print_str = '%s %.1f %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f' \
-                     % (self.cls_type, self.trucation, self.occlusion, self.alpha, left, top, right, btm,
+                     % (self.cls_type, self.truncation, self.occlusion, self.alpha, left, top, right, btm,
                         W, H, L, X, Y, Z, self.ry)
         return print_str
     
-    def REG_result_to_kitti_format_label(self, reg_alpha, reg_dim, reg_pos):
+    def REG_result_to_kitti_format_label(self, **reg_values): #keys:alpha, dim, pos, trun
         left, top, right, btm = self.box2d
+        reg_alpha = reg_values['alpha']
+        reg_dim = reg_values['dim']
+        reg_pos = reg_values['pos']
+        reg_trun = reg_values['trun'] if 'trun' in reg_values.keys() else self.truncation
         H, W, L = reg_dim
         X, Y, Z = reg_pos
         reg_ry = self.ry - self.alpha + reg_alpha
         print_str = '%s %.1f %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f' \
-                     % (self.cls_type, self.trucation, self.occlusion, reg_alpha, left, top, right, btm,
+                     % (self.cls_type, reg_trun, self.occlusion, reg_alpha, left, top, right, btm,
                         W, H, L, X, Y, Z, reg_ry)
         return print_str
-
-#https://github.com/HKUST-Aerial-Robotics/Stereo-RCNN/blob/63c6ab98b7a5e36c7bcfdec4529804fc940ee900/lib/model/utils/kitti_utils.py#L97C5-L97C25
-class FrameCalibrationData:
-    '''Frame Calibration Holder
-        p0-p3      Camera P matrix. Contains extrinsic 3x4    
-                   and intrinsic parameters.
-        r0_rect    Rectification matrix, required to transform points 3x3    
-                   from velodyne to camera coordinate frame.
-        tr_velodyne_to_cam0     Used to transform from velodyne to cam 3x4    
-                                coordinate frame according to:
-                                Point_Camera = P_cam * R0_rect *
-                                                Tr_velo_to_cam *
-                                                Point_Velodyne.
-    '''
-
-    def __init__(self, calib_path):
-        self.calib_path = calib_path
-        self.p0 = []
-        self.p1 = []
-        self.p2 = []
-        self.p3 = []
-        self.p2_2 = []
-        self.p2_3 = []
-        self.r0_rect = []
-        self.t_cam2_cam0 = []
-        self.tr_velodyne_to_cam0 = []
-        self.set_info(calib_path)
-        
-    def set_info(self, calib_path):
-        ''' 
-        Reads in Calibration file from Kitti Dataset.
-        
-        Inputs:
-        CALIB_PATH : Str PATH of the calibration file.
-        
-        Returns:
-        frame_calibration_info : FrameCalibrationData
-                                Contains a frame's full calibration data.
-        ^ z        ^ z                                      ^ z         ^ z
-        | cam2     | cam0                                   | cam3      | cam1
-        |-----> x  |-----> x                                |-----> x   |-----> x
-
-        '''
-        data_file = open(calib_path, 'r')
-        data_reader = csv.reader(data_file, delimiter=' ')
-        data = []
-
-        for row in data_reader:
-            data.append(row)
-
-        data_file.close()
-
-        p_all = []
-
-        for i in range(4):
-            p = data[i]
-            p = p[1:]
-            p = [float(p[i]) for i in range(len(p))]
-            p = np.reshape(p, (3, 4))
-            p_all.append(p)
-
-        # based on camera 0
-        self.p0 = p_all[0]
-        self.p1 = p_all[1]
-        self.p2 = p_all[2]
-        self.p3 = p_all[3]
-
-        # based on camera 2
-        self.p2_2 = np.copy(p_all[2]) 
-        self.p2_2[0,3] = self.p2_2[0,3] - self.p2[0,3]
-
-        self.p2_3 = np.copy(p_all[3]) 
-        self.p2_3[0,3] = self.p2_3[0,3] - self.p2[0,3]
-
-        self.t_cam2_cam0 = np.zeros(3)
-        self.t_cam2_cam0[0] = (self.p2[0,3] - self.p0[0,3])/self.p2[0,0]
-
-        # Read in rectification matrix
-        tr_rect = data[4]
-        tr_rect = tr_rect[1:]
-        tr_rect = [float(tr_rect[i]) for i in range(len(tr_rect))]
-        self.r0_rect = np.reshape(tr_rect, (3, 3))
-
-        # Read in velodyne to cam matrix
-        tr_v2c = data[5]
-        tr_v2c = tr_v2c[1:]
-        tr_v2c = [float(tr_v2c[i]) for i in range(len(tr_v2c))]
-        self.tr_velodyne_to_cam0 = np.reshape(tr_v2c, (3, 4))

@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from .Plotting import *
+import math
 
 def calc_theta_ray(width, box2d, proj_matrix):#透過跟2d bounding box 中心算出射線角度
     box2d = np.array(box2d).flatten()
@@ -15,18 +16,17 @@ def calc_theta_ray(width, box2d, proj_matrix):#透過跟2d bounding box 中心�
     dx = abs(dx)
     angle = np.arctan( (2*dx*np.tan(fovx/2)) / width )
     angle = angle * mult
-
     return angle
 
 def sign(num):
     return 1 if num>=0 else -1
 
 def get_box_center(box2d):
-    box2d = np.array(box2d).flatten()
-    return [(box2d[0]+box2d[2])//2, (box2d[1]+box2d[3])//2]
+    box2d = np.array(box2d, dtype=np.int32).flatten()
+    return [(box2d[0]+box2d[2])//2, (box2d[1]+box2d[3])//2] #x, y
 
 def get_box_size(box2d):
-    box2d = np.array(box2d).flatten()
+    box2d = np.array(box2d, dtype=np.int32).flatten()
     width = max(box2d[2]-box2d[0], 1)
     height = max(box2d[3]-box2d[1], 1)
     return width, height
@@ -447,9 +447,9 @@ class TrackingObject(object):
         print(f'Alpha:{self.alphas}, Ry:{self.rys}')
         print(f'Trun:{self.truncated}, Occ:{self.occluded}')
 
-def iou_2d(box1, box2):
-    box1 = box1.flatten()
-    box2 = box2.flatten()
+def calc_IoU_2d(box1, box2):
+    box1 = np.array(box1, dtype=np.int32).flatten()
+    box2 = np.array(box2, dtype=np.int32).flatten()
     area1 = (box1[2]-box1[0])*(box1[3]-box1[1])
     area2 = (box2[2]-box2[0])*(box2[3]-box2[1])
     area_sum = abs(area1) + abs(area2)
@@ -463,8 +463,10 @@ def iou_2d(box1, box2):
     if x1 >= x2 or y1 >= y2:
         return 0
     else:
-        inter_area = abs((x2-x1)*(y2-y1))
-    return inter_area/(area_sum-inter_area)
+        area_overlap = abs((x2-x1)*(y2-y1))
+
+    area_union = area_sum-area_overlap
+    return area_overlap/area_union
 
 def keep_same_seeds(seed):
     torch.manual_seed(seed)
@@ -475,61 +477,49 @@ def keep_same_seeds(seed):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
-#0810 add
+#0810 add #somewhere wrong
 def compute_residual_loss(residual, gt_bin, gt_residual, device, reduction='mean'):
     one_hot = torch.zeros((residual).shape).to(device)
     # make one hot map
     for i in range(gt_bin.shape[0]):
+        if gt_bin[i] >= residual.shape[1] or gt_bin[i] < 0:
+            print(gt_bin)
         one_hot[i][gt_bin[i]] = 1
     reg_residual = torch.sum(residual * one_hot.to(device), axis=1)
     residual_loss = F.l1_loss(reg_residual, gt_residual, reduction=reduction)
     return residual_loss
 
-#0810 add
-def compute_cos_group_loss(REG_alphas, GT_alphas):
-    REG_alphas = REG_alphas.detach()
-    GT_alphas = GT_alphas.detach()
-    GT_groups = get_bin_classes(GT_alphas.tolist())
-    group_idxs = get_group_idxs(GT_groups) #nested list
+def old_residual_loss(orient_residual,truth_bin,truth_residual,device):#truth_residual:B,truth_bin:B,orient_residual:B,12
+
+    one_hot_map=torch.zeros((orient_residual.shape)).to(device).scatter_(dim=1,index=truth_bin.view(-1,1),value=1)#(batch,bin_class)
+    heading_res=torch.sum(orient_residual*one_hot_map,dim=1)
+    reg_loss=F.l1_loss(heading_res,truth_residual,reduction='mean')
     
-    group_loss = torch.tensor(0)
+    return reg_loss,heading_res
+
+# 1021 updated
+def compute_group_loss(REG_alphas, GT_alphas, loss_func):
+    GT_groups = get_bin_classes(GT_alphas)
+    group_idxs = get_group_idxs(GT_groups) #nested list
+    group_loss = torch.tensor(0.)
     for idxs in group_idxs:
         if len(idxs) == 1:
             continue
         reg = REG_alphas[idxs]
         gt = GT_alphas[idxs]
         ratio = reg.shape[0]/REG_alphas.shape[0]
-        loss = ratio * cos_std_loss(reg, gt)
+        loss = ratio * loss_func(reg, gt)
         group_loss = torch.add(group_loss, loss)
-    return group_loss.requires_grad_(True)
+    return group_loss.requires_grad_(True) # add for 0. tensor
 
 def cos_std_loss(reg, gt):
     return torch.std(torch.cos(reg-gt))
-
-def compute_sin_sin_group_loss(REG_alphas, GT_alphas):
-    REG_alphas = REG_alphas.detach()
-    GT_alphas = GT_alphas.detach()
-    GT_groups = get_bin_classes(GT_alphas.tolist())
-    group_idxs = get_group_idxs(GT_groups) #nested list
-    
-    group_loss = torch.tensor(0)
-    for idxs in group_idxs:
-        if len(idxs) == 1:
-            continue
-        reg = REG_alphas[idxs]
-        gt = GT_alphas[idxs]
-        ratio = reg.shape[0]/REG_alphas.shape[0]
-        loss = ratio * sin_sin_std_loss(reg, gt)
-        group_loss = torch.add(group_loss, loss)
-    return group_loss.requires_grad_(True)
 
 def sin_sin_std_loss(reg, gt):
     return torch.std(torch.sin(reg)- torch.sin(gt))
 
 def compute_compare_group_loss(REG_alphas, GT_alphas):
-    REG_alphas = REG_alphas.detach()
-    GT_alphas = GT_alphas.detach()
-    GT_groups = get_bin_classes(GT_alphas.tolist())
+    GT_groups = get_bin_classes(GT_alphas)
     group_idxs = get_group_idxs(GT_groups) #nested list
     
     group_loss = torch.tensor(0)
@@ -550,16 +540,40 @@ def compare_abs_best_loss(reg, gt):
     best_delta_loss = torch.sin(reg_best_delta).mean() #using sin for sin(0)~0
     return best_delta_loss
 
+# TODO remove later, same function as compute_angle_by_bin_residual
 def compute_alpha(bin, residual, angle_per_class):
     bin_argmax = torch.max(bin, dim=1)[1]
-    residual = residual[torch.arange(len(residual)), bin_argmax] 
+    residual = residual[torch.arange(len(residual)), bin_argmax]
     alphas = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
     for i in range(len(alphas)):
         alphas[i] = angle_correction(alphas[i])
     return alphas
 
-# USED IN EXTRA LABELING
+# TODO remove later, same function as compute_angle_by_bin_residual
+def compute_ry(bin, residual, theta_rays, angle_per_class): 
+    bin_argmax = torch.max(bin, dim=1)[1]
+    residual = residual[torch.arange(len(residual)), bin_argmax]
+    angles = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
+    for i in range(len(angles)):
+        angles[i] = angle_correction(angles[i]+theta_rays[i])
+    return angles
 
+# 1021 added
+def compute_angle_by_bin_residual(bin, residual, angle_per_class, theta_rays=None):
+    '''
+        theta_rays=None : Alpha
+        theta_rays!=None : Ry
+    '''
+    bin_argmax = torch.max(bin, dim=1)[1]
+    residual = residual[torch.arange(len(residual)), bin_argmax] 
+    angles = angle_per_class*bin_argmax + residual #mapping bin_class and residual to get alpha
+    if theta_rays==None:
+        theta_rays = torch.zeros_like(angles)
+    for i in range(len(angles)):
+        angles[i] = angle_correction(angles[i]+theta_rays[i])
+    return angles
+
+# USED IN EXTRA LABELING
 def get_bin_classes(array, num_bin=60):
     org_classes = list()
     for value in array:
@@ -617,3 +631,243 @@ def flip_orient(angle):
         return round(3.14-angle, 2)
     elif angle<0:
         return round(-3.14-angle, 2)
+    
+## 0919 added
+
+def loc3d_2_box2d_np(orient, location, dimension, cam_to_img):
+    prj_points = []
+    R = np.array([[np.cos(orient), 0, np.sin(orient)], [0, 1, 0], [-np.sin(orient), 0, np.cos(orient)]])
+    corners = create_corners(dimension, location, R)
+    for corner in corners:
+        point = project_3d_pt(corner, cam_to_img)
+        prj_points.append(point)
+
+    prj_points = np.array(prj_points)
+    prj_points_X = prj_points[:,0]
+    prj_points_Y = prj_points[:,1]
+    prj_box = [min(prj_points_X), min(prj_points_Y), max(prj_points_X), max(prj_points_Y)]
+    prj_box = np.array(prj_box, dtype=np.int32)
+    return prj_box
+
+def calc_GIoU_2d(box1, box2):
+    box1 = np.array(box1, dtype=np.int32).flatten()
+    box2 = np.array(box2, dtype=np.int32).flatten()
+    area1 = (box1[2]-box1[0])*(box1[3]-box1[1])
+    area2 = (box2[2]-box2[0])*(box2[3]-box2[1])
+    area_sum = abs(area1) + abs(area2)
+
+    #計算重疊方形座標
+    x1 = max(box1[0], box2[0]) # left
+    y1 = max(box1[1], box2[1]) # top
+    x2 = min(box1[2], box2[2]) # right
+    y2 = min(box1[3], box2[3]) # btm
+
+    if x1 >= x2 or y1 >= y2:
+        return 0
+    else:
+        area_overlap = abs((x2-x1)*(y2-y1))
+
+    area_union = area_sum-area_overlap
+    IoU = area_overlap/area_union
+
+    #計算凸型面積 (包住AB的長方形 - union AB)
+    x1 = min(box1[0], box2[0]) # left
+    y1 = min(box1[1], box2[1]) # top
+    x2 = max(box1[2], box2[2]) # right
+    y2 = max(box1[3], box2[3]) # btm
+    
+    if x1 >= x2 or y1 >= y2:
+        area_C = 0
+    else:
+        area_C = abs((x2-x1)*(y2-y1))
+
+    GIoU= IoU - (area_C-area_union)/area_C
+    return GIoU
+
+def calc_IoU_loss(box2d, theta_rays, dims, alphas, calib):
+    iou_loss = torch.tensor(0.0)
+    rys = alphas + theta_rays
+    for i in range(len(dims)):
+        reg_loc, _ = calc_location(dims[i], calib[i], box2d[i], rys[i], theta_rays[i])
+        prj_box2d = loc3d_2_box2d_np(rys[i], reg_loc, dims[i], calib[i])
+        #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
+        #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
+        iou_loss += torch.tensor(1 - calc_IoU_2d(box2d[i], prj_box2d))
+        #iou_loss += torch.tensor(1 - calc_GIoU_2d(gt_box2d[i], prj_box2d)) GIoU loss
+    return iou_loss / len(dims)
+
+def box2d_area(box):
+    if len(box)==2: #[ [left, top], [right, btm] ]
+        area = (box[1][0]-box[0][0])*(box[1][1]-box[0][1])
+    elif len(box)==4: #[left, top, right, btm]
+        area = (box[2]-box[0])*(box[3]-box[1]) #有可能會overflow    
+    return area
+
+class IoULoss(torch.nn.Module):
+    def __init__(self, weight):
+        # --------------------------------------------
+        # Initialization
+        # --------------------------------------------
+        super(IoULoss, self).__init__()
+        self.weight = weight
+#gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib
+    def forward(self, gt_box2d, gt_theta_ray, reg_dims, reg_alphas, calib):
+        # --------------------------------------------
+        # Define forward pass
+        # --------------------------------------------
+        iou_loss = torch.tensor(0.0)
+        reg_ry = reg_alphas + gt_theta_ray
+        for i in range(len(reg_dims)):
+            reg_loc, _ = calc_location(reg_dims[i], calib[i], gt_box2d[i], reg_ry[i], gt_theta_ray[i])
+            prj_box2d = loc3d_2_box2d_np(reg_ry[i], reg_loc, reg_dims[i], calib[i])
+            iou_value = calc_IoU_2d(gt_box2d[i], prj_box2d)
+            #iou_loss += torch.tensor(1 - iou_value) #0919ver. 會和giou_loss大小相同
+            #iou_loss += -1 * torch.log(torch.tensor(iou_value)) #https://zhuanlan.zhihu.com/p/359982543
+            iou_loss += F.l1_loss(torch.tensor(1.0), torch.tensor(iou_value)) #0926ver. cause somewhere wrong above (not converge)
+        iou_loss /= len(reg_dims)
+        return self.weight * iou_loss
+    
+def init_loss_dict():
+    loss_dict = dict()
+    # org
+    loss_dict['total'] = 0 
+    loss_dict['dim'] = 0
+    loss_dict['bin'] = 0
+    loss_dict['residual'] = 0
+    loss_dict['theta'] = 0 # theta = bin+residual
+    # mine
+    loss_dict['group'] = 0
+    loss_dict['C_dim'] = 0
+    loss_dict['C_angle'] = 0
+    loss_dict['depth'] = 0
+    loss_dict['iou'] = 0
+    loss_dict['trun'] = 0
+    return loss_dict
+
+# expired
+def old_loss_dict_add(loss_dict, batch_size, bin, residual, dim, total, group, consist_dim, consist_angle, depth, iou):
+    # org
+    loss_dict['total'] += total*batch_size
+    loss_dict['dim'] += dim*batch_size
+    loss_dict['bin'] += bin*batch_size
+    loss_dict['residual'] += residual*batch_size
+    loss_dict['theta'] = loss_dict['bin'] + loss_dict['residual']
+    # mine
+    loss_dict['group'] += group*batch_size
+    loss_dict['C_dim'] += consist_dim*batch_size
+    loss_dict['C_angle'] += consist_angle*batch_size
+    loss_dict['depth'] += depth*batch_size
+    loss_dict['iou'] += iou*batch_size
+    return loss_dict
+
+def loss_dict_add(loss_dict, batch_size, **losses): #.item()
+    for key in losses.keys():
+        if key not in loss_dict.keys(): # easier for adding new loss
+            loss_dict[key] = 0
+        loss_dict[key] += losses[key]*batch_size
+    loss_dict['theta'] = loss_dict['bin'] + loss_dict['residual']
+    return loss_dict
+
+def calc_avg_loss(loss_dict, total_num): #len(dataset_train_all)
+    for key in loss_dict.keys():
+        loss_dict[key] /= total_num
+    return loss_dict
+
+def print_epoch_loss(loss_dict, epoch, type='Train'): #len(dataset_train_all)
+    print(f'--- epoch {epoch} {type}---', end=' ')
+    for key in loss_dict.keys():
+        if key == 'group': # for better observation
+            print()
+            print('\t\t\t', end='')
+        print(f'[{key}:{loss_dict[key]:.3f}]', end=', ')
+    print()
+
+# TODO MOVE to somewhere
+import csv
+#https://github.com/HKUST-Aerial-Robotics/Stereo-RCNN/blob/63c6ab98b7a5e36c7bcfdec4529804fc940ee900/lib/model/utils/kitti_utils.py#L97C5-L97C25
+class FrameCalibrationData:
+    '''Frame Calibration Holder
+        p0-p3      Camera P matrix. Contains extrinsic 3x4    
+                   and intrinsic parameters.
+        r0_rect    Rectification matrix, required to transform points 3x3    
+                   from velodyne to camera coordinate frame.
+        tr_velodyne_to_cam0     Used to transform from velodyne to cam 3x4    
+                                coordinate frame according to:
+                                Point_Camera = P_cam * R0_rect *
+                                                Tr_velo_to_cam *
+                                                Point_Velodyne.
+    '''
+
+    def __init__(self, calib_path):
+        self.calib_path = calib_path
+        self.p0 = []
+        self.p1 = []
+        self.p2 = []
+        self.p3 = []
+        self.p2_2 = []
+        self.p2_3 = []
+        self.r0_rect = []
+        self.t_cam2_cam0 = []
+        self.tr_velodyne_to_cam0 = []
+        self.set_info(calib_path)
+        
+    def set_info(self, calib_path):
+        ''' 
+        Reads in Calibration file from Kitti Dataset.
+        
+        Inputs:
+        CALIB_PATH : Str PATH of the calibration file.
+        
+        Returns:
+        frame_calibration_info : FrameCalibrationData
+                                Contains a frame's full calibration data.
+        ^ z        ^ z                                      ^ z         ^ z
+        | cam2     | cam0                                   | cam3      | cam1
+        |-----> x  |-----> x                                |-----> x   |-----> x
+
+        '''
+        data_file = open(calib_path, 'r')
+        data_reader = csv.reader(data_file, delimiter=' ')
+        data = []
+
+        for row in data_reader:
+            data.append(row)
+
+        data_file.close()
+
+        p_all = []
+
+        for i in range(4):
+            p = data[i]
+            p = p[1:]
+            p = [float(p[i]) for i in range(len(p))]
+            p = np.reshape(p, (3, 4))
+            p_all.append(p)
+
+        # based on camera 0
+        self.p0 = p_all[0]
+        self.p1 = p_all[1]
+        self.p2 = p_all[2]
+        self.p3 = p_all[3]
+
+        # based on camera 2
+        self.p2_2 = np.copy(p_all[2]) 
+        self.p2_2[0,3] = self.p2_2[0,3] - self.p2[0,3]
+
+        self.p2_3 = np.copy(p_all[3]) 
+        self.p2_3[0,3] = self.p2_3[0,3] - self.p2[0,3]
+
+        self.t_cam2_cam0 = np.zeros(3)
+        self.t_cam2_cam0[0] = (self.p2[0,3] - self.p0[0,3])/self.p2[0,0]
+
+        # Read in rectification matrix
+        tr_rect = data[4]
+        tr_rect = tr_rect[1:]
+        tr_rect = [float(tr_rect[i]) for i in range(len(tr_rect))]
+        self.r0_rect = np.reshape(tr_rect, (3, 3))
+
+        # Read in velodyne to cam matrix
+        tr_v2c = data[5]
+        tr_v2c = tr_v2c[1:]
+        tr_v2c = [float(tr_v2c[i]) for i in range(len(tr_v2c))]
+        self.tr_velodyne_to_cam0 = np.reshape(tr_v2c, (3, 4))

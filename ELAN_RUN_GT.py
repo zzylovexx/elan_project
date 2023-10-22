@@ -15,18 +15,6 @@ parser.add_argument("--weights-path", "-W_PATH", required=True, help='weights pa
 parser.add_argument("--result-path", "-R_PATH", required=True, help='path (folder name) of the generated pred-labels')
 parser.add_argument('--data-path', "-D_PATH", required=True, help='folder of the elan dataset')
 
-def plot_regressed_3d_bbox(img, cam_to_img, box2d, dimensions, alpha, theta_ray, detectionid):
-
-    # the math! returns X, the corners used for constraint
-    location, X = calc_location(dimensions, cam_to_img, box2d, alpha, theta_ray)
-
-    orient = alpha + theta_ray
-
-    #plot_2d_box(img, box2d, detectionid)
-    plot_3d_box(img, cam_to_img, orient, dimensions, location) # 3d boxes
-
-    return location, orient
-
 def main():
 
     FLAGS = parser.parse_args()
@@ -39,8 +27,11 @@ def main():
 
     device = torch.device(f'cuda:{FLAGS.device}') # 選gpu的index
     checkpoint = torch.load(weights_path, map_location=device) #if training on 2 GPU, mapping on the same device
-    normalize_type = 0#checkpoint['normal']
-    bin_num = checkpoint['bin']
+    normalize_type = checkpoint['normal']
+    try:
+        bin_num = checkpoint['bin']
+    except:
+        bin_num = checkpoint['cfg']['bins']
     angle_per_class = 2*np.pi/float(bin_num)
 
     my_vgg = vgg.vgg19_bn(weights='DEFAULT').to(device)
@@ -57,7 +48,6 @@ def main():
                               normalize])
 
     # Kitti image_2 dir / label_2 dir
-    print(data_root)
     img_root = os.path.join(data_root, 'image_2')
     label_root = os.path.join(data_root, 'renew_label')
     images = sorted(glob.glob(os.path.join(img_root, '*.png'), recursive=True))
@@ -69,61 +59,64 @@ def main():
             [0.000e+00, 1.418867e+03, 3.6e+02, 0],
             [0.000e+00, 000e+00, 1.0e+00, 0] ])
 
-    for i in range(len(renew_labels)):
-        img = cv2.imread(images[i])
-        lines = [x.strip() for x in open(renew_labels[i]).readlines()]
-        label_ELAN = ''
-        for idx, line in enumerate(lines):
-            #print(line)
-            elements = line.split()
-            if elements[0].lower() != 'car':
-                continue
-            for j in range(1, len(elements)):
-                elements[j] = float(elements[j])
+    with torch.no_grad():
+        for i in range(len(renew_labels)):
+            img = cv2.imread(images[i])
+            lines = [x.strip() for x in open(renew_labels[i]).readlines()]
+            label_ELAN = ''
             
-            class_ = elements[0]
-            truncate = elements[1]
-            occluded = elements[2]
+            for idx, line in enumerate(lines):
+                #print(line)
+                elements = line.split()
+                if elements[0].lower() != 'car':
+                    continue
+                for j in range(1, len(elements)):
+                    elements[j] = float(elements[j])
                 
-            top_left = (int(round(elements[4])), int(round(elements[5])))
-            btm_right = (int(round(elements[6])), int(round(elements[7])))
-            box2d = (top_left, btm_right)
-            dim_gt = [elements[8], elements[9], elements[10]] # height, width, length
-            crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1]
-            try:
-                crop = process(crop)
-            except:
-                print(renew_labels[i], line)
-            #2dbox
-            crop = torch.stack([crop]).to(device)
-            #Location = [elements[11], elements[12], elements[13]]
-            
-            alpha_gt = elements[3]
-            ry_gt = elements[14]
-            theta_ray = ry_gt - alpha_gt
-            
-            [RESIDUALs, BIN_CONFs, delta_DIMs] = model(crop)
-            bin_argmax = torch.max(BIN_CONFs, dim=1)[1]
-            orient_residual = RESIDUALs[torch.arange(len(RESIDUALs)), bin_argmax] 
-            Alphas = angle_per_class*bin_argmax + orient_residual #mapping bin_class and residual to get alpha
-            alpha_Elan = float(Alphas[0].data)
-            alpha_Elan = angle_correction(alpha_Elan)
-            dim_Elan = delta_DIMs.cpu().data.numpy()[0, :]
-            dim_Elan += ELAN_averages.get_item(class_)
+                class_ = elements[0]
+                truncate = elements[1]
+                occluded = elements[2]
+                    
+                top_left = (int(round(elements[4])), int(round(elements[5])))
+                btm_right = (int(round(elements[6])), int(round(elements[7])))
+                box2d = (top_left, btm_right)
+                #dim_gt = [elements[8], elements[9], elements[10]] # height, width, length
+                crop = img[top_left[1]:btm_right[1]+1, top_left[0]:btm_right[0]+1]
+                try:
+                    crop = process(crop)
+                except:
+                    print(renew_labels[i], line)
+                #2dbox
+                crop = torch.stack([crop]).to(device)
+                #Location = [elements[11], elements[12], elements[13]]
+                
+                alpha_gt = elements[3]
+                ry_gt = elements[14]
+                theta_ray = ry_gt - alpha_gt
+                
+                [RESIDUALs, BIN_CONFs, delta_DIMs] = model(crop)
+                bin_argmax = torch.max(BIN_CONFs, dim=1)[1]
+                orient_residual = RESIDUALs[torch.arange(len(RESIDUALs)), bin_argmax] 
+                Alphas = angle_per_class*bin_argmax + orient_residual #mapping bin_class and residual to get alpha
+                alpha_Elan = float(Alphas[0].data)
+                alpha_Elan = angle_correction(alpha_Elan)
+                dim_Elan = delta_DIMs.cpu().data.numpy()[0, :]
+                dim_Elan += ELAN_averages.get_item(class_)
 
-            loc, ry = plot_regressed_3d_bbox(img, cam_to_img, box2d, dim_Elan, alpha_Elan, theta_ray, idx)
+                loc, _ = calc_location(dim_Elan, cam_to_img, box2d, alpha_Elan, theta_ray)
+                ry = alpha_Elan + theta_ray
 
-            label_ELAN += '{CLASS} {T:.1f} {O} {A:.2f} {left} {top} {right} {btm} {H:.2f} {W:.2f} {L:.2f} {X:.2f} {Y:.2f} {Z:.2f} {Ry:.2f}\n'.format(
-                            CLASS=class_, T=truncate, O=occluded, A=alpha_Elan, left=box2d[0][0], top=box2d[0][1], right=box2d[1][0], btm=box2d[1][1],
-                            H=dim_Elan[0], W=dim_Elan[1], L=dim_Elan[2], X=loc[0], Y=loc[1], Z=loc[2], Ry=ry)
-        
-        new_label_path = renew_labels[i].replace(label_root, result_root + '/label_2')
-        with open(new_label_path, 'w') as ELAN_f:
-            ELAN_f.writelines(label_ELAN)
-        #cv2.imwrite(images[i].replace(img_root, result_root + '/image_2'), img)
-        
-        if i%500==0:
-            print(i)
+                label_ELAN += '{CLASS} {T:.1f} {O} {A:.2f} {left} {top} {right} {btm} {H:.2f} {W:.2f} {L:.2f} {X:.2f} {Y:.2f} {Z:.2f} {Ry:.2f}\n'.format(
+                                CLASS=class_, T=truncate, O=occluded, A=alpha_Elan, left=box2d[0][0], top=box2d[0][1], right=box2d[1][0], btm=box2d[1][1],
+                                H=dim_Elan[0], W=dim_Elan[1], L=dim_Elan[2], X=loc[0], Y=loc[1], Z=loc[2], Ry=ry)
+            
+            new_label_path = renew_labels[i].replace(label_root, result_root + '/label_2')
+            with open(new_label_path, 'w') as ELAN_f:
+                ELAN_f.writelines(label_ELAN)
+            #cv2.imwrite(images[i].replace(img_root, result_root + '/image_2'), img)
+            
+            if i%500==0:
+                print(i)
             
     print(new_label_path)
     
