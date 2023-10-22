@@ -306,16 +306,16 @@ def main():
                     group_loss = torch.tensor(0.0).to(device)
 
                 reg_alphas = compute_angle_by_bin_residual(bin_L, residual_L, angle_per_class)
-                reg_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')).to(device) + dim_L
+                reg_dims = dataset_train.get_cls_dim_avg('car').to(device) + dim_L.cpu().detach().numpy()
                 #gt_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')).to(device) + gt_dim
                 #compute on GPU
                 if is_depth > 0:
                     obj_W, obj_L = reg_dims[:,1], reg_dims[:,2]
                     if is_depth==1:
-                        depth_alphas = reg_alphas #dep
+                        depth_alphas = reg_alphas.cpu() #dep
                     elif is_depth==2:
-                        depth_alphas = gt_alphas #depA            
-                    calc_depths = calc_depth_with_alpha_theta_tensor(gt_img_W, gt_box2d, gt_calib, obj_W, obj_L, depth_alphas, gt_trun, device)
+                        depth_alphas = gt_alphas.cpu() #depA            
+                    calc_depths = calc_depth_with_alpha_theta(gt_img_W, gt_box2d, gt_calib, obj_W, obj_L, depth_alphas, gt_trun, device)
                     depth_loss = weight_dict['depth'] * F.l1_loss(calc_depths, gt_depths, reduction='mean')
                 else:
                     depth_loss = torch.tensor(0.0).to(device)
