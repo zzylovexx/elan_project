@@ -741,9 +741,11 @@ def init_loss_dict():
     loss_dict['C_angle'] = 0
     loss_dict['depth'] = 0
     loss_dict['iou'] = 0
+    loss_dict['trun'] = 0
     return loss_dict
 
-def loss_dict_add(loss_dict, batch_size, bin, residual, dim, total, group, consist_dim, consist_angle, depth, iou): #.item()
+# expired
+def old_loss_dict_add(loss_dict, batch_size, bin, residual, dim, total, group, consist_dim, consist_angle, depth, iou):
     # org
     loss_dict['total'] += total*batch_size
     loss_dict['dim'] += dim*batch_size
@@ -756,6 +758,14 @@ def loss_dict_add(loss_dict, batch_size, bin, residual, dim, total, group, consi
     loss_dict['C_angle'] += consist_angle*batch_size
     loss_dict['depth'] += depth*batch_size
     loss_dict['iou'] += iou*batch_size
+    return loss_dict
+
+def loss_dict_add(loss_dict, batch_size, **losses): #.item()
+    for key in losses.keys():
+        if key not in loss_dict.keys(): # easier for adding new loss
+            loss_dict[key] = 0
+        loss_dict[key] += losses[key]*batch_size
+    loss_dict['theta'] = loss_dict['bin'] + loss_dict['residual']
     return loss_dict
 
 def calc_avg_loss(loss_dict, total_num): #len(dataset_train_all)

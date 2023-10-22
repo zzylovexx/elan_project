@@ -220,12 +220,16 @@ class Object3d(object):
                         W, H, L, X, Y, Z, self.ry)
         return print_str
     
-    def REG_result_to_kitti_format_label(self, reg_alpha, reg_dim, reg_pos):
+    def REG_result_to_kitti_format_label(self, **reg_values): #keys:alpha, dim, pos, trun
         left, top, right, btm = self.box2d
+        reg_alpha = reg_values['alpha']
+        reg_dim = reg_values['dim']
+        reg_pos = reg_values['pos']
+        reg_trun = reg_values['trun'] if 'trun' in reg_values.keys() else self.truncation
         H, W, L = reg_dim
         X, Y, Z = reg_pos
         reg_ry = self.ry - self.alpha + reg_alpha
         print_str = '%s %.1f %d %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f' \
-                     % (self.cls_type, self.truncation, self.occlusion, reg_alpha, left, top, right, btm,
+                     % (self.cls_type, reg_trun, self.occlusion, reg_alpha, left, top, right, btm,
                         W, H, L, X, Y, Z, reg_ry)
         return print_str
