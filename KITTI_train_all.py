@@ -67,6 +67,9 @@ def main():
     cfg['network'] = network
     start_epoch = 0
     best_value = 100 # for record best epoch
+
+
+
     # continue training
     if len(FLAGS.latest_path) > 0:
         print('-------------CONTINUE TRAINING AND LOAD CHECKPOINT----------------')
@@ -88,6 +91,16 @@ def main():
     os.makedirs(log_path, exist_ok=True)
     writer = SummaryWriter(log_path)
     
+    if is_group == 1:
+        group_loss_func = cos_std_loss
+    elif is_group == 2:
+        group_loss_func = sin_sin_std_loss
+    elif is_group == 3:
+        group_loss_func = compare_abs_best_loss
+    if is_group > 0:
+        print('Group loss:', str(group_loss_func))
+
+
     # model
     print("Loading all detected objects in dataset...")
     start = time.time()
@@ -108,7 +121,7 @@ def main():
     train_loader = data.DataLoader(dataset_train_all, **params)
     valid_loader = data.DataLoader(dataset_valid, **params)
     print(f'LOAD time:{(time.time()-start)//60}min')
-    # 0818 added
+
     if network==0:
         my_vgg = vgg.vgg19_bn(weights='DEFAULT') #512x7x7
         model = vgg_Model(features=my_vgg.features, bins=bin_num).to(device)
@@ -192,11 +205,7 @@ def main():
                 #REG_alphas = compute_alpha(bin_L, residual_L, angle_per_class).to(device)
                 #group_loss = group_loss_func(REG_alphas, GT_alphas)
                 # 1021 group_ry_loss 
-                #cos_std_loss | sin_sin_std_loss | TODO check performance
-                if is_group == 1:
-                    group_loss_func = cos_std_loss 
-                if is_group == 2:
-                    group_loss_func = sin_sin_std_loss
+                #cos_std_loss | sin_sin_std_loss | compare_cos TODO check performance
                 reg_rys = compute_angle_by_bin_residual(bin_L, residual_L, angle_per_class, gt_theta_ray_L).to(device)
                 group_loss = weight_dict['group'] * compute_group_loss(reg_rys, gt_rys, loss_func=group_loss_func)
             else:
@@ -205,7 +214,6 @@ def main():
             reg_alphas = compute_angle_by_bin_residual(bin_L, residual_L, angle_per_class)
             reg_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')).to(device) + dim_L
             #gt_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')).to(device) + gt_dim
-            depth_loss = torch.tensor(0.0).to(device)
             if is_depth > 0:
                 obj_W, obj_L = reg_dims[:,1], reg_dims[:,2]
                 if is_depth==1:
@@ -214,8 +222,9 @@ def main():
                     depth_alphas = gt_alphas #depA            
                 calc_depths = calc_depth_with_alpha_theta_tensor(gt_img_W, gt_box2d, gt_calib, obj_W, obj_L, depth_alphas, gt_trun, device)
                 depth_loss = weight_dict['depth'] * F.l1_loss(calc_depths, gt_depths, reduction='mean')
+            else:
+                depth_loss = torch.tensor(0.0).to(device)
 
-            iou_loss = torch.tensor(0.0).to(device)
             if is_iou > 0:
                 if is_iou == 1:
                     iou_alphas = reg_alphas
@@ -223,11 +232,13 @@ def main():
                     iou_alphas =  torch.tensor(gt_alphas)
                 #iou_alphas = reg_alphas if is_iou==1 else torch.tensor(gt_alphas)
                 iou_loss = weight_dict['iou'] * calc_IoU_loss_tensor(gt_box2d, gt_theta_ray_L, reg_dims.cpu(), iou_alphas, gt_calib, device) #iou
+            else:
+                iou_loss = torch.tensor(0.0).to(device)
 
             total_loss = dim_loss + bin_loss + residual_loss + group_loss \
                         + C_dim_loss + C_angle_loss + depth_loss + iou_loss
             train_loss_dict = loss_dict_add(train_loss_dict, batch_L.shape[0], bin_loss.item(), residual_loss.item(), dim_loss.item(), total_loss.item(), \
-                                    group_loss.item(), C_dim_loss.item(), C_angle_loss.item(), depth_loss.item(), iou_loss.item()) #.item()        
+                                    group_loss.item(), C_dim_loss.item(), C_angle_loss.item(), depth_loss.item(), iou_loss.item()) #.item()
 
             total_loss.backward()
             optimizer.step()
@@ -243,6 +254,7 @@ def main():
             print(f'{save_path} | SOMEWHERE WRONG!')
             exit()
 
+        # ---------------------------------------- EVALUATION PART ---------------------------------------- #
         model.eval()
         val_loss_dict = init_loss_dict()
         VAL_alpha_list = list()
@@ -250,91 +262,89 @@ def main():
         VAL_reg_alpha_list = list()
         VAL_reg_dim_list = list()
         with torch.no_grad():
-            for val_batch_L, val_labels_L, val_batch_R, val_labels_R in valid_loader:
-                val_batch_L=val_batch_L.to(device)
-                val_batch_R=val_batch_R.to(device)
-                val_residual = val_labels_L['Heading_res'].to(device)
-                val_bin = val_labels_L['Heading_bin'].to(device)#這個角度在哪個class上
-                val_dim = val_labels_L['Dim_delta'].to(device)
-                val_theta_ray_L = val_labels_L['Theta_ray'].to(device)
-                val_theta_ray_R = val_labels_R['Theta_ray'].to(device)
-                val_depths = val_labels_L['Depth'] #val compute on cpu
-                val_alphas = val_labels_L['Alpha'].to(device)
-                val_rys = val_labels_L['Ry'].to(device)
-                val_img_W = val_labels_L['img_W'] #depth_loss
-                val_box2d = val_labels_L['Box2d'].numpy() #depth_loss, tensor->numpy
-                val_calib = val_labels_L['Calib'].numpy() #depth_loss, iou_loss
-                val_trun = val_labels_L['Truncation'] #depth_loss
+            for batch_L, labels_L, batch_R, labels_R in valid_loader:
+                batch_L=batch_L.to(device)
+                batch_R=batch_R.to(device)
+                gt_residual = labels_L['Heading_res'].to(device)
+                gt_bin = labels_L['Heading_bin'].to(device)#這個角度在哪個class上
+                gt_dim = labels_L['Dim_delta'].to(device)
+                gt_theta_ray_L = labels_L['Theta_ray'].to(device)
+                gt_theta_ray_R = labels_R['Theta_ray'].to(device)
+                gt_depths = labels_L['Depth'] #val compute on cpu
+                gt_alphas = labels_L['Alpha'].to(device)
+                gt_rys = labels_L['Ry'].to(device)
+                gt_img_W = labels_L['img_W'].numpy() #depth_loss, tensor->numpy
+                gt_box2d = labels_L['Box2d'].numpy() #depth_loss
+                gt_calib = labels_L['Calib'].numpy() #depth_loss, iou_loss
+                gt_trun = labels_L['Truncation'] #depth_loss
                 
-                [residual_l, bin_l, dim_l] = model(val_batch_L)
-                
-
-                val_dim_loss = weight_dict['dim'] * F.l1_loss(dim_l, val_dim, reduction='mean')
-                val_bin_loss = weight_dict['theta'] * F.cross_entropy(bin_l, val_bin, reduction='mean').to(device)
-                val_residual_loss = weight_dict['theta'] * compute_residual_loss(residual_l, val_bin, val_residual, device)
-                
-                if type_ > 0 :
-                    [residual_r, bin_r, dim_r] = model(val_batch_R)
+                [residual_L, bin_L, dim_L] = model(batch_L)
+                # ORG loss
+                bin_loss = weight_dict['theta'] * F.cross_entropy(bin_L, gt_bin, reduction='mean').to(device)
+                residual_loss = weight_dict['theta'] * compute_residual_loss(residual_L, gt_bin, gt_residual, device)
+                dim_loss = weight_dict['dim'] * F.l1_loss(dim_L, gt_dim, reduction='mean')
+                # consistency dimension loss
+                if type_ > 0:
+                    [residual_R, bin_R, dim_R] = model(batch_R)
                 if type_ == 1 or type_ == 3: # D, DA
-                    val_C_dim_loss = weight_dict['C_dim'] * F.l1_loss(dim_l, dim_r, reduction='mean').to(device)
+                    C_dim_loss = weight_dict['C_dim'] * F.l1_loss(dim_L, dim_R, reduction='mean').to(device)
                 else:
-                    val_C_dim_loss = torch.tensor(0.0).to(device)
-
+                    C_dim_loss = torch.tensor(0.0).to(device)
+                # consistency Ry angle loss
                 if type_ == 2 or type_ == 3: # A, DA
-                    val_reg_ry_l = compute_angle_by_bin_residual(bin_l, residual_l, angle_per_class, val_theta_ray_L) #grad會斷掉 連不到bin_L, residual
-                    val_reg_ry_r = compute_angle_by_bin_residual(bin_r, residual_r, angle_per_class, val_theta_ray_R)
-                    val_C_angle_loss = weight_dict['C_angle'] * F.l1_loss(torch.cos(val_reg_ry_l), torch.cos(val_reg_ry_r), reduction='mean').to(device)
+                    reg_ry_L = compute_angle_by_bin_residual(bin_L, residual_L, angle_per_class, gt_theta_ray_L) #grad會斷掉 連不到bin_L, residual
+                    reg_ry_R = compute_angle_by_bin_residual(bin_R, residual_R, angle_per_class, gt_theta_ray_R)
+                    C_angle_loss = weight_dict['C_angle'] * F.l1_loss(torch.cos(reg_ry_L), torch.cos(reg_ry_R), reduction='mean').to(device)
                 else:
-                    val_C_angle_loss = torch.tensor(0.0).to(device)
-
+                    C_angle_loss = torch.tensor(0.0).to(device)
+                # group_loss
                 if is_group > 0 :
                     if is_group == 1:
                         group_loss_func = cos_std_loss 
-                    if is_group == 2:
+                    elif is_group == 2:
                         group_loss_func = sin_sin_std_loss
-                    val_reg_rys = compute_angle_by_bin_residual(bin_L, residual_L, angle_per_class, val_theta_ray_L).to(device)
-                    val_group_loss = weight_dict['group'] * compute_group_loss(val_reg_rys, val_rys, group_loss_func)
+                    elif is_group == 3:
+                        group_loss_func = compare_abs_best_loss
+                    reg_rys = compute_angle_by_bin_residual(bin_L, residual_L, angle_per_class, gt_theta_ray_L).to(device)
+                    group_loss = weight_dict['group'] * compute_group_loss(reg_rys, gt_rys, loss_func=group_loss_func)
                 else:
-                    val_group_loss = torch.tensor(0.0).to(device)
+                    group_loss = torch.tensor(0.0).to(device)
 
-                # 1008 depth_loss
-                val_depth_loss = torch.tensor(0.0).to(device)
-                val_reg_alphas = compute_angle_by_bin_residual(bin_l, residual_l, angle_per_class)
-                val_reg_dims = dataset_train.get_cls_dim_avg('car') + dim_l.cpu().detach().numpy()
-                #val_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')).to(device) + val_dim
+                reg_alphas = compute_angle_by_bin_residual(bin_L, residual_L, angle_per_class)
+                reg_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')).to(device) + dim_L
+                #gt_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')).to(device) + gt_dim
+                #compute on GPU
                 if is_depth > 0:
-                    calc_depths = list()
-                    for i in range(val_batch_L.shape[0]):
-                        img_W, box2d, cam_to_img = val_img_W[i], val_box2d[i], val_calib[i]
-                        _, obj_W, obj_L = val_reg_dims[i]
-                        if is_depth==1:
-                            depth_alpha = val_reg_alphas[i].cpu() #dep
-                        elif is_depth==2:
-                            depth_alpha = val_alphas[i].to(device) #depA 
-                        calc_depths.append(calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, depth_alpha, trun=val_trun[i]))
-                    calc_depths = torch.stack(calc_depths)
-                    val_depth_loss = weight_dict['depth'] * F.l1_loss(calc_depths, val_depths, reduction='mean')
-                
-                val_iou_loss = torch.tensor(0.0).to(device)
+                    obj_W, obj_L = reg_dims[:,1], reg_dims[:,2]
+                    if is_depth==1:
+                        depth_alphas = reg_alphas #dep
+                    elif is_depth==2:
+                        depth_alphas = gt_alphas #depA            
+                    calc_depths = calc_depth_with_alpha_theta_tensor(gt_img_W, gt_box2d, gt_calib, obj_W, obj_L, depth_alphas, gt_trun, device)
+                    depth_loss = weight_dict['depth'] * F.l1_loss(calc_depths, gt_depths, reduction='mean')
+                else:
+                    depth_loss = torch.tensor(0.0).to(device)
+
+                #compute on cpu
                 if is_iou > 0:
-                    # one take 1.38s (calc_IoU_loss_tensor)
-                    # faster computation ? Yes, 0.05s
                     if is_iou == 1:
-                        iou_alphas = val_reg_alphas.cpu().detach().numpy()
+                        iou_alphas = reg_alphas.cpu().detach().numpy()
                     elif is_iou == 2:
-                        iou_alphas = val_alphas
-                    val_iou_loss = weight_dict['iou'] * calc_IoU_loss(val_box2d, val_theta_ray_L.detach().cpu().numpy(), \
-                                                                        val_reg_dims, iou_alphas, val_calib).to(device)
+                        iou_alphas = gt_alphas.cpu().detach().numpy()
+                    iou_loss = weight_dict['iou'] * calc_IoU_loss(gt_box2d, gt_theta_ray_L.detach().cpu().numpy(), \
+                                                                        reg_dims, iou_alphas, gt_calib).to(device)
+                else:
+                    iou_loss = torch.tensor(0.0).to(device)
 
-                val_total_loss = val_dim_loss + val_bin_loss + val_residual_loss + val_group_loss + \
-                                val_C_dim_loss + val_C_angle_loss + val_depth_loss + val_iou_loss
-                val_loss_dict = loss_dict_add(val_loss_dict, val_batch_L.shape[0], val_bin_loss.item(), val_residual_loss.item(), val_dim_loss.item(), val_total_loss.item(), \
-                                            val_group_loss.item(), val_C_dim_loss.item(), val_C_angle_loss.item(), val_depth_loss.item(), val_iou_loss.item()) #.item()
-
-                VAL_reg_alpha_list += val_reg_alphas.cpu().tolist()
-                VAL_alpha_list += val_alphas.cpu().tolist()
-                VAL_reg_dim_list += dim_l.cpu().tolist()
-                VAL_dim_list += val_dim.cpu().tolist()
+                total_loss = dim_loss + bin_loss + residual_loss + group_loss \
+                            + C_dim_loss + C_angle_loss + depth_loss + iou_loss
+                val_loss_dict = loss_dict_add(val_loss_dict, batch_L.shape[0], bin_loss.item(), residual_loss.item(), dim_loss.item(), total_loss.item(), \
+                                        group_loss.item(), C_dim_loss.item(), C_angle_loss.item(), depth_loss.item(), iou_loss.item()) #.item()
+            
+                VAL_reg_alpha_list += reg_alphas.cpu().tolist()
+                VAL_alpha_list += gt_alphas.cpu().tolist()
+                VAL_reg_dim_list += dim_L.cpu().tolist()
+                VAL_dim_list += gt_dim.cpu().tolist()
 
             val_loss_dict = calc_avg_loss(val_loss_dict, len(dataset_valid))
             print_epoch_loss(val_loss_dict, epoch, type='Valid')
@@ -345,11 +355,12 @@ def main():
         eval_dim_diff =  np.mean(abs(VAL_dim_list-VAL_reg_dim_list), axis=0)
         print(f'[Alpha diff]: {eval_angle_diff:.4f}') #close to 0 is better
         print(f'[DIM diff] H:{eval_dim_diff[0]:.4f}, W:{eval_dim_diff[1]:.4f}, L:{eval_dim_diff[2]:.4f}')
+
+        # Write tmp performance
         writer.add_scalar(f'{train_config}/alpha_diff', eval_angle_diff, epoch)
         writer.add_scalar(f'{train_config}/H_diff', eval_dim_diff[0], epoch)
         writer.add_scalar(f'{train_config}/W_diff', eval_dim_diff[1], epoch)
         writer.add_scalar(f'{train_config}/L_diff', eval_dim_diff[2], epoch)
-        
         #write LOSS
         for key in train_loss_dict.keys():
             writer.add_scalars(f'{train_config}/{key}_loss', {'Train': train_loss_dict[key], 'Valid': val_loss_dict[key]}, epoch)

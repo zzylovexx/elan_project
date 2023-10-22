@@ -128,11 +128,11 @@ def main():
     f = open(f'KITTI_eval/{eval_root}.txt', 'w')
     sys.stdout = f
     print_info(checkpoint, cfg)
-    ron_evaluation(val_ids, diff_list, cls_list, eval_root)
+    ron_evaluation(val_ids, diff_list, cls_list, save_root)
     print('[MY CALC Depth error]')
     box_depth_error_calculation(val_GT_depth, val_CALC_depth, 5)
     print('=============[Train EVAL]===============')
-    ron_evaluation(train_ids, diff_list, cls_list, eval_root)
+    ron_evaluation(train_ids, diff_list, cls_list, save_root)
     print('[MY CALC Depth error]')
     box_depth_error_calculation(train_GT_depth, train_CALC_depth, 5)
     sys.stdout = org_stdout

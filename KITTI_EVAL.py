@@ -83,7 +83,8 @@ def print_info(checkpoint, cfg):
 if __name__ == '__main__':
     FLAGS = parser.parse_args()
     weights_path = FLAGS.weights_path
-    result_root = FLAGS.result_path
+    eval_root = FLAGS.result_path
+    save_root = os.path.join('KIITI_labels', eval_root)
     split = FLAGS.split
     device = torch.device('cuda:0')
     checkpoint = torch.load(weights_path, map_location=device) #if training on 2 GPU, mapping on the same device
@@ -92,19 +93,19 @@ if __name__ == '__main__':
     cls_list = cfg['class_list']
     val_ids = [x.strip() for x in open('Kitti/ImageSets/val.txt').readlines()]
     print('=============[VAL EVAL]===============')
-    ron_evaluation(val_ids, diff_list, cls_list, result_root)
+    ron_evaluation(val_ids, diff_list, cls_list, save_root)
     train_ids = [x.strip() for x in open('Kitti/ImageSets/train.txt').readlines()]
     print('=============[Train EVAL]===============')
-    ron_evaluation(train_ids, diff_list, cls_list, result_root)
+    ron_evaluation(train_ids, diff_list, cls_list, save_root)
     '''
     org_stdout = sys.stdout
-    os.makedirs(f'KITTI_eval/{result_root.split("/")[0]}', exist_ok=True)
-    f = open(f'KITTI_eval/{result_root}.txt', 'w')
+    os.makedirs(f'KITTI_eval/{eval_root.split("/")[0]}', exist_ok=True)
+    f = open(f'KITTI_eval/{eval_root}.txt', 'w')
     sys.stdout = f
     print_info(checkpoint, cfg)
-    ron_evaluation(val_ids, diff_list, cls_list, result_root)
+    ron_evaluation(val_ids, diff_list, cls_list, save_root)
     print('[MY CALC Depth error]')
     box_depth_error_calculation(val_GT_depth, val_CALC_depth, 5)
     print('=============[Train EVAL]===============')
-    ron_evaluation(train_ids, diff_list, cls_list, result_root)
+    ron_evaluation(train_ids, diff_list, cls_list, save_root)
     '''
