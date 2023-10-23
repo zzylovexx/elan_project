@@ -171,7 +171,7 @@ def main():
             gt_img_W = labels_L['img_W'] #depth_loss
             gt_box2d = labels_L['Box2d'] #depth_loss
             gt_calib = labels_L['Calib'].numpy() #depth_loss, iou_loss
-            gt_trun = labels_L['Truncation'] #depth_loss
+            gt_trun = labels_L['Truncation'].float() #depth_loss, trun_loss_mse will fail because of Double type
             
             [residual_L, bin_L, dim_L, trun_L] = model(batch_L)
 
@@ -283,7 +283,7 @@ def main():
                 gt_img_W = labels_L['img_W'].numpy() #depth_loss, tensor->numpy
                 gt_box2d = labels_L['Box2d'].numpy() #depth_loss
                 gt_calib = labels_L['Calib'].numpy() #depth_loss, iou_loss
-                gt_trun = labels_L['Truncation'] #depth_loss
+                gt_trun = labels_L['Truncation'].float() #depth_loss, trun_loss
                 
                 [residual_L, bin_L, dim_L, trun_L] = model(batch_L)
                 # ORG loss
