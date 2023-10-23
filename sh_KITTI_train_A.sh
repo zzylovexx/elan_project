@@ -1,11 +1,11 @@
 # check every time
-DATE="1021"
+DATE="1023_regress_L"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
 #L_PATH="weights/1020/KITTI_BL_B4_dep_iou_vgg_best.pkl"
 L_PATH=""
 
-DEVICE=0
+DEVICE=1
 TYPE=2 # 0:BL, 1:C_dim, 2:C_angle, 3 C_Both
 IOU=0 # 0:NO, 1:REG alpha (iou), 2:GT alpha (iouA) [TODO] 3:GT dim?
 DEPTH=0 # 0:NO, 1:REG alpha (dep), 2: GT alpha (depA)
@@ -115,6 +115,4 @@ echo "SHELL R_PATH:"$R_PATH
 python KITTI_train_all.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -IOU=$IOU -A=$AUGMENT -L_PATH=$L_PATH
 python KITTI_RUN_GT.py -W_PATH=$PKL -R_PATH=$R_PATH -D=$DEVICE -N=$NETWORK
 echo "SHELL FINISHED"
-sh ./sh_KITTI_train_A1.sh
-sh ./sh_KITTI_train_A2.sh
 sh ./sh_KITTI_train_A3.sh

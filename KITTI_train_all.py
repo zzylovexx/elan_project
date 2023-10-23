@@ -214,14 +214,16 @@ def main():
 
             reg_alphas = compute_angle_by_bin_residual(bin_L, residual_L, angle_per_class)
             reg_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')).to(device) + dim_L
-            #gt_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')).to(device) + gt_dim
+            gt_dims = torch.tensor(dataset_train.get_cls_dim_avg('car')).to(device) + gt_dim
             if is_depth > 0:
-                obj_W, obj_L = reg_dims[:,1], reg_dims[:,2]
+                reg_W, reg_L = reg_dims[:,1], reg_dims[:,2]
+                gt_W = gt_dims[:,1] # 1023added, gt_W, regress L only
                 if is_depth==1:
                     depth_alphas = reg_alphas #dep
                 elif is_depth==2:
                     depth_alphas = gt_alphas #depA            
-                calc_depths = calc_depth_with_alpha_theta_tensor(gt_img_W, gt_box2d, gt_calib, obj_W, obj_L, depth_alphas, gt_trun, device)
+                #calc_depths = calc_depth_with_alpha_theta_tensor(gt_img_W, gt_box2d, gt_calib, reg_W, reg_L, depth_alphas, gt_trun, device)
+                calc_depths = calc_depth_with_alpha_theta_tensor(gt_img_W, gt_box2d, gt_calib, gt_W, reg_L, depth_alphas, gt_trun, device) # 1023added
                 depth_loss = weight_dict['depth'] * F.l1_loss(calc_depths, gt_depths, reduction='mean')
             else:
                 depth_loss = torch.tensor(0.0).to(device)
@@ -232,7 +234,9 @@ def main():
                 elif is_iou == 2:
                     iou_alphas =  torch.tensor(gt_alphas)
                 #iou_alphas = reg_alphas if is_iou==1 else torch.tensor(gt_alphas)
-                iou_loss = weight_dict['iou'] * calc_IoU_loss_tensor(gt_box2d, gt_theta_ray_L, reg_dims.cpu(), iou_alphas, gt_calib, device) #iou
+                combine_dims = torch.stack([gt_dims[:,0], gt_dims[:,1], reg_dims[:,2]]) # 1023added
+                #iou_loss = weight_dict['iou'] * calc_IoU_loss_tensor(gt_box2d, gt_theta_ray_L, reg_dims.cpu(), iou_alphas, gt_calib, device) 
+                iou_loss = weight_dict['iou'] * calc_IoU_loss_tensor(gt_box2d, gt_theta_ray_L, combine_dims.cpu(), iou_alphas, gt_calib, device) #1023added
             else:
                 iou_loss = torch.tensor(0.0).to(device)
 
@@ -308,13 +312,15 @@ def main():
 
                 reg_alphas = compute_angle_by_bin_residual(bin_L, residual_L, angle_per_class)
                 reg_dims = dataset_train.get_cls_dim_avg('car') + dim_L.cpu().detach().numpy()
-                #gt_dims = dataset_train.get_cls_dim_avg('car') + gt_dim.cpu().detach().numpy()
+                gt_dims = dataset_train.get_cls_dim_avg('car') + gt_dim.cpu().detach().numpy()
                 #compute on GPU
                 if is_depth > 0:
                     calc_depths = list()
                     for i in range(batch_L.shape[0]):
                         img_W, box2d, cam_to_img = gt_img_W[i], gt_box2d[i], gt_calib[i]
-                        _, obj_W, obj_L = reg_dims[i]
+                        #_, obj_W, obj_L = reg_dims[i]
+                        obj_W = gt_dims[i][1] # 1023added
+                        obj_L = reg_dims[i][2]
                         if is_depth==1:
                             depth_alpha = reg_alphas[i].cpu() #dep
                         elif is_depth==2:
@@ -325,24 +331,7 @@ def main():
                     depth_loss = weight_dict['depth'] * F.l1_loss(calc_depths, gt_depths, reduction='mean')
                 else:
                     depth_loss = torch.tensor(0.0).to(device)
-                '''
-                val_depth_loss = torch.tensor(0.0).to(device)
-                val_reg_alphas = compute_alpha(bin, residual, angle_per_class)
-                val_reg_dims = dataset_train.get_cls_dim_avg('car') + dim.cpu().detach().numpy()
-                #val_dims = dataset_train.get_cls_dim_avg('car') + val_dim.cpu().detach().numpy()
-                if is_depth > 0:
-                    calc_depths = list()
-                    for i in range(val_batch_L.shape[0]):
-                        img_W, box2d, cam_to_img = val_img_W[i], val_box2d[i], val_calib[i]
-                        _, obj_W, obj_L = val_reg_dims[i]
-                        if is_depth==1:
-                            depth_alpha = val_reg_alphas[i].cpu() #dep
-                        elif is_depth==2:
-                            depth_alpha = val_alphas[i].to(device) #depA 
-                        calc_depths.append(calc_depth_with_alpha_theta(img_W, box2d, cam_to_img, obj_W, obj_L, depth_alpha, trun=val_trun[i]))
-                    calc_depths = torch.stack(calc_depths)
-                    val_depth_loss = weight_dict['depth'] * F.l1_loss(calc_depths, val_depths, reduction='mean')
-                '''
+
                 #compute on cpu
                 if is_iou > 0:
                     if is_iou == 1:
