@@ -92,7 +92,7 @@ def main():
             if len(inputs)!=0:
                 inputs = torch.stack(inputs).to(device)
                 # model regress part
-                [residual, bin_, dim, reg_trun] = model(inputs)
+                [residual, bin_, dim, reg_truns] = model(inputs)
                 bin_argmax = torch.max(bin_, dim=1)[1]
                 orient_residual = residual[torch.arange(len(residual)), bin_argmax].detach()
                 REG_alphas = angle_per_class*bin_argmax + orient_residual #mapping bin_class and residual to get alpha
@@ -104,6 +104,7 @@ def main():
                     reg_dim = avg_dim + dim[i].cpu().detach().numpy()
                     reg_pos, _ = calc_location(reg_dim, cam_to_img.p2, obj.box2d.reshape((2,2)), reg_alpha, obj.theta_ray)
                     reg_pos[1] += reg_dim[0]/2 #reg_pos is 3d center, + H/2 to be the same standard as gt label
+                    reg_trun = reg_truns[i].detach().item()
                     reg_labels += obj.REG_result_to_kitti_format_label(alpha=reg_alpha, dim=reg_dim, pos=reg_pos, trun=reg_trun) + '\n'
                     # [TRAIN]
                     if id_ in train_ids:

@@ -1,5 +1,5 @@
 # check every time
-DATE="1022_trun_L1"
+DATE="1022_trun_del"
 W_PATH="weights/$DATE"
 R_PATH="$DATE"
 #L_PATH="weights/1020/KITTI_BL_B4_dep_iou_vgg_best.pkl"
@@ -14,7 +14,7 @@ GROUP=0 # 0:NO, 1:cos, 2:sin_sin, 3:compare
 
 #FIXED
 AUGMENT=0
-EPOCH=50
+EPOCH=1
 WARMUP=0
 NETWORK=0 # 0:vgg19_bn, 1:resnet18, 2:densenet121
 BIN=4
@@ -115,6 +115,6 @@ echo "SHELL W_PATH:"$W_PATH
 echo "SHELL PKL:"$PKL
 echo "SHELL R_PATH:"$R_PATH
 python KITTI_train_trun.py -T=$TYPE -W_PATH=$W_PATH -D=$DEVICE -E=$EPOCH -B=$BIN -G=$GROUP -W=$WARMUP -C=$COND -N=$NETWORK -DEP=$DEPTH -IOU=$IOU -A=$AUGMENT -L_PATH=$L_PATH
-python KITTI_RUN_GT_trun.py -W_PATH=$PKL -R_PATH=$R_PATH -D=$DEVICE -N=$NETWORK
+#python KITTI_RUN_GT_trun.py -W_PATH=$PKL -R_PATH=$R_PATH -D=$DEVICE -N=$NETWORK
 echo "SHELL FINISHED"
-sh sh_KITTI_train_trun2.sh
+#sh sh_KITTI_train_trun2.sh
